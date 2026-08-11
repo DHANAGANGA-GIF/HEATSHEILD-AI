@@ -121,12 +121,30 @@ export function getUserProfile(): UserProfile {
 
 export function saveUserProfile(profile: Partial<UserProfile>): UserProfile {
   const current = getUserProfile();
-  const updated = { ...current, ...profile };
+  const updated = { ...current, authenticated: true, ...profile };
   if (typeof window !== 'undefined') {
     localStorage.setItem(PROFILE_KEY, JSON.stringify(updated));
   }
   return updated;
 }
+
+export function clearUserProfile(): void {
+  if (typeof window !== 'undefined') {
+    localStorage.removeItem(PROFILE_KEY);
+  }
+}
+
+export async function logoutUser(): Promise<void> {
+  if (isSupabaseConfigured && supabase) {
+    try {
+      await supabase.auth.signOut();
+    } catch {
+      // Ignore network errors on logout
+    }
+  }
+  clearUserProfile();
+}
+
 
 export function getSavedLocations(): LocationData[] {
   if (typeof window === 'undefined') return [];

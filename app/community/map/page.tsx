@@ -112,7 +112,7 @@ export default function CommunityMapPage() {
             </div>
 
             <div className="text-slate-400 text-[11px]">
-              Center: {userLoc.name} ({userLoc.latitude.toFixed(2)}°, {userLoc.longitude.toFixed(2)}°)
+              Your area: {userLoc.name} · KARE Campus shown as institutional reference
             </div>
           </div>
 
@@ -221,6 +221,8 @@ export default function CommunityMapPage() {
 
             <LeafletMap
               center={userLoc}
+              userLocation={userLoc}
+              showCampusMarker={true}
               reports={filteredReports}
               clusters={clusters}
               coolingLocations={VERIFIED_COOLING_LOCATIONS}

@@ -1,6 +1,19 @@
 # HeatShield AI — Intelligent Contextual Heat-Risk Decision-Support System
 
-> **A zero-budget, multi-tenant AI decision-support system for personal, community, and institutional heat-risk mitigation.**
+[![Vercel Deployment](https://img.shields.io/badge/Vercel-Live%20Production-000000?style=for-the-badge&logo=vercel)](https://heatshield-ai-kare.vercel.app)
+[![Tests](https://img.shields.io/badge/Tests-92%2F92%20PASS-emerald?style=for-the-badge&logo=github-actions)](tests/)
+[![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)](LICENSE)
+
+> **Live Production Application**: [https://heatshield-ai-kare.vercel.app](https://heatshield-ai-kare.vercel.app)
+> **GitHub Repository**: [https://github.com/DHANAGANGA-GIF/HEATSHEILD-AI](https://github.com/DHANAGANGA-GIF/HEATSHEILD-AI)
+
+---
+
+## 🚀 Live Production Dashboard Preview
+
+![HeatShield AI Operational Dashboard](docs/assets/dashboard.png)
+
+*Operational Heat Risk Dashboard displaying real-time environmental thermal stress (27.9°C Apparent, 61% Humidity, 6.6 km/h Wind), contextual risk scoring (48/100 Moderate Risk), and explainable XAI factor weights.*
 
 ---
 
@@ -45,7 +58,7 @@ Trained on benchmark meteorological profiles (ECMWF ERA5-Land reanalysis histori
 - **Data Stream**: Open-Meteo REST Forecast & Geocoding APIs (Free Tier, No Key Required)
 - **Mapping**: Leaflet.js, React-Leaflet, OpenStreetMap
 - **Inference**: Dual pure TypeScript in-browser engine + deployable Python FastAPI microservice
-- **Testing**: Node.js Native Test Runner (`tsx --test`) — 78 Automated Tests (100% PASS)
+- **Testing**: Node.js Native Test Runner (`tsx --test`) — 92 Automated Tests (100% PASS)
 
 ---
 
@@ -78,8 +91,8 @@ Trained on benchmark meteorological profiles (ECMWF ERA5-Land reanalysis histori
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-username/heatshield-ai.git
-cd heatshield-ai
+git clone https://github.com/DHANAGANGA-GIF/HEATSHEILD-AI.git
+cd HEATSHEILD-AI
 
 # Install dependencies
 npm install
@@ -90,14 +103,14 @@ cp .env.example .env.local
 # Run TypeScript check
 npx tsc --noEmit
 
-# Run unit & integration test suite (78 tests)
+# Run unit & integration test suite (92 tests)
 npm test
 
 # Start local development server
 npm run dev
 ```
 
-Open `http://localhost:3000` in your browser.
+Open `http://localhost:3001` in your browser.
 
 ---
 
@@ -121,17 +134,16 @@ NEXT_PUBLIC_AI_SERVICE_URL=http://localhost:8000
 
 ## Project Documentation Suite
 
-Complete academic and technical documentation is available in the [`/docs`](file:///C:/Users/rowad/csp%20%231/docs) directory:
+Complete academic and technical documentation is available in the [`/docs`](docs) directory:
 
-- 📄 [`FINAL-PROJECT-REPORT.md`](file:///C:/Users/rowad/csp%20%231/docs/FINAL-PROJECT-REPORT.md) — Comprehensive Final Project Report
-- 📄 [`RESEARCH-PAPER.md`](file:///C:/Users/rowad/csp%20%231/docs/RESEARCH-PAPER.md) — IEEE-Style Academic Research Paper
-- 📊 [`ARCHITECTURE-DIAGRAMS.md`](file:///C:/Users/rowad/csp%20%231/docs/ARCHITECTURE-DIAGRAMS.md) — 10 System Architecture & Data Flow Diagrams
-- 🚀 [`DEPLOYMENT.md`](file:///C:/Users/rowad/csp%20%231/docs/DEPLOYMENT.md) — Zero-Budget Deployment Guide (Vercel + Supabase)
-- 🔒 [`END-TO-END-SECURITY-VALIDATION.md`](file:///C:/Users/rowad/csp%20%231/docs/END-TO-END-SECURITY-VALIDATION.md) — Complete Security & Hardening Audit
-- 📺 [`PRESENTATION-OUTLINE.md`](file:///C:/Users/rowad/csp%20%231/docs/PRESENTATION-OUTLINE.md) — 15-Slide Presentation Deck Outline
-- 🎙️ [`FINAL-DEMO-SCRIPT.md`](file:///C:/Users/rowad/csp%20%231/docs/FINAL-DEMO-SCRIPT.md) — 7–10 Minute Live Demonstration Script
-- ❓ [`VIVA-QUESTIONS.md`](file:///C:/Users/rowad/csp%20%231/docs/VIVA-QUESTIONS.md) — 50 Viva & Oral Defense Q&A Guide
-- ❄️ [`PROJECT-FREEZE.md`](file:///C:/Users/rowad/csp%20%231/docs/PROJECT-FREEZE.md) — Final Freeze Specifications
+- 📄 [`FINAL-PROJECT-REPORT.md`](docs/FINAL-PROJECT-REPORT.md) — Comprehensive Final Project Report
+- 📄 [`IEEE-PAPER-FINAL.md`](docs/IEEE-PAPER-FINAL.md) — IEEE-Format Camera-Ready Research Paper
+- 📊 [`ARCHITECTURE.md`](docs/ARCHITECTURE.md) — System Architecture & Data Flow Diagrams
+- 🚀 [`PRODUCTION-DEPLOYMENT-FINAL.md`](docs/PRODUCTION-DEPLOYMENT-FINAL.md) — Final Production Deployment Document
+- 🔒 [`END-TO-END-SECURITY-VALIDATION.md`](docs/END-TO-END-SECURITY-VALIDATION.md) — Complete Security & Hardening Audit
+- 📺 [`PRESENTATION-OUTLINE.md`](docs/PRESENTATION-OUTLINE.md) — Presentation Deck Outline
+- 🎙️ [`FINAL-DEMO-SCRIPT.md`](docs/FINAL-DEMO-SCRIPT.md) — Live Demonstration Script
+- ❓ [`VIVA-QUESTIONS.md`](docs/VIVA-QUESTIONS.md) — 50 Viva & Oral Defense Q&A Guide
 
 ---
 

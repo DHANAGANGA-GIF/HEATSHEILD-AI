@@ -17,7 +17,8 @@ export default function AssistantPage() {
   const [risk, setRisk] = useState<RiskAssessment | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const loadData = () => {
+    setLoading(true);
     const p = getUserProfile();
     const loc = p.location || { name: 'Chennai', latitude: 13.0827, longitude: 80.2707 };
     fetchWeatherData(loc.latitude, loc.longitude, loc.name).then((w) => {
@@ -30,7 +31,12 @@ export default function AssistantPage() {
       });
       setRisk(r);
       setLoading(false);
-    });
+    }).catch(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    loadData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
@@ -64,12 +70,22 @@ export default function AssistantPage() {
 
           {/* AI Assistant Component */}
           <div className="flex-1 min-h-0">
-            <AiAssistant
-              weather={weather}
-              risk={risk}
-              mode={techMode}
-              onModeChange={setTechMode}
-            />
+            {loading ? (
+              <div className="h-full bg-white rounded-xl border border-slate-200 flex flex-col items-center justify-center gap-3 text-center p-8">
+                <div className="w-8 h-8 rounded-full border-4 border-emerald-600 border-t-transparent animate-spin" />
+                <p className="text-sm font-semibold text-slate-700">Loading environmental context...</p>
+                <p className="text-xs text-slate-400">Retrieving live weather and risk data for the assistant.</p>
+              </div>
+            ) : !weather ? (
+              <div className="h-full bg-white rounded-xl border border-slate-200 flex flex-col items-center justify-center gap-3 text-center p-8">
+                <p className="text-sm font-semibold text-slate-700">We couldn&apos;t retrieve current weather data.</p>
+                <p className="text-xs text-slate-400 max-w-xs">The assistant can still answer general heat safety questions. Contextual risk information will be unavailable.</p>
+                <button onClick={loadData} className="mt-1 px-4 py-2 text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition">Try Again</button>
+                <AiAssistant weather={null} risk={null} mode={techMode} onModeChange={setTechMode} />
+              </div>
+            ) : (
+              <AiAssistant weather={weather} risk={risk} mode={techMode} onModeChange={setTechMode} />
+            )}
           </div>
         </main>
       </div>

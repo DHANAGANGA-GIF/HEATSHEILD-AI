@@ -20,6 +20,8 @@ export interface UserProfile {
   role: 'user' | 'school' | 'worksite' | 'ngo' | 'admin';
   organization_id?: string;
   created_at: string;
+  onboarded?: boolean;
+  authenticated?: boolean;
 }
 
 export interface LocationData {

@@ -76,7 +76,7 @@ export default function TimelinePage() {
   const [loading, setLoading] = useState(true);
   const [showTable, setShowTable] = useState(false);
 
-  useEffect(() => {
+  const loadTimelineData = () => {
     const p = getUserProfile();
     const loc = p.location || { name: 'Chennai', latitude: 13.0827, longitude: 80.2707 };
     const ctx: ForecastContext = {
@@ -96,7 +96,16 @@ export default function TimelinePage() {
           setTrend(analyzeForecastTrend(scored));
         }
       })
+      .catch(() => {
+        setWeather(null);
+        setScoredForecast([]);
+        setTrend(null);
+      })
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    loadTimelineData();
   }, []);
 
   const dataStatus = !weather
@@ -161,10 +170,16 @@ export default function TimelinePage() {
               Loading live forecast data from Open-Meteo...
             </div>
           ) : !weather || scoredForecast.length === 0 ? (
-            <div className="bg-white p-10 rounded-xl border border-rose-200 text-center font-mono text-sm text-rose-700">
-              <AlertTriangle className="w-8 h-8 mx-auto mb-3 text-rose-400" />
-              <div className="font-bold text-base mb-1">FORECAST UNAVAILABLE</div>
-              <div className="text-xs text-slate-500">Environmental forecast data could not be retrieved. Retain current conditions data if available. Do not invent forecast values.</div>
+            <div className="bg-white p-10 rounded-xl border border-rose-200 text-center font-mono text-sm text-rose-700 space-y-3">
+              <AlertTriangle className="w-8 h-8 mx-auto text-rose-400" />
+              <div className="font-bold text-base">FORECAST UNAVAILABLE</div>
+              <div className="text-xs text-slate-500 max-w-md mx-auto">Environmental forecast data could not be retrieved from Open-Meteo. Retain current conditions data if available.</div>
+              <button
+                onClick={loadTimelineData}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-sans text-xs font-semibold rounded-lg transition inline-flex items-center gap-1.5"
+              >
+                Try Again
+              </button>
             </div>
           ) : (
             <>

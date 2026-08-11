@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Navbar } from '@/components/Navbar';
 import { Sidebar } from '@/components/Sidebar';
 import { HeatGauge } from '@/components/HeatGauge';
@@ -8,10 +8,14 @@ import { WeatherCard } from '@/components/WeatherCard';
 import { RiskDrivers } from '@/components/RiskDrivers';
 import { GuidanceList } from '@/components/GuidanceList';
 import { AiAssistant } from '@/components/AiAssistant';
+import { LocationStatusBar } from '@/components/LocationStatusBar';
+import { LocationSelector } from '@/components/LocationSelector';
+import { SystemStatusPanel, SystemStatusValue } from '@/components/SystemStatusPanel';
 import { fetchWeatherData } from '@/lib/weather-api';
 import { evaluateHeatRisk } from '@/lib/risk-engine';
-import { getUserProfile } from '@/lib/store';
-import { RiskAssessment, TechMode, WeatherData } from '@/lib/types';
+import { getUserProfile, saveUserProfile } from '@/lib/store';
+import { LocationSource } from '@/lib/constants';
+import { LocationData, RiskAssessment, TechMode, WeatherData } from '@/lib/types';
 import Link from 'next/link';
 import { Clock, Sliders, MessageSquare, ArrowRight, ChevronDown, ChevronUp } from 'lucide-react';
 
@@ -23,16 +27,15 @@ export default function DashboardPage() {
   const [risk, setRisk] = useState<RiskAssessment | null>(null);
   const [loading, setLoading] = useState(true);
   const [showAssistant, setShowAssistant] = useState(false);
+  const [showLocationSelector, setShowLocationSelector] = useState(false);
+  const [locationSource, setLocationSource] = useState<LocationSource>('DEFAULT');
 
-  const loadDashboardData = async () => {
+  const loadData = useCallback(async (loc: LocationData) => {
     setLoading(true);
     const p = getUserProfile();
     setProfile(p);
-
-    const loc = p.location || { name: 'Chennai', latitude: 13.0827, longitude: 80.2707 };
     const wData = await fetchWeatherData(loc.latitude, loc.longitude, loc.name);
     setWeather(wData);
-
     const rData = evaluateHeatRisk(wData, {
       activity: p.activity_level,
       duration: p.exposure_duration,
@@ -41,11 +44,49 @@ export default function DashboardPage() {
     });
     setRisk(rData);
     setLoading(false);
-  };
+  }, []);
+
+  const loadDashboardData = useCallback(async () => {
+    const p = getUserProfile();
+    const loc = p.location || { name: 'Chennai', latitude: 13.0827, longitude: 80.2707 };
+    await loadData(loc);
+  }, [loadData]);
 
   useEffect(() => {
     loadDashboardData();
-  }, []);
+  }, [loadDashboardData]);
+
+  const handleLocationChange = async (loc: LocationData, source: LocationSource) => {
+    setLocationSource(source);
+    saveUserProfile({ location: loc });
+    await loadData(loc);
+  };
+
+  const currentLocation = profile.location || { name: 'Chennai', latitude: 13.0827, longitude: 80.2707 };
+  const dataStatus: 'LIVE' | 'CACHED' | 'UNAVAILABLE' = weather
+    ? weather.is_cached ? 'CACHED' : 'LIVE'
+    : loading ? 'LIVE' : 'UNAVAILABLE';
+
+  const lastUpdatedLabel = weather
+    ? `Updated ${new Date(weather.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+    : undefined;
+
+  // Derive accurate system status values
+  const weatherSysStatus: SystemStatusValue = loading
+    ? 'LOADING'
+    : weather?.is_cached ? 'CACHED'
+    : weather ? 'LIVE'
+    : 'UNAVAILABLE';
+  const forecastSysStatus: SystemStatusValue = weather?.hourly_forecast?.length
+    ? weather.is_cached ? 'CACHED' : 'LIVE'
+    : 'UNAVAILABLE';
+  const alertsSysStatus: SystemStatusValue = 'ACTIVE';
+  const aiSysStatus: SystemStatusValue = risk ? 'READY' : 'UNAVAILABLE';
+  const locationSysStatus: SystemStatusValue =
+    locationSource === 'GPS' ? 'GPS'
+    : locationSource === 'CAMPUS' ? 'CAMPUS'
+    : locationSource === 'DEFAULT' ? 'LIVE'
+    : 'MANUAL';
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900 font-sans flex flex-col">
@@ -61,7 +102,7 @@ export default function DashboardPage() {
           onCloseMobile={() => setMobileSidebarOpen(false)}
         />
 
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full space-y-6">
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full space-y-5">
           {/* Dashboard Header Bar */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-xl border border-slate-200 shadow-xs">
             <div>
@@ -69,7 +110,7 @@ export default function DashboardPage() {
                 OPERATIONAL HEAT RISK DASHBOARD
               </h1>
               <p className="text-xs text-slate-500 mt-0.5 font-mono">
-                Contextual Heat Strain Model for {profile.name || 'User'} ({profile.role.toUpperCase()} MODE)
+                Contextual Heat Strain Assessment for {profile.name || 'User'} ({profile.role.toUpperCase()} MODE)
               </p>
             </div>
 
@@ -86,13 +127,33 @@ export default function DashboardPage() {
                 className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-lg shadow-xs transition flex items-center gap-1.5"
               >
                 <MessageSquare className="w-3.5 h-3.5" />
-                <span>{showAssistant ? 'Hide AI Assistant' : 'Ask AI Assistant'}</span>
+                <span>{showAssistant ? 'Hide Assistant' : 'Ask AI Assistant'}</span>
                 {showAssistant ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
               </button>
             </div>
           </div>
 
-          {/* Embedded AI Assistant (when toggled on Dashboard) */}
+          {/* ── Location Status Bar (Q1: Where am I?) ─────────────────────── */}
+          <LocationStatusBar
+            location={currentLocation}
+            locationSource={locationSource}
+            dataStatus={dataStatus}
+            lastUpdated={lastUpdatedLabel}
+            onChangeLocation={() => setShowLocationSelector(true)}
+            onRefresh={loadDashboardData}
+            isLoading={loading}
+          />
+
+          {/* ── System Status Panel ─────────────────────────────────────────── */}
+          <SystemStatusPanel
+            locationStatus={locationSysStatus}
+            weatherStatus={weatherSysStatus}
+            forecastStatus={forecastSysStatus}
+            alertsStatus={alertsSysStatus}
+            aiStatus={aiSysStatus}
+          />
+
+          {/* Embedded AI Assistant (toggleable) */}
           {showAssistant && (
             <div className="h-[480px]">
               <AiAssistant
@@ -104,13 +165,26 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {loading || !weather || !risk ? (
+          {/* Loading State */}
+          {loading && !weather ? (
             <div className="p-12 bg-white rounded-xl border border-slate-200 text-center font-mono text-xs text-slate-500 animate-pulse">
-              Fetching real-time environmental data & computing heat risk factors...
+              Retrieving environmental data for {currentLocation.name}...
+            </div>
+          ) : !weather || !risk ? (
+            /* Unavailable State (human-readable) */
+            <div className="p-10 bg-white rounded-xl border border-slate-200 text-center space-y-3">
+              <p className="text-sm font-semibold text-slate-700">We couldn&apos;t retrieve current weather data.</p>
+              <p className="text-xs text-slate-500">Risk assessment is temporarily unavailable because current environmental data could not be retrieved.</p>
+              <button
+                onClick={loadDashboardData}
+                className="mt-2 px-4 py-2 text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition"
+              >
+                Try Again
+              </button>
             </div>
           ) : (
             <>
-              {/* Primary Gauge */}
+              {/* Q2+Q3: What are the conditions? / What is my risk? */}
               <HeatGauge
                 score={risk.risk_score}
                 level={risk.risk_level}
@@ -118,8 +192,8 @@ export default function DashboardPage() {
                 dataQuality={risk.data_quality}
               />
 
-              {/* Grid: Current Weather & Explainable Factors */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Q2 detail + Q4: Why is the risk at this level? */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
                 <WeatherCard
                   weather={weather}
                   onRefresh={loadDashboardData}
@@ -132,14 +206,25 @@ export default function DashboardPage() {
                 />
               </div>
 
-              {/* Personalized Guidance */}
+              {/* Q5: What should I do now? */}
               <GuidanceList
                 guidance={risk.recommendations}
                 mode={techMode}
               />
 
-              {/* Quick Actions & Shortcut Grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
+              {/* Q6: When could conditions become worse? + Quick Actions */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <Link
+                  href="/timeline"
+                  className="p-4 bg-white rounded-xl border border-slate-200 hover:border-emerald-500 transition shadow-xs group"
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-bold font-mono text-emerald-700">FORECAST TIMELINE</span>
+                    <Clock className="w-4 h-4 text-slate-400 group-hover:text-emerald-600" />
+                  </div>
+                  <p className="text-xs text-slate-500">See when heat risk peaks over the next 24–48 hours.</p>
+                </Link>
+
                 <Link
                   href="/simulator"
                   className="p-4 bg-white rounded-xl border border-slate-200 hover:border-emerald-500 transition shadow-xs group"
@@ -148,7 +233,7 @@ export default function DashboardPage() {
                     <span className="text-xs font-bold font-mono text-emerald-700">WHAT-IF SIMULATOR</span>
                     <Sliders className="w-4 h-4 text-slate-400 group-hover:text-emerald-600" />
                   </div>
-                  <p className="text-xs text-slate-500">Test different activity, exposure, or cooling scenarios.</p>
+                  <p className="text-xs text-slate-500">Test how changing activity or cooling affects your risk.</p>
                 </Link>
 
                 <Link
@@ -159,24 +244,23 @@ export default function DashboardPage() {
                     <span className="text-xs font-bold font-mono text-emerald-700">COMMUNITY MAP</span>
                     <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-emerald-600" />
                   </div>
-                  <p className="text-xs text-slate-500">View water points, shade reports, and cluster hotspots.</p>
-                </Link>
-
-                <Link
-                  href="/reports"
-                  className="p-4 bg-white rounded-xl border border-slate-200 hover:border-emerald-500 transition shadow-xs group"
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-bold font-mono text-emerald-700">AUDIT REPORTS</span>
-                    <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-emerald-600" />
-                  </div>
-                  <p className="text-xs text-slate-500">Export CSV or PDF heat audit logs for compliance.</p>
+                  <p className="text-xs text-slate-500">View water points, shade reports, and cooling centers.</p>
                 </Link>
               </div>
             </>
           )}
         </main>
       </div>
+
+      {/* Location Selector Modal */}
+      {showLocationSelector && (
+        <LocationSelector
+          currentLocation={currentLocation}
+          currentSource={locationSource}
+          onSelect={handleLocationChange}
+          onClose={() => setShowLocationSelector(false)}
+        />
+      )}
     </div>
   );
 }

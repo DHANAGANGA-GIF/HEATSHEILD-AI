@@ -63,6 +63,7 @@ export default function OnboardingPage() {
       cooling_access: coolingAccess,
       language,
       location,
+      onboarded: true,
     });
     router.push('/dashboard');
   };

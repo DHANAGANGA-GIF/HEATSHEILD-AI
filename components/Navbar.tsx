@@ -3,8 +3,8 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
-import { Shield, Bell, User, Globe, AlertTriangle, Menu, X, Sun } from 'lucide-react';
-import { getUserProfile, getAlerts, saveUserProfile } from '@/lib/store';
+import { Shield, Bell, User, Globe, AlertTriangle, Menu, X, Sun, LogOut } from 'lucide-react';
+import { getUserProfile, getAlerts, saveUserProfile, logoutUser } from '@/lib/store';
 import { Language, TechMode, UserProfile } from '@/lib/types';
 import { t } from '@/lib/i18n';
 
@@ -23,6 +23,11 @@ export const Navbar: React.FC<NavbarProps> = ({
   const pathname = usePathname();
   const [profile, setProfile] = useState<UserProfile>(getUserProfile());
   const [unreadAlerts, setUnreadAlerts] = useState(0);
+
+  const handleLogout = async () => {
+    await logoutUser();
+    router.push('/login');
+  };
 
   useEffect(() => {
     const p = getUserProfile();
@@ -130,6 +135,16 @@ export const Navbar: React.FC<NavbarProps> = ({
               {profile.name || 'User Profile'}
             </span>
           </Link>
+
+          {/* Logout Button */}
+          <button
+            onClick={handleLogout}
+            title="Sign Out"
+            className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition"
+            aria-label="Sign Out"
+          >
+            <LogOut className="w-4 h-4" />
+          </button>
         </div>
       </div>
     </header>
