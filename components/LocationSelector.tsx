@@ -54,6 +54,8 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
           latitude: Math.round(pos.coords.latitude * 100) / 100,   // ~1km precision for privacy
           longitude: Math.round(pos.coords.longitude * 100) / 100,
           country: '',
+          // Store actual accuracy from browser — never fabricate this value
+          gps_accuracy: pos.coords.accuracy ? Math.round(pos.coords.accuracy) : undefined,
         };
         onSelect(loc, 'GPS');
         onClose();

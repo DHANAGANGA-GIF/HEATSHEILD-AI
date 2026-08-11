@@ -8,7 +8,7 @@ import { LocationSource } from '@/lib/constants';
 interface LocationStatusBarProps {
   location: LocationData;
   locationSource: LocationSource;
-  dataStatus: 'LIVE' | 'CACHED' | 'UNAVAILABLE';
+  dataStatus: 'LIVE' | 'CACHED' | 'UNAVAILABLE' | 'FALLBACK';
   lastUpdated?: string;
   onChangeLocation?: () => void;
   onRefresh?: () => void;
@@ -24,10 +24,11 @@ const SOURCE_CONFIG: Record<LocationSource, { label: string; color: string; dotC
   DEFAULT: { label: 'Default Location', color: 'text-slate-600 bg-slate-50 border-slate-200',        dotColor: 'bg-slate-400' },
 };
 
-const STATUS_CONFIG: Record<'LIVE' | 'CACHED' | 'UNAVAILABLE', { label: string; color: string; dotColor: string }> = {
+const STATUS_CONFIG: Record<'LIVE' | 'CACHED' | 'UNAVAILABLE' | 'FALLBACK', { label: string; color: string; dotColor: string }> = {
   LIVE:        { label: 'LIVE',        color: 'text-emerald-700',  dotColor: 'bg-emerald-500 animate-pulse' },
   CACHED:      { label: 'CACHED',      color: 'text-amber-700',    dotColor: 'bg-amber-400' },
   UNAVAILABLE: { label: 'UNAVAILABLE', color: 'text-red-600',      dotColor: 'bg-red-500' },
+  FALLBACK:    { label: 'UNAVAILABLE', color: 'text-red-600',      dotColor: 'bg-red-500' },
 };
 
 export const LocationStatusBar: React.FC<LocationStatusBarProps> = ({
@@ -41,11 +42,18 @@ export const LocationStatusBar: React.FC<LocationStatusBarProps> = ({
   className = '',
 }) => {
   const src = SOURCE_CONFIG[locationSource];
-  const status = STATUS_CONFIG[dataStatus];
+  const status = STATUS_CONFIG[dataStatus] ?? STATUS_CONFIG['UNAVAILABLE'];
 
   // Show city/locality only — never raw GPS coordinates in normal UI
   const displayName = location.name;
   const displayLocality = location.locality || location.country || '';
+
+  // GPS accuracy badge — only shown when source is GPS and accuracy is known
+  const gpsAccuracyLabel = locationSource === 'GPS' && location.gps_accuracy
+    ? `±${location.gps_accuracy < 1000
+        ? `${location.gps_accuracy}m`
+        : `${(location.gps_accuracy / 1000).toFixed(1)}km`}`
+    : null;
 
   return (
     <div className={`bg-white border border-slate-200 rounded-xl px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs ${className}`}>
@@ -61,12 +69,18 @@ export const LocationStatusBar: React.FC<LocationStatusBarProps> = ({
               <span className="text-xs text-slate-500 truncate hidden sm:inline">{displayLocality}</span>
             )}
           </div>
-          <div className="flex items-center gap-2 mt-0.5">
+          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
             {/* Source badge */}
             <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold border ${src.color}`}>
               <span className={`w-1.5 h-1.5 rounded-full ${src.dotColor}`} />
               {src.label}
             </span>
+            {/* GPS accuracy — only when real GPS and accuracy is known */}
+            {gpsAccuracyLabel && (
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-mono text-emerald-700 bg-emerald-50 border border-emerald-200">
+                {gpsAccuracyLabel}
+              </span>
+            )}
             {/* Data status */}
             <span className={`inline-flex items-center gap-1 text-[11px] font-mono font-semibold ${status.color}`}>
               <span className={`w-1.5 h-1.5 rounded-full ${status.dotColor}`} />

@@ -19,16 +19,19 @@ export async function fetchWeatherData(
 ): Promise<WeatherData> {
   const cacheKey = `${WEATHER_CACHE_KEY}${lat.toFixed(2)}_${lon.toFixed(2)}`;
 
-  // Try cache first
+  // Try cache first (within 15-min TTL)
   if (typeof window !== 'undefined') {
     const cachedStr = localStorage.getItem(cacheKey);
     if (cachedStr) {
       try {
         const cachedObj = JSON.parse(cachedStr) as { data: WeatherData; timestamp: number };
         if (Date.now() - cachedObj.timestamp < CACHE_TTL_MS) {
+          const ageMs = Date.now() - cachedObj.timestamp;
+          const ageMins = Math.floor(ageMs / 60000);
           return {
             ...cachedObj.data,
-            is_cached: false, // Fresh within TTL
+            is_cached: true,  // Served from localStorage cache (not live API)
+            cache_timestamp: ageMins === 0 ? 'Just now' : `${ageMins} min ago`,
           };
         }
       } catch (e) {
@@ -112,7 +115,7 @@ export async function fetchWeatherData(
       }
     }
 
-    // Default emergency fallback data if offline/blocked
+    // Emergency fallback: no API and no cache available
     return {
       temperature: 34.5,
       relative_humidity: 68,
@@ -122,7 +125,8 @@ export async function fetchWeatherData(
       weather_code: 1,
       timestamp: new Date().toISOString(),
       is_cached: true,
-      cache_timestamp: 'Fallback Mode',
+      is_fallback: true,   // Hardcoded emergency data — not a real observation
+      cache_timestamp: 'Unavailable',
       location: {
         name: locationName,
         latitude: lat,

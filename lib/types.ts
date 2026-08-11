@@ -30,6 +30,8 @@ export interface LocationData {
   latitude: number;
   longitude: number;
   country?: string;
+  /** GPS accuracy in metres from browser Geolocation API (only set when source is GPS) */
+  gps_accuracy?: number;
 }
 
 export interface WeatherData {
@@ -42,6 +44,8 @@ export interface WeatherData {
   timestamp: string;
   is_cached?: boolean;
   cache_timestamp?: string;
+  /** True when data is the hardcoded emergency fallback (no real API or cache available) */
+  is_fallback?: boolean;
   location: LocationData;
   hourly_forecast?: HourlyForecast[];
 }

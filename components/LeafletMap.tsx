@@ -196,6 +196,24 @@ export const LeafletMap: React.FC<LeafletMapProps> = ({
             </div>`);
 
           centerOnUserRef.current = () => map.setView([userLocation.latitude, userLocation.longitude], 14);
+
+          // Draw GPS accuracy circle when accuracy is known (Phase 24)
+          // Uses the actual accuracy value from the browser — never fabricated
+          if (userLocation.gps_accuracy && userLocation.gps_accuracy > 0) {
+            L.circle([userLocation.latitude, userLocation.longitude], {
+              radius: userLocation.gps_accuracy, // metres from browser Geolocation API
+              color: '#ea580c',
+              fillColor: '#ea580c',
+              fillOpacity: 0.08,
+              weight: 1,
+              dashArray: '4 4',
+            }).addTo(map).bindTooltip(
+              `GPS Accuracy: ±${userLocation.gps_accuracy < 1000
+                ? `${userLocation.gps_accuracy}m`
+                : `${(userLocation.gps_accuracy / 1000).toFixed(1)}km`}`,
+              { permanent: false, direction: 'top' }
+            );
+          }
         }
 
       } catch (err: any) {

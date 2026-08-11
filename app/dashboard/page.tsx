@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { Navbar } from '@/components/Navbar';
 import { Sidebar } from '@/components/Sidebar';
 import { HeatGauge } from '@/components/HeatGauge';
@@ -14,12 +15,14 @@ import { SystemStatusPanel, SystemStatusValue } from '@/components/SystemStatusP
 import { fetchWeatherData } from '@/lib/weather-api';
 import { evaluateHeatRisk } from '@/lib/risk-engine';
 import { getUserProfile, saveUserProfile } from '@/lib/store';
+import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { LocationSource } from '@/lib/constants';
 import { LocationData, RiskAssessment, TechMode, WeatherData } from '@/lib/types';
 import Link from 'next/link';
 import { Clock, Sliders, MessageSquare, ArrowRight, ChevronDown, ChevronUp } from 'lucide-react';
 
 export default function DashboardPage() {
+  const router = useRouter();
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [techMode, setTechMode] = useState<TechMode>('technical');
   const [profile, setProfile] = useState(getUserProfile());
@@ -29,6 +32,7 @@ export default function DashboardPage() {
   const [showAssistant, setShowAssistant] = useState(false);
   const [showLocationSelector, setShowLocationSelector] = useState(false);
   const [locationSource, setLocationSource] = useState<LocationSource>('DEFAULT');
+  const refreshIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const loadData = useCallback(async (loc: LocationData) => {
     setLoading(true);
@@ -53,8 +57,36 @@ export default function DashboardPage() {
   }, [loadData]);
 
   useEffect(() => {
+    // ── Phase 2/3: Supabase session guard ──────────────────────────────────
+    // Only enforced when Supabase is configured (production).
+    // In demo/offline mode (isSupabaseConfigured=false) we allow localStorage-based auth.
+    if (isSupabaseConfigured && supabase) {
+      supabase.auth.getSession().then(({ data }) => {
+        if (!data.session) {
+          router.replace('/login');
+        }
+      });
+    }
+
+    // ── Phase 4: First load ────────────────────────────────────────────────
     loadDashboardData();
-  }, [loadDashboardData]);
+
+    // ── Phase 15: 15-minute auto-refresh ──────────────────────────────────
+    // Prevents stale weather from being shown as LIVE.
+    // Using 15-min interval to match the weather cache TTL.
+    const REFRESH_INTERVAL_MS = 15 * 60 * 1000;
+    refreshIntervalRef.current = setInterval(() => {
+      loadDashboardData();
+    }, REFRESH_INTERVAL_MS);
+
+    // Cleanup: always remove timer on unmount to prevent memory leaks
+    return () => {
+      if (refreshIntervalRef.current) {
+        clearInterval(refreshIntervalRef.current);
+        refreshIntervalRef.current = null;
+      }
+    };
+  }, [loadDashboardData, router]);
 
   const handleLocationChange = async (loc: LocationData, source: LocationSource) => {
     setLocationSource(source);
@@ -63,8 +95,10 @@ export default function DashboardPage() {
   };
 
   const currentLocation = profile.location || { name: 'Chennai', latitude: 13.0827, longitude: 80.2707 };
-  const dataStatus: 'LIVE' | 'CACHED' | 'UNAVAILABLE' = weather
-    ? weather.is_cached ? 'CACHED' : 'LIVE'
+  const dataStatus: 'LIVE' | 'CACHED' | 'UNAVAILABLE' | 'FALLBACK' = weather
+    ? weather.is_fallback ? 'FALLBACK'
+    : weather.is_cached ? 'CACHED'
+    : 'LIVE'
     : loading ? 'LIVE' : 'UNAVAILABLE';
 
   const lastUpdatedLabel = weather
