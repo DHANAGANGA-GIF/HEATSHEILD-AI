@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { Navbar } from '@/components/Navbar';
 import { Sidebar } from '@/components/Sidebar';
+import { EmailPreferenceToggle } from '@/components/EmailPreferenceToggle';
 import {
   getSmartAlerts,
   getAlertSettings,
@@ -314,19 +315,11 @@ function NotificationsContent() {
                   />
                 </div>
 
-                {/* Email Delivery */}
-                <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between opacity-70">
-                  <div>
-                    <div className="font-semibold text-slate-300 flex items-center gap-2">
-                      <span>Email Delivery</span>
-                      <span className="text-[9px] font-mono font-bold bg-slate-800 text-amber-400 px-1.5 py-0.5 rounded border border-amber-800/40">
-                        NOT CONFIGURED
-                      </span>
-                    </div>
-                    <div className="text-[10px] text-slate-500">Requires SMTP gateway connection</div>
-                  </div>
-                  <input type="checkbox" disabled checked={false} className="w-4 h-4 cursor-not-allowed" />
+                {/* Email Delivery (Resend Integration) */}
+                <div className="col-span-1 md:col-span-2">
+                  <EmailPreferenceToggle />
                 </div>
+
 
                 {/* SMS Delivery */}
                 <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between opacity-70">
