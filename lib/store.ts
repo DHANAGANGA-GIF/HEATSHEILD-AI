@@ -484,6 +484,10 @@ export const DEFAULT_ALERT_SETTINGS: AlertSettings = {
   min_severity: 'CAUTION',
   forecast_alerts_enabled: true,
   browser_notifications_enabled: false,
+  location_alerts_enabled: true,
+  recovery_alerts_enabled: true,
+  email_notifications_enabled: false,
+  sms_notifications_enabled: false,
 };
 
 export function getAlertSettings(): AlertSettings {

@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { Shield, Bell, User, Globe, AlertTriangle, Menu, X, Sun, LogOut } from 'lucide-react';
-import { getUserProfile, getAlerts, saveUserProfile, logoutUser } from '@/lib/store';
+import { getUserProfile, getAlerts, getSmartAlerts, saveUserProfile, logoutUser } from '@/lib/store';
 import { Language, TechMode, UserProfile } from '@/lib/types';
 import { t } from '@/lib/i18n';
 
@@ -32,8 +32,11 @@ export const Navbar: React.FC<NavbarProps> = ({
   useEffect(() => {
     const p = getUserProfile();
     setProfile(p);
-    const alerts = getAlerts();
-    setUnreadAlerts(alerts.filter(a => !a.read).length);
+    const smartAlerts = getSmartAlerts();
+    const legacyAlerts = getAlerts();
+    const smartUnread = smartAlerts.filter(a => !a.read && !a.dismissed).length;
+    const legacyUnread = legacyAlerts.filter(a => !a.read).length;
+    setUnreadAlerts(smartUnread > 0 ? smartUnread : legacyUnread);
   }, [pathname]);
 
   const handleLanguageChange = (lang: Language) => {
@@ -110,10 +113,11 @@ export const Navbar: React.FC<NavbarProps> = ({
             </select>
           </div>
 
-          {/* Alerts Bell */}
+          {/* Notifications Bell */}
           <Link
-            href="/alerts"
+            href="/notifications"
             className="relative p-2 text-slate-300 hover:text-white rounded-lg hover:bg-slate-800 transition"
+            title="Notification Center"
           >
             <Bell className="w-5 h-5" />
             {unreadAlerts > 0 && (

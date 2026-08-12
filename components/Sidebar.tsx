@@ -18,6 +18,7 @@ import {
   ShieldCheck,
   FileText,
   Bookmark,
+  Bell,
   Settings,
   HelpCircle,
   X
@@ -36,6 +37,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, onCloseMobile }) =
       title: 'CORE PLATFORM',
       items: [
         { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+        { label: 'Notifications', href: '/notifications', icon: Bell },
         { label: 'Risk Analysis', href: '/risk', icon: Flame },
         { label: 'Risk Timeline', href: '/timeline', icon: Clock },
         { label: 'Ask AI Assistant', href: '/assistant', icon: MessageSquare },

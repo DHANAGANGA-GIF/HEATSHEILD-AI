@@ -54,3 +54,7 @@ export const INSTITUTION_SHORT = 'KARE';
  * without exposing exact home/office address.
  */
 export const DISPLAY_COORD_PRECISION = 2;
+export const LOCATION_CHANGE_RADIUS_KM = 10;
+export const ALERT_COOLDOWN_MINUTES = 60;
+export const WEATHER_REFRESH_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+
