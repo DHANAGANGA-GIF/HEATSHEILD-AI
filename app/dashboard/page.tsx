@@ -32,13 +32,25 @@ export default function DashboardPage() {
   const [showAssistant, setShowAssistant] = useState(false);
   const [showLocationSelector, setShowLocationSelector] = useState(false);
   const [locationSource, setLocationSource] = useState<LocationSource>('DEFAULT');
+  const [authStatus, setAuthStatus] = useState<SystemStatusValue>('AUTHENTICATED');
+  
   const refreshIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const requestSeqRef = useRef<number>(0);
 
+  // RACE-CONDITION & STALE REQUEST PROTECTED DATA LOADER
   const loadData = useCallback(async (loc: LocationData) => {
+    const currentSeq = ++requestSeqRef.current;
     setLoading(true);
     const p = getUserProfile();
     setProfile(p);
+    
     const wData = await fetchWeatherData(loc.latitude, loc.longitude, loc.name);
+
+    // RACE CONDITION GUARD: Discard out-of-order stale responses
+    if (currentSeq !== requestSeqRef.current) {
+      return;
+    }
+
     setWeather(wData);
     const rData = evaluateHeatRisk(wData, {
       activity: p.activity_level,
@@ -57,36 +69,48 @@ export default function DashboardPage() {
   }, [loadData]);
 
   useEffect(() => {
-    // ── Phase 2/3: Supabase session guard ──────────────────────────────────
-    // Only enforced when Supabase is configured (production).
-    // In demo/offline mode (isSupabaseConfigured=false) we allow localStorage-based auth.
+    // Supabase Auth state listener & route guard
     if (isSupabaseConfigured && supabase) {
       supabase.auth.getSession().then(({ data }) => {
         if (!data.session) {
+          setAuthStatus('SIGNED OUT');
           router.replace('/login');
+        } else {
+          setAuthStatus('AUTHENTICATED');
         }
       });
-    }
 
-    // ── Phase 4: First load ────────────────────────────────────────────────
+      const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+        if (event === 'SIGNED_OUT' || !session) {
+          setAuthStatus('SIGNED OUT');
+          router.replace('/login');
+        } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
+          setAuthStatus('AUTHENTICATED');
+        }
+      });
+
+      return () => {
+        subscription.unsubscribe();
+      };
+    }
+  }, [router]);
+
+  useEffect(() => {
     loadDashboardData();
 
-    // ── Phase 15: 15-minute auto-refresh ──────────────────────────────────
-    // Prevents stale weather from being shown as LIVE.
-    // Using 15-min interval to match the weather cache TTL.
+    // 15-minute auto-refresh to maintain live data freshness
     const REFRESH_INTERVAL_MS = 15 * 60 * 1000;
     refreshIntervalRef.current = setInterval(() => {
       loadDashboardData();
     }, REFRESH_INTERVAL_MS);
 
-    // Cleanup: always remove timer on unmount to prevent memory leaks
     return () => {
       if (refreshIntervalRef.current) {
         clearInterval(refreshIntervalRef.current);
         refreshIntervalRef.current = null;
       }
     };
-  }, [loadDashboardData, router]);
+  }, [loadDashboardData]);
 
   const handleLocationChange = async (loc: LocationData, source: LocationSource) => {
     setLocationSource(source);
@@ -95,25 +119,35 @@ export default function DashboardPage() {
   };
 
   const currentLocation = profile.location || { name: 'Chennai', latitude: 13.0827, longitude: 80.2707 };
+
+  // Calculate weather freshness & stale protection
+  const weatherAgeMins = weather ? Math.floor((Date.now() - new Date(weather.timestamp).getTime()) / 60000) : 0;
+  const isStale = weatherAgeMins > 15;
+
   const dataStatus: 'LIVE' | 'CACHED' | 'UNAVAILABLE' | 'FALLBACK' = weather
     ? weather.is_fallback ? 'FALLBACK'
-    : weather.is_cached ? 'CACHED'
+    : weather.is_cached || isStale ? 'CACHED'
     : 'LIVE'
     : loading ? 'LIVE' : 'UNAVAILABLE';
 
   const lastUpdatedLabel = weather
-    ? `Updated ${new Date(weather.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+    ? isStale
+      ? `Stale (Updated ${weatherAgeMins}m ago)`
+      : `Updated ${new Date(weather.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
     : undefined;
 
-  // Derive accurate system status values
+  // Derive system status panel values
   const weatherSysStatus: SystemStatusValue = loading
     ? 'LOADING'
-    : weather?.is_cached ? 'CACHED'
+    : weather?.is_fallback ? 'FALLBACK'
+    : weather?.is_cached || isStale ? 'CACHED'
     : weather ? 'LIVE'
     : 'UNAVAILABLE';
+    
   const forecastSysStatus: SystemStatusValue = weather?.hourly_forecast?.length
-    ? weather.is_cached ? 'CACHED' : 'LIVE'
+    ? weather.is_cached || isStale ? 'CACHED' : 'LIVE'
     : 'UNAVAILABLE';
+
   const alertsSysStatus: SystemStatusValue = 'ACTIVE';
   const aiSysStatus: SystemStatusValue = risk ? 'READY' : 'UNAVAILABLE';
   const locationSysStatus: SystemStatusValue =
@@ -167,7 +201,7 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* ── Location Status Bar (Q1: Where am I?) ─────────────────────── */}
+          {/* Location Status Bar */}
           <LocationStatusBar
             location={currentLocation}
             locationSource={locationSource}
@@ -178,13 +212,14 @@ export default function DashboardPage() {
             isLoading={loading}
           />
 
-          {/* ── System Status Panel ─────────────────────────────────────────── */}
+          {/* System Status Panel */}
           <SystemStatusPanel
             locationStatus={locationSysStatus}
             weatherStatus={weatherSysStatus}
             forecastStatus={forecastSysStatus}
             alertsStatus={alertsSysStatus}
             aiStatus={aiSysStatus}
+            authStatus={authStatus}
           />
 
           {/* Embedded AI Assistant (toggleable) */}
@@ -205,7 +240,7 @@ export default function DashboardPage() {
               Retrieving environmental data for {currentLocation.name}...
             </div>
           ) : !weather || !risk ? (
-            /* Unavailable State (human-readable) */
+            /* Unavailable State */
             <div className="p-10 bg-white rounded-xl border border-slate-200 text-center space-y-3">
               <p className="text-sm font-semibold text-slate-700">We couldn&apos;t retrieve current weather data.</p>
               <p className="text-xs text-slate-500">Risk assessment is temporarily unavailable because current environmental data could not be retrieved.</p>
@@ -218,7 +253,7 @@ export default function DashboardPage() {
             </div>
           ) : (
             <>
-              {/* Q2+Q3: What are the conditions? / What is my risk? */}
+              {/* Heat Risk Score Gauge */}
               <HeatGauge
                 score={risk.risk_score}
                 level={risk.risk_level}
@@ -226,7 +261,7 @@ export default function DashboardPage() {
                 dataQuality={risk.data_quality}
               />
 
-              {/* Q2 detail + Q4: Why is the risk at this level? */}
+              {/* Weather & XAI Contributing Factors */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
                 <WeatherCard
                   weather={weather}
@@ -240,13 +275,13 @@ export default function DashboardPage() {
                 />
               </div>
 
-              {/* Q5: What should I do now? */}
+              {/* Actionable Guidance */}
               <GuidanceList
                 guidance={risk.recommendations}
                 mode={techMode}
               />
 
-              {/* Q6: When could conditions become worse? + Quick Actions */}
+              {/* Quick Actions */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <Link
                   href="/timeline"

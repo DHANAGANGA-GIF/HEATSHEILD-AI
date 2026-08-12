@@ -2,19 +2,22 @@
 
 import React from 'react';
 import {
-  MapPin, Cloud, Cpu, TrendingUp, Bell, MessageSquare,
-  CheckCircle2, AlertTriangle, WifiOff, Loader2,
+  MapPin, Cloud, Cpu, TrendingUp, Bell, MessageSquare, ShieldCheck,
 } from 'lucide-react';
 
 export type SystemStatusValue =
   | 'LIVE'
   | 'CACHED'
+  | 'FALLBACK'
   | 'MANUAL'
   | 'CAMPUS'
   | 'GPS'
   | 'UNAVAILABLE'
   | 'READY'
   | 'ACTIVE'
+  | 'DISABLED'
+  | 'AUTHENTICATED'
+  | 'SIGNED OUT'
   | 'LOADING';
 
 interface StatusItem {
@@ -25,10 +28,11 @@ interface StatusItem {
 
 interface SystemStatusPanelProps {
   locationStatus: SystemStatusValue;   // GPS | MANUAL | CAMPUS | UNAVAILABLE
-  weatherStatus: SystemStatusValue;    // LIVE | CACHED | UNAVAILABLE | LOADING
+  weatherStatus: SystemStatusValue;    // LIVE | CACHED | FALLBACK | UNAVAILABLE | LOADING
   forecastStatus: SystemStatusValue;   // LIVE | CACHED | UNAVAILABLE | LOADING
-  alertsStatus: SystemStatusValue;     // ACTIVE | UNAVAILABLE
+  alertsStatus: SystemStatusValue;     // ACTIVE | DISABLED | UNAVAILABLE
   aiStatus: SystemStatusValue;         // READY | UNAVAILABLE
+  authStatus?: SystemStatusValue;      // AUTHENTICATED | SIGNED OUT
   className?: string;
 }
 
@@ -39,6 +43,7 @@ function statusConfig(value: SystemStatusValue | string) {
     case 'READY':
     case 'ACTIVE':
     case 'GPS':
+    case 'AUTHENTICATED':
       return {
         dot: 'bg-emerald-500 animate-pulse',
         text: 'text-emerald-700',
@@ -46,6 +51,7 @@ function statusConfig(value: SystemStatusValue | string) {
         border: 'border-emerald-200',
       };
     case 'CACHED':
+    case 'FALLBACK':
     case 'MANUAL':
     case 'CAMPUS':
       return {
@@ -61,6 +67,8 @@ function statusConfig(value: SystemStatusValue | string) {
         bg: 'bg-blue-50',
         border: 'border-blue-200',
       };
+    case 'DISABLED':
+    case 'SIGNED OUT':
     case 'UNAVAILABLE':
     default:
       return {
@@ -88,6 +96,7 @@ export const SystemStatusPanel: React.FC<SystemStatusPanelProps> = ({
   forecastStatus,
   alertsStatus,
   aiStatus,
+  authStatus = 'AUTHENTICATED',
   className = '',
 }) => {
   const items: StatusItem[] = [
@@ -97,15 +106,16 @@ export const SystemStatusPanel: React.FC<SystemStatusPanelProps> = ({
     { label: 'FORECAST',     value: forecastStatus, icon: <TrendingUp className="w-3.5 h-3.5" /> },
     { label: 'ALERTS',       value: alertsStatus,   icon: <Bell className="w-3.5 h-3.5" /> },
     { label: 'AI ASSISTANT', value: aiStatus,       icon: <MessageSquare className="w-3.5 h-3.5" /> },
+    { label: 'AUTH',         value: authStatus,     icon: <ShieldCheck className="w-3.5 h-3.5" /> },
   ];
 
   return (
     <div className={`bg-slate-900 border border-slate-700 rounded-xl px-5 py-3 ${className}`}>
       <div className="flex items-center gap-2 mb-3">
         <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-        <span className="text-[11px] font-mono font-bold text-slate-400 uppercase tracking-wider">System Status</span>
+        <span className="text-[11px] font-mono font-bold text-slate-400 uppercase tracking-wider">System Status Panel</span>
       </div>
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
         {items.map((item) => (
           <div key={item.label} className="flex flex-col gap-1.5">
             <div className="flex items-center gap-1 text-slate-500">

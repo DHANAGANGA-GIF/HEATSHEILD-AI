@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test": "npx tsx --test tests/ai-assistant.test.ts tests/cluster-detector.test.ts tests/community-map.test.ts tests/demo-hardening.test.ts tests/forecast-alert.test.ts tests/location-ux.test.ts tests/organization.test.ts tests/risk-engine.test.ts tests/risk-simulator.test.ts tests/security-hardening.test.ts"
+    "test": "npx tsx --test tests/ai-assistant.test.ts tests/cluster-detector.test.ts tests/community-map.test.ts tests/demo-hardening.test.ts tests/forecast-alert.test.ts tests/location-ux.test.ts tests/organization.test.ts tests/realtime-hardening.test.ts tests/risk-engine.test.ts tests/risk-simulator.test.ts tests/security-hardening.test.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.1",

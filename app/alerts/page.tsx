@@ -17,10 +17,8 @@ import {
 import { AlertSettings, AlertPriority, SmartAlert, WeatherData } from '@/lib/types';
 import {
   Bell, BellOff, ShieldAlert, AlertTriangle, Info, CheckCircle2,
-  X, RotateCcw, Settings2, RefreshCw, ChevronDown, ChevronUp, Eye
+  X, RotateCcw, Settings2, RefreshCw, ChevronDown, ChevronUp, Eye, Mail, Phone, Globe
 } from 'lucide-react';
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const PRIORITY_ORDER: Record<AlertPriority, number> = {
   INFO: 0, CAUTION: 1, 'HIGH PRIORITY': 2, CRITICAL: 3,
@@ -44,8 +42,7 @@ function PriorityIcon({ priority }: { priority: AlertPriority }) {
 }
 
 const SEVERITY_OPTIONS: AlertPriority[] = ['INFO', 'CAUTION', 'HIGH PRIORITY', 'CRITICAL'];
-
-// ─── Page Component ───────────────────────────────────────────────────────────
+const CATEGORY_FILTERS = ['All', 'Risk', 'Forecast', 'Weather', 'Security', 'Community', 'System'];
 
 export default function AlertsPage() {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
@@ -56,9 +53,9 @@ export default function AlertsPage() {
   const [generateMsg, setGenerateMsg] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [showDismissed, setShowDismissed] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [notifPermission, setNotifPermission] = useState<NotificationPermission | 'unsupported'>('default');
 
-  // Load settings, alerts, and weather on mount
   useEffect(() => {
     setSettings(getAlertSettings());
     setAlerts(getSmartAlerts());
@@ -68,7 +65,6 @@ export default function AlertsPage() {
       setNotifPermission('unsupported');
     }
 
-    // Pre-fetch weather data for alert generation
     const p = getUserProfile();
     const loc = p.location || { name: 'Chennai', latitude: 13.0827, longitude: 80.2707 };
     fetchWeatherData(loc.latitude, loc.longitude, loc.name)
@@ -76,13 +72,11 @@ export default function AlertsPage() {
       .catch(() => setWeather(null));
   }, []);
 
-  // Persist settings change
   const updateSetting = (patch: Partial<AlertSettings>) => {
     const updated = saveAlertSettings(patch);
     setSettings(updated);
   };
 
-  // Generate alerts on demand (user-initiated)
   const handleGenerateAlerts = useCallback(async () => {
     if (!weather || !settings) return;
     setGenerating(true);
@@ -96,10 +90,7 @@ export default function AlertsPage() {
         age_group: p.age_group,
       };
 
-      // Compute current risk
       const currentRisk = evaluateHeatRisk(weather, ctx);
-
-      // Score forecast
       const scoredForecast = weather.hourly_forecast
         ? scoreForecast(weather, weather.hourly_forecast.slice(0, 24), ctx, !!weather.is_cached)
         : [];
@@ -110,7 +101,6 @@ export default function AlertsPage() {
         ? 'CACHED'
         : scoredForecast.length > 0 ? 'FORECAST' : 'LIVE';
 
-      // Get active cooldowns
       const cooldownKeys = getActiveCooldownKeys(ALERT_COOLDOWN_MS);
 
       const newAlerts = generateAlerts({
@@ -124,7 +114,6 @@ export default function AlertsPage() {
       if (newAlerts.length === 0) {
         setGenerateMsg('No new alerts generated. All conditions within normal thresholds or within cooldown window.');
       } else {
-        // Record cooldowns for newly fired alerts
         recordAlertCooldowns(newAlerts.map(a => a.dedup_key));
         const updated = addSmartAlerts(newAlerts);
         setAlerts(updated);
@@ -137,22 +126,18 @@ export default function AlertsPage() {
     }
   }, [weather, settings]);
 
-  // Dismiss alert
   const handleDismiss = (id: string) => {
     setAlerts(dismissSmartAlert(id));
   };
 
-  // Mark read
   const handleMarkRead = (id: string) => {
     setAlerts(markSmartAlertRead(id));
   };
 
-  // Clear dismissed
   const handleClearDismissed = () => {
     setAlerts(clearDismissedAlerts());
   };
 
-  // Request browser notifications (only on explicit user click)
   const handleRequestNotifPermission = async () => {
     if (typeof Notification === 'undefined') return;
     const result = await Notification.requestPermission();
@@ -162,7 +147,7 @@ export default function AlertsPage() {
     }
   };
 
-  const activeAlerts = alerts.filter(a => !a.dismissed);
+  const activeAlerts = alerts.filter(a => !a.dismissed && (selectedCategory === 'All' || a.rule_id.toLowerCase().includes(selectedCategory.toLowerCase())));
   const dismissedAlerts = alerts.filter(a => a.dismissed);
   const unreadCount = activeAlerts.filter(a => !a.read).length;
 
@@ -180,10 +165,10 @@ export default function AlertsPage() {
             <div>
               <div className="flex items-center gap-2.5">
                 <Bell className="w-5 h-5 text-slate-500" />
-                <h1 className="text-xl font-bold text-slate-900">SMART HEAT-RISK ALERTS</h1>
+                <h1 className="text-xl font-bold text-slate-900">NOTIFICATION & ALERT CENTER</h1>
               </div>
               <p className="text-xs text-slate-500 font-mono mt-0.5">
-                Rule-based environmental threshold alerts — derived from live HeatShield forecast data
+                Rule-based environmental threshold alerts & channel status center
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -202,12 +187,56 @@ export default function AlertsPage() {
             </div>
           </div>
 
+          {/* Delivery Channels Status Panel */}
+          <div className="bg-slate-900 text-slate-100 p-4 rounded-xl border border-slate-800 space-y-3">
+            <div className="text-[11px] font-mono font-bold uppercase tracking-wider text-slate-400">
+              ALERT DELIVERY CHANNELS STATUS
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs font-mono">
+              <div className="p-2.5 bg-slate-800 rounded-lg border border-slate-700">
+                <span className="text-[10px] text-slate-400 block">IN-APP</span>
+                <span className="font-bold text-emerald-400">ACTIVE</span>
+              </div>
+              <div className="p-2.5 bg-slate-800 rounded-lg border border-slate-700">
+                <span className="text-[10px] text-slate-400 block">BROWSER</span>
+                <span className={`font-bold ${notifPermission === 'granted' ? 'text-emerald-400' : 'text-slate-400'}`}>
+                  {notifPermission === 'granted' ? 'ENABLED' : notifPermission === 'denied' ? 'BLOCKED' : 'DISABLED'}
+                </span>
+              </div>
+              <div className="p-2.5 bg-slate-800 rounded-lg border border-slate-700">
+                <span className="text-[10px] text-slate-400 block">EMAIL</span>
+                <span className="font-bold text-slate-400">NOT CONFIGURED</span>
+              </div>
+              <div className="p-2.5 bg-slate-800 rounded-lg border border-slate-700">
+                <span className="text-[10px] text-slate-400 block">SMS GATEWAY</span>
+                <span className="font-bold text-slate-400">NOT CONFIGURED</span>
+              </div>
+            </div>
+          </div>
+
           {/* Safety Notice */}
           <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl flex items-start gap-2.5 text-xs text-blue-900">
             <Info className="w-4 h-4 shrink-0 text-blue-500 mt-0.5" />
             <span>
-              <strong>ENVIRONMENTAL DECISION-SUPPORT NOTICE:</strong> These alerts represent estimated environmental heat-risk thresholds derived from forecast data. They do <strong>NOT</strong> predict medical outcomes, diagnose illness, or substitute for professional advice. Alert conditions and thresholds are documented in <code className="font-mono bg-blue-100 px-1 rounded">docs/FORECAST-ALERT-VALIDATION.md</code>.
+              <strong>ENVIRONMENTAL DECISION-SUPPORT NOTICE:</strong> These alerts represent estimated environmental heat-risk thresholds derived from forecast data. They do <strong>NOT</strong> predict medical outcomes or substitute for professional emergency advice.
             </span>
+          </div>
+
+          {/* Category Filter Tabs */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs">
+            {CATEGORY_FILTERS.map((cat) => (
+              <button
+                key={cat}
+                onClick={() => setSelectedCategory(cat)}
+                className={`px-3 py-1.5 rounded-lg font-mono font-semibold transition whitespace-nowrap ${
+                  selectedCategory === cat
+                    ? 'bg-emerald-700 text-white shadow-xs'
+                    : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+                }`}
+              >
+                {cat}
+              </button>
+            ))}
           </div>
 
           {/* Alert Settings Panel */}
@@ -279,7 +308,7 @@ export default function AlertsPage() {
                 ) : notifPermission === 'granted' ? (
                   <div className="flex items-center gap-2 text-xs text-emerald-700 font-medium">
                     <CheckCircle2 className="w-4 h-4" />
-                    <span>Browser notifications granted</span>
+                    <span>Notifications enabled</span>
                   </div>
                 ) : notifPermission === 'denied' ? (
                   <span className="text-xs font-mono text-rose-600">Notifications blocked by browser. Enable in browser site settings to use this feature.</span>
@@ -349,7 +378,7 @@ export default function AlertsPage() {
                 <CheckCircle2 className="w-8 h-8 mx-auto text-emerald-400" />
                 <div className="text-sm font-semibold text-slate-700">No active alerts</div>
                 <div className="text-xs text-slate-500">
-                  Click "Run Alert Check" above to analyse current forecast data. No alerts will be fabricated if data is unavailable.
+                  Click &quot;Run Alert Check&quot; above to analyse current forecast data. No alerts will be fabricated if data is unavailable.
                 </div>
               </div>
             ) : (
@@ -362,13 +391,11 @@ export default function AlertsPage() {
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex items-start gap-3 flex-1 min-w-0">
-                        {/* Priority Icon */}
                         <div className={`p-2 rounded-lg shrink-0 ${styles.icon}`}>
                           <PriorityIcon priority={alert.priority} />
                         </div>
 
                         <div className="flex-1 min-w-0 space-y-1.5">
-                          {/* Title + Badges */}
                           <div className="flex flex-wrap items-center gap-2">
                             <span className={`text-[11px] font-bold font-mono px-2 py-0.5 rounded border ${styles.badge}`}>
                               {alert.priority}
@@ -386,20 +413,16 @@ export default function AlertsPage() {
                             {!alert.read && <span className="text-[9px] font-bold bg-slate-900 text-white px-1.5 py-0.5 rounded">UNREAD</span>}
                           </div>
 
-                          {/* Alert Title */}
                           <h3 className="text-sm font-bold text-slate-900">{alert.title}</h3>
 
-                          {/* Alert Message */}
                           <p className="text-xs text-slate-700 leading-relaxed">{alert.message}</p>
 
-                          {/* Affected Period */}
                           {alert.affected_period_label && (
                             <div className="text-[11px] font-mono text-slate-500">
                               Affected period: <strong className="text-slate-700">{alert.affected_period_label}</strong>
                             </div>
                           )}
 
-                          {/* Trigger Data */}
                           <div className="flex flex-wrap gap-3 text-[11px] font-mono text-slate-500 pt-1">
                             {alert.trigger_data.temperature != null && (
                               <span>{alert.trigger_data.temperature}°C</span>
@@ -411,20 +434,17 @@ export default function AlertsPage() {
                             <span className="font-bold text-slate-700">{alert.trigger_data.risk_level}</span>
                           </div>
 
-                          {/* Recommended Action */}
                           <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-900 flex items-start gap-2 mt-1">
                             <CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-emerald-600 mt-0.5" />
                             <span>{alert.recommended_action}</span>
                           </div>
 
-                          {/* Timestamp */}
                           <span className="text-[10px] font-mono text-slate-400 block">
                             Generated: {new Date(alert.timestamp).toLocaleString()}
                           </span>
                         </div>
                       </div>
 
-                      {/* Action Buttons */}
                       <div className="flex flex-col gap-1.5 shrink-0">
                         {!alert.read && (
                           <button
@@ -450,7 +470,7 @@ export default function AlertsPage() {
             )}
           </div>
 
-          {/* Dismissed Alerts (collapsible) */}
+          {/* Dismissed Alerts */}
           {dismissedAlerts.length > 0 && (
             <div>
               <button
