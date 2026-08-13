@@ -1,5 +1,6 @@
-import { AlertItem, AlertPriority, AlertSettings, CommunityCategory, CommunityReport, LocationData, ReportSeverity, ReportStatus, SmartAlert, UserProfile, VerifiedCoolingLocation } from './types';
+import { AlertItem, AlertPriority, AlertSettings, CommunityCategory, CommunityReport, LocationData, NotificationLog, RecipientNotificationProfile, ReportSeverity, ReportStatus, SmartAlert, UserProfile, VerifiedCoolingLocation } from './types';
 import { isSupabaseConfigured, supabase } from './supabase';
+
 import { checkDuplicateSubmission, recordSubmissionTime, validateReportInput } from './community-moderation';
 import { calculateDistanceKm } from './cluster-detector';
 
@@ -484,10 +485,6 @@ export const DEFAULT_ALERT_SETTINGS: AlertSettings = {
   min_severity: 'CAUTION',
   forecast_alerts_enabled: true,
   browser_notifications_enabled: false,
-  location_alerts_enabled: true,
-  recovery_alerts_enabled: true,
-  email_notifications_enabled: false,
-  sms_notifications_enabled: false,
 };
 
 export function getAlertSettings(): AlertSettings {
@@ -601,4 +598,194 @@ export function recordAlertCooldowns(dedupKeys: string[]): void {
   }
   localStorage.setItem(ALERT_COOLDOWNS_KEY, JSON.stringify(cooldowns));
 }
+
+// ─── Recipient & Notification Log Management ───────────────────────────────
+
+const RECIPIENT_PROFILES_KEY = 'heatshield_recipient_profiles';
+const NOTIFICATION_LOGS_KEY = 'heatshield_notification_logs';
+
+export const INITIAL_REGISTERED_RECIPIENTS: RecipientNotificationProfile[] = [
+  {
+    id: 'rec_klu_560',
+    email: '99240040560@klu.ac.in',
+    display_name: 'KLU Student 560',
+    age: 20,
+    location_name: 'Chennai',
+    latitude: 13.0827,
+    longitude: 80.2707,
+    location_source: 'MANUAL_LOCATION',
+    email_alerts_enabled: true,
+    hourly_summary_enabled: true,
+    critical_alerts_enabled: true,
+    forecast_alerts_enabled: true,
+    created_at: new Date().toISOString(),
+  },
+  {
+    id: 'rec_klu_571',
+    email: '99240040571@klu.ac.in',
+    display_name: 'KLU Student 571',
+    age: 21,
+    location_name: 'Vijayawada',
+    latitude: 16.5062,
+    longitude: 80.6480,
+    location_source: 'MANUAL_LOCATION',
+    email_alerts_enabled: true,
+    hourly_summary_enabled: true,
+    critical_alerts_enabled: true,
+    forecast_alerts_enabled: true,
+    created_at: new Date().toISOString(),
+  },
+  {
+    id: 'rec_klu_875',
+    email: '99240040875@klu.ac.in',
+    display_name: 'KLU Student 875',
+    age: undefined, // Missing age: must not be guessed!
+    location_name: 'Guntur',
+    latitude: 16.3067,
+    longitude: 80.4365,
+    location_source: 'MANUAL_LOCATION',
+    email_alerts_enabled: true,
+    hourly_summary_enabled: true,
+    critical_alerts_enabled: true,
+    forecast_alerts_enabled: true,
+    created_at: new Date().toISOString(),
+  },
+  {
+    id: 'rec_klu_159',
+    email: '99240040159@klu.ac.in',
+    display_name: 'KLU Student 159',
+    age: 22,
+    location_name: 'Hyderabad',
+    latitude: 17.3850,
+    longitude: 78.4867,
+    location_source: 'MANUAL_LOCATION',
+    email_alerts_enabled: true,
+    hourly_summary_enabled: true,
+    critical_alerts_enabled: true,
+    forecast_alerts_enabled: true,
+    created_at: new Date().toISOString(),
+  },
+];
+
+// Server-side in-memory fallbacks for Node process lifecycle
+let globalServerLogs: NotificationLog[] = [];
+let globalServerRecipients: RecipientNotificationProfile[] = [...INITIAL_REGISTERED_RECIPIENTS];
+
+export function getRecipientProfiles(): RecipientNotificationProfile[] {
+  if (typeof window === 'undefined') {
+    return globalServerRecipients;
+  }
+  const stored = localStorage.getItem(RECIPIENT_PROFILES_KEY);
+  if (!stored) {
+    localStorage.setItem(RECIPIENT_PROFILES_KEY, JSON.stringify(INITIAL_REGISTERED_RECIPIENTS));
+    return INITIAL_REGISTERED_RECIPIENTS;
+  }
+  try {
+    return JSON.parse(stored);
+  } catch {
+    return INITIAL_REGISTERED_RECIPIENTS;
+  }
+}
+
+export function saveRecipientProfile(profile: Partial<RecipientNotificationProfile> & { email: string }): RecipientNotificationProfile[] {
+  const current = getRecipientProfiles();
+  const index = current.findIndex(p => p.email.toLowerCase() === profile.email.toLowerCase());
+  let updated: RecipientNotificationProfile[];
+  if (index >= 0) {
+    updated = current.map((p, i) => i === index ? { ...p, ...profile, updated_at: new Date().toISOString() } : p);
+  } else {
+    const newProfile: RecipientNotificationProfile = {
+      id: `rec_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      display_name: profile.display_name || profile.email.split('@')[0],
+      location_name: profile.location_name || 'Chennai',
+      latitude: profile.latitude ?? 13.0827,
+      longitude: profile.longitude ?? 80.2707,
+      location_source: profile.location_source || 'MANUAL_LOCATION',
+      email_alerts_enabled: profile.email_alerts_enabled ?? true,
+      hourly_summary_enabled: profile.hourly_summary_enabled ?? true,
+      critical_alerts_enabled: profile.critical_alerts_enabled ?? true,
+      forecast_alerts_enabled: profile.forecast_alerts_enabled ?? true,
+      created_at: new Date().toISOString(),
+      ...profile,
+      email: profile.email.toLowerCase(),
+    };
+    updated = [...current, newProfile];
+  }
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(RECIPIENT_PROFILES_KEY, JSON.stringify(updated));
+  } else {
+    globalServerRecipients = updated;
+  }
+  return updated;
+}
+
+export function getNotificationLogs(): NotificationLog[] {
+  if (typeof window === 'undefined') {
+    return globalServerLogs;
+  }
+  const stored = localStorage.getItem(NOTIFICATION_LOGS_KEY);
+  if (!stored) return [];
+  try {
+    return JSON.parse(stored);
+  } catch {
+    return [];
+  }
+}
+
+export function saveNotificationLog(log: NotificationLog): NotificationLog[] {
+  const current = getNotificationLogs();
+  const filtered = current.filter(l => l.idempotency_key !== log.idempotency_key);
+  const updated = [log, ...filtered].slice(0, 100);
+
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(NOTIFICATION_LOGS_KEY, JSON.stringify(updated));
+  } else {
+    globalServerLogs = updated;
+  }
+
+  // Asynchronously attempt writing to Supabase if available
+  if (isSupabaseConfigured && supabase) {
+    supabase.from('notification_logs').insert([{
+      id: log.id,
+      recipient_id: log.recipient_id,
+      recipient_email: log.recipient_email,
+      alert_type: log.alert_type,
+      risk_level: log.risk_level,
+      location_name: log.location_name,
+      latitude: log.latitude,
+      longitude: log.longitude,
+      location_status: log.location_status,
+      temperature: log.temperature,
+      feels_like_temperature: log.feels_like_temperature,
+      humidity: log.humidity,
+      weather_condition: log.weather_condition,
+      weather_status: log.weather_status,
+      risk_score: log.risk_score,
+      provider: log.provider,
+      provider_message_id: log.provider_message_id,
+      status: log.status,
+      failure_reason: log.failure_reason,
+      idempotency_key: log.idempotency_key,
+      sent_at: log.sent_at,
+    }]).then(
+      res => {
+        if (res.error) {
+          console.warn('Supabase notification log insert notice:', res.error.message);
+        }
+      },
+      err => {
+        console.warn('Supabase insert exception:', err);
+      }
+    );
+  }
+
+
+  return updated;
+}
+
+export function isIdempotentKeyProcessed(idempotencyKey: string): boolean {
+  const logs = getNotificationLogs();
+  return logs.some(l => l.idempotency_key === idempotencyKey && l.status === 'SENT');
+}
+
 

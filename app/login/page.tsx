@@ -517,6 +517,45 @@ export default function LoginPage() {
           <span>Continue with Google</span>
         </button>
 
+        {/* Quick Demo Access */}
+        <div className="space-y-1.5 pt-2 border-t border-slate-800">
+          <div className="text-[11px] font-mono text-slate-400 font-semibold mb-2">QUICK DEMO SESSIONS (REVIEWERS)</div>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => handleDemoLogin('user')}
+              className="py-2 px-2.5 rounded-lg bg-slate-950 hover:bg-slate-800 text-slate-300 text-[11px] font-semibold text-left border border-slate-800 transition flex items-center justify-between"
+            >
+              <span>User Demo</span>
+              <ArrowRight className="w-3 h-3 text-emerald-400" />
+            </button>
+            <button
+              type="button"
+              onClick={() => handleDemoLogin('school')}
+              className="py-2 px-2.5 rounded-lg bg-slate-950 hover:bg-slate-800 text-slate-300 text-[11px] font-semibold text-left border border-slate-800 transition flex items-center justify-between"
+            >
+              <span>School Admin</span>
+              <ArrowRight className="w-3 h-3 text-blue-400" />
+            </button>
+            <button
+              type="button"
+              onClick={() => handleDemoLogin('worksite')}
+              className="py-2 px-2.5 rounded-lg bg-slate-950 hover:bg-slate-800 text-slate-300 text-[11px] font-semibold text-left border border-slate-800 transition flex items-center justify-between"
+            >
+              <span>Worksite Safety</span>
+              <ArrowRight className="w-3 h-3 text-amber-400" />
+            </button>
+            <button
+              type="button"
+              onClick={() => handleDemoLogin('ngo')}
+              className="py-2 px-2.5 rounded-lg bg-slate-950 hover:bg-slate-800 text-slate-300 text-[11px] font-semibold text-left border border-slate-800 transition flex items-center justify-between"
+            >
+              <span>NGO Lead</span>
+              <ArrowRight className="w-3 h-3 text-rose-400" />
+            </button>
+          </div>
+        </div>
+
         <div className="mt-6 text-center text-[11px] text-slate-500 font-sans">
           By logging in, you agree to HeatShield AI&apos;s <Link href="/terms" className="underline hover:text-slate-300">Terms of Service</Link> and <Link href="/privacy" className="underline hover:text-slate-300">Privacy Policy</Link>.
         </div>

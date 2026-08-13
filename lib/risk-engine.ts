@@ -1,6 +1,7 @@
-import { ActivityLevel, AgeGroup, CoolingAccess, ExposureDuration, RiskAssessment, RiskLevel, WeatherData } from './types';
+import { ActivityLevel, AgeGroup, CoolingAccess, ExposureDuration, RiskAssessment, RiskLevel, UserProfile, WeatherData } from './types';
 import { calculateXAIContributions } from './xai-engine';
 import { generatePersonalizedGuidance } from './guidance-engine';
+
 
 /**
  * Calculates Steadman/NWS Heat Index (°C) from dry bulb temperature T (°C) and Relative Humidity RH (%)
@@ -135,3 +136,24 @@ export function evaluateHeatRisk(
     limitations: 'Local microclimatic factors (direct sun exposure, radiant ground heat) may differ from regional environmental observations.',
   };
 }
+
+export function calculateRiskAssessment({
+  weather,
+  profile,
+}: {
+  weather: WeatherData;
+  profile: Partial<UserProfile>;
+}): RiskAssessment {
+  const ageGroup: AgeGroup = profile.age_group || 'adult';
+  const activity: ActivityLevel = profile.activity_level || 'moderate';
+  const duration: ExposureDuration = profile.exposure_duration || 'moderate';
+  const cooling: CoolingAccess = profile.cooling_access || 'good';
+
+  return evaluateHeatRisk(weather, {
+    activity,
+    duration,
+    cooling,
+    age_group: ageGroup,
+  });
+}
+

@@ -6,6 +6,9 @@ export interface SendEmailOptions {
   alert: SmartAlert;
   locationName?: string;
   recipientName?: string;
+  locationStatus?: string;
+  gpsAccuracy?: number;
+  trend?: 'increasing' | 'stable' | 'decreasing';
 }
 
 export interface SendEmailResult {
@@ -24,59 +27,137 @@ export async function sendAlertEmail(options: SendEmailOptions): Promise<SendEma
   if (!apiKey) {
     return {
       success: false,
-      error: 'RESEND_API_KEY environment variable is not configured',
+      error: 'RESEND_API_KEY environment variable is not configured on the server',
     };
   }
 
   const fromAddress = process.env.EMAIL_FROM || 'HeatShield AI Alerts <onboarding@resend.dev>';
   const resend = new Resend(apiKey);
 
-  const { to, alert, locationName } = options;
-  const loc = locationName || alert.location_name || 'Selected Location';
+  const { to, alert, locationName, recipientName, locationStatus, gpsAccuracy, trend } = options;
+  const loc = locationName || alert.location_name || 'Location Unavailable';
+  const alertTime = alert.timestamp ? new Date(alert.timestamp).toUTCString() : new Date().toUTCString();
+  const isCritical = alert.priority === 'CRITICAL' || alert.trigger_data.risk_level === 'EXTREME';
+  const severityStr = alert.priority || alert.trigger_data.risk_level || 'ALERT';
+  const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-  const subject = `[HeatShield AI Alert] ${alert.priority}: ${alert.title}`;
+  // Subject format per specification: HeatShield AI | [SEVERITY] | [REAL LOCATION OR LOCATION UNAVAILABLE] | [UNIQUE EVENT TIME]
+  const subject = `HeatShield AI | [${severityStr}] | [${loc}] | [${timeStr}]`;
+
+  const defaultPrecautions = [
+    'Drink 250-500ml of clean water every hour during outdoor exposure.',
+    'Move into shaded, air-conditioned, or fan-cooled environments immediately.',
+    'Reschedule strenuous outdoor physical labor to early morning or night.',
+    'Take 15-20 minute recovery rest breaks every hour in a cool area.',
+    'Monitor for dizziness, headache, rapid pulse, or unusual weakness.',
+    'Apply cool damp cloths to skin, forehead, and neck.',
+    'Seek immediate medical attention if confusion, fainting, or high fever occurs.'
+  ];
+
+  const precautionsList = (alert.precautions && alert.precautions.length >= 3)
+    ? alert.precautions
+    : defaultPrecautions;
+
+  const greeting = recipientName ? `Hello ${recipientName},` : 'Hello,';
+  const accuracyStr = gpsAccuracy !== undefined ? `±${gpsAccuracy} m` : 'unavailable';
+  const locSourceStr = locationStatus || 'SAVED LOCATION';
 
   const htmlContent = `
     <!DOCTYPE html>
     <html>
       <head>
         <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>${alert.title}</title>
         <style>
-          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #0f172a; color: #f8fafc; margin: 0; padding: 24px; }
-          .container { max-width: 600px; margin: 0 auto; background: #1e293b; border-radius: 12px; padding: 24px; border: 1px solid #334155; }
-          .header { font-size: 13px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.05em; color: #38bdf8; margin-bottom: 8px; }
-          .title { font-size: 20px; font-weight: bold; color: #ffffff; margin-bottom: 12px; line-height: 1.3; }
-          .badge { display: inline-block; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: bold; background: #ef4444; color: #ffffff; text-transform: uppercase; }
-          .message { font-size: 14px; color: #e2e8f0; line-height: 1.5; margin: 16px 0; }
-          .details { background: #0f172a; border-radius: 8px; padding: 16px; margin: 16px 0; border: 1px solid #334155; }
-          .detail-item { font-size: 13px; color: #cbd5e1; margin-bottom: 6px; font-family: monospace; }
-          .action { background: #064e3b; border: 1px solid #059669; border-radius: 8px; padding: 16px; margin-top: 16px; color: #a7f3d0; font-size: 13px; line-height: 1.5; }
-          .footer { font-size: 11px; color: #64748b; margin-top: 24px; text-align: center; font-family: monospace; }
+          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #090d16; color: #f8fafc; margin: 0; padding: 20px; }
+          .container { max-width: 640px; margin: 0 auto; background: #131c2e; border-radius: 14px; padding: 28px; border: 1px solid #1e293b; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
+          .header { font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; color: #10b981; margin-bottom: 6px; }
+          .title { font-size: 22px; font-weight: 800; color: #ffffff; margin-bottom: 12px; line-height: 1.25; }
+          .badge { display: inline-block; padding: 5px 12px; border-radius: 6px; font-size: 11px; font-weight: 800; background: ${isCritical ? '#991b1b' : '#9a3412'}; color: #ffffff; text-transform: uppercase; letter-spacing: 0.05em; }
+          .meta-bar { font-size: 12px; color: #94a3b8; margin-top: 14px; margin-bottom: 20px; border-bottom: 1px solid #1e293b; padding-bottom: 12px; line-height: 1.6; }
+          .message { font-size: 14px; color: #e2e8f0; line-height: 1.6; margin: 18px 0; background: #0f172a; padding: 16px; border-radius: 8px; border-left: 4px solid #10b981; }
+          .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 20px 0; }
+          .card { background: #0b1324; border-radius: 8px; padding: 14px; border: 1px solid #1e293b; }
+          .card-title { font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; margin-bottom: 4px; }
+          .card-value { font-size: 15px; font-weight: 700; color: #f8fafc; font-family: monospace; }
+          .precautions-header { font-size: 14px; font-weight: 800; color: #38bdf8; text-transform: uppercase; margin-top: 24px; margin-bottom: 10px; }
+          .precautions-list { margin: 0; padding-left: 20px; color: #cbd5e1; font-size: 13px; line-height: 1.6; }
+          .precautions-list li { margin-bottom: 6px; }
+          .action-box { background: #064e3b; border: 1px solid #059669; border-radius: 10px; padding: 18px; margin-top: 22px; color: #a7f3d0; font-size: 14px; line-height: 1.5; }
+          .disclaimer { background: #1e293b; border-radius: 8px; padding: 14px; margin-top: 24px; color: #94a3b8; font-size: 11px; line-height: 1.5; border: 1px solid #334155; }
+          .footer { font-size: 11px; color: #475569; margin-top: 28px; text-align: center; font-family: monospace; }
         </style>
       </head>
       <body>
         <div class="container">
-          <div class="header">HeatShield AI Safety System</div>
+          <div class="header">HEATSHIELD AI | REAL-TIME ENVIRONMENTAL RISK UPDATE</div>
           <div class="title">${alert.title}</div>
-          <div><span class="badge">${alert.priority}</span></div>
-          <p class="message">${alert.message}</p>
-          
-          <div class="details">
-            <div class="detail-item"><strong>Location:</strong> ${loc}</div>
-            <div class="detail-item"><strong>Risk Score:</strong> ${alert.trigger_data.risk_score} / 100 (${alert.trigger_data.risk_level})</div>
-            ${alert.trigger_data.temperature !== undefined ? `<div class="detail-item"><strong>Temperature:</strong> ${alert.trigger_data.temperature}°C (Apparent: ${alert.trigger_data.apparent_temperature ?? '--'}°C)</div>` : ''}
-            ${alert.trigger_data.humidity !== undefined ? `<div class="detail-item"><strong>Humidity:</strong> ${alert.trigger_data.humidity}%</div>` : ''}
-            <div class="detail-item"><strong>Data Quality/Source:</strong> ${alert.source_status}</div>
+          <div>
+            <span class="badge">${alert.priority}</span>
+            <span style="font-size:12px; color:#94a3b8; margin-left:10px;">Risk Level: ${alert.trigger_data.risk_level} (${alert.trigger_data.risk_score}/100) ${trend ? `• Trend: ${trend.toUpperCase()}` : ''}</span>
           </div>
 
-          <div class="action">
-            <strong>RECOMMENDED PREVENTIVE ACTION:</strong><br/>
+          <div class="meta-bar">
+            <strong>${greeting}</strong><br/>
+            <strong>Notification ID:</strong> ${alert.id}<br/>
+            <strong>Issued To:</strong> ${to}<br/>
+            <strong>Event Timestamp:</strong> ${alertTime}<br/>
+            <strong>Current Location:</strong> ${loc}<br/>
+            <strong>Location Source:</strong> ${locSourceStr}<br/>
+            <strong>GPS Accuracy:</strong> ${accuracyStr}
+          </div>
+
+          <div class="message">
+            <strong>Environmental Thermal Assessment:</strong><br/>
+            ${alert.message}
+            ${alert.why_generated ? `<br/><br/><strong>Why this risk:</strong> ${alert.why_generated}` : ''}
+          </div>
+
+          <div class="grid">
+            <div class="card">
+              <div class="card-title">Temperature</div>
+              <div class="card-value">${alert.trigger_data.temperature !== undefined ? `${alert.trigger_data.temperature}°C` : 'Unavailable'}</div>
+            </div>
+            <div class="card">
+              <div class="card-title">Feels-Like Temp</div>
+              <div class="card-value">${alert.trigger_data.apparent_temperature !== undefined ? `${alert.trigger_data.apparent_temperature}°C` : 'Unavailable'}</div>
+            </div>
+            <div class="card">
+              <div class="card-title">Humidity</div>
+              <div class="card-value">${alert.trigger_data.humidity !== undefined ? `${alert.trigger_data.humidity}%` : 'Unavailable'}</div>
+            </div>
+            <div class="card">
+              <div class="card-title">Wind Speed</div>
+              <div class="card-value">${alert.trigger_data.wind_speed !== undefined ? `${alert.trigger_data.wind_speed} km/h` : 'Unavailable'}</div>
+            </div>
+            <div class="card">
+              <div class="card-title">Data Status</div>
+              <div class="card-value">${alert.source_status}</div>
+            </div>
+            <div class="card">
+              <div class="card-title">Heat Index Score</div>
+              <div class="card-value">${alert.trigger_data.risk_score} / 100</div>
+            </div>
+          </div>
+
+          <div class="precautions-header">Recommended Precautions</div>
+          <ol class="precautions-list">
+            ${precautionsList.map(p => `<li>${p}</li>`).join('')}
+          </ol>
+
+          <div class="action-box">
+            <strong>RECOMMENDED IMMEDIATE PREVENTIVE ACTION:</strong><br/>
             ${alert.recommended_action}
           </div>
 
+          <div class="disclaimer">
+            <strong>SAFETY & WELLNESS DISCLAIMER:</strong> This notification is generated from live environmental observations to assist with heat safety awareness. It is not a medical diagnosis or treatment evaluation. Consult healthcare professionals for personal medical concerns.
+          </div>
+
           <div class="footer">
-            Automated Smart Alert dispatches derived from live Open-Meteo & deterministic HeatShield risk engine.<br/>
-            Rule ID: ${alert.rule_id} | Dedup Key: ${alert.dedup_key}
+            HeatShield AI Real-Time Environmental Risk Pipeline<br/>
+            Notification ID: ${alert.id} | Dedup Key: ${alert.dedup_key} | Provider: Open-Meteo & Nominatim
           </div>
         </div>
       </body>
@@ -89,7 +170,7 @@ export async function sendAlertEmail(options: SendEmailOptions): Promise<SendEma
       to: [to],
       subject: subject,
       html: htmlContent,
-      text: `${alert.title}\nPriority: ${alert.priority}\nLocation: ${loc}\nRisk Score: ${alert.trigger_data.risk_score}/100 (${alert.trigger_data.risk_level})\n\n${alert.message}\n\nRecommended Action:\n${alert.recommended_action}\n\nRule ID: ${alert.rule_id}`,
+      text: `${alert.title}\nNotification ID: ${alert.id}\nPriority: ${alert.priority}\nRisk Level: ${alert.trigger_data.risk_level} (${alert.trigger_data.risk_score}/100)\nLocation: ${loc}\nLocation Source: ${locSourceStr}\nGPS Accuracy: ${accuracyStr}\nTimestamp: ${alertTime}\n\nMessage:\n${alert.message}\n\nWhy Generated:\n${alert.why_generated || 'Environmental evaluation'}\n\nRecommended Action:\n${alert.recommended_action}\n\nPrecautions:\n${precautionsList.join('\n')}\n\nDisclaimer: This is informational environmental safety guidance, not a medical diagnosis.`,
     });
 
     if (response.error) {
@@ -110,3 +191,4 @@ export async function sendAlertEmail(options: SendEmailOptions): Promise<SendEma
     };
   }
 }
+

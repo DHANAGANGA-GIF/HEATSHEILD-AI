@@ -22,6 +22,7 @@ export interface UserProfile {
   created_at: string;
   onboarded?: boolean;
   authenticated?: boolean;
+  sms_phone?: string;
 }
 
 export interface LocationData {
@@ -73,6 +74,7 @@ export interface HourlyForecastRisk {
 }
 
 export type RiskLevel = 'LOW' | 'MODERATE' | 'HIGH' | 'EXTREME';
+
 
 export interface RiskFactor {
   name: string;
@@ -230,10 +232,25 @@ export interface SmartAlert {
   dedup_key: string;
   /** Location context when the notification was generated. */
   location_name?: string;
-  /** Primary XAI risk drivers. */
-  drivers?: Array<{ name: string; impact_percent: number }>;
   /** Technical reason why this alert was generated. */
   why_generated?: string;
+  /** Primary XAI risk drivers. */
+  drivers?: Array<{ name: string; impact_percent: number }>;
+  /** Email delivery status */
+  email_status?: 'SENT' | 'FAILED' | 'PENDING' | 'SKIPPED';
+  /** SMS delivery status */
+  sms_status?: 'SENT' | 'FAILED' | 'NOT_CONFIGURED' | 'PENDING' | 'SKIPPED';
+  /** 5-7 actionable precautions */
+  precautions?: string[];
+  /** Medical safety notice */
+  medical_disclaimer?: string;
+  /** Weather snapshot */
+  weather_snapshot?: {
+    temperature?: number;
+    apparent_temperature?: number;
+    humidity?: number;
+    weather_code?: number;
+  };
 }
 
 /** User-configurable alert settings. */
@@ -247,6 +264,7 @@ export interface AlertSettings {
   email_notifications_enabled?: boolean;
   sms_notifications_enabled?: boolean;
 }
+
 
 /** Time range annotation for rising/falling risk periods. */
 export interface RangeAnnotation {
@@ -335,3 +353,58 @@ export interface MLMetrics {
   training_samples: number;
   trained_at: string;
 }
+
+export type LocationSourceStatus = 'LIVE_GPS' | 'SAVED_LOCATION' | 'MANUAL_LOCATION' | 'UNAVAILABLE';
+export type WeatherSourceStatus = 'LIVE' | 'CACHED' | 'STALE' | 'UNAVAILABLE';
+
+/** Registered Recipient Profile for Automated Notifications */
+export interface RecipientNotificationProfile {
+  id: string;
+  user_id?: string;
+  email: string;
+  display_name?: string;
+  /** Age is ONLY included if voluntarily provided by the user. Never guessed. */
+  age?: number;
+  location_name: string;
+  latitude: number;
+  longitude: number;
+  location_source: LocationSourceStatus;
+  email_alerts_enabled: boolean;
+  hourly_summary_enabled: boolean;
+  critical_alerts_enabled: boolean;
+  forecast_alerts_enabled?: boolean;
+  last_notification_at?: string;
+  sms_phone?: string;
+  created_at: string;
+  updated_at?: string;
+}
+
+/** Persistent Log Record of Scheduled or Triggered Notification Dispatch */
+export interface NotificationLog {
+  id: string;
+  recipient_id: string;
+  recipient_email: string;
+  alert_type: string;
+  risk_level: RiskLevel;
+  location_name: string;
+  latitude?: number;
+  longitude?: number;
+  location_status: LocationSourceStatus;
+  temperature?: number;
+  feels_like_temperature?: number;
+  humidity?: number;
+  weather_condition?: string;
+  weather_status: WeatherSourceStatus;
+  risk_score?: number;
+  precautions?: string[];
+  provider: 'Resend' | 'Twilio';
+  provider_message_id?: string;
+  status: 'SENT' | 'FAILED' | 'SKIPPED';
+  failure_reason?: string;
+  /** Unique idempotency key: recipient_email + scheduled_hour + alert_type */
+  idempotency_key: string;
+  scheduled_for?: string;
+  sent_at: string;
+  created_at: string;
+}
+

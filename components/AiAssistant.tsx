@@ -78,7 +78,12 @@ Welcome to HeatShield AI. Environmental data is loading or unavailable. Ask gene
         },
       ]);
     }
+  // Stable primitive selectors (weather?.timestamp, risk?.risk_score) are used intentionally
+  // instead of the full `weather`/`risk` objects to prevent infinite re-renders — the objects
+  // are recreated on each parent render. Adding them directly would violate correctness.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [weather?.timestamp, risk?.risk_score]);
+
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });

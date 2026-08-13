@@ -4,47 +4,29 @@ import React, { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import {
-  Bell,
-  CheckCircle,
-  AlertTriangle,
-  Info,
-  ShieldAlert,
-  Settings,
-  Filter,
-  ArrowLeft,
-  X,
-  Volume2,
-  Globe,
-  MapPin,
-  Clock,
-  Sparkles,
-  ExternalLink,
-  RotateCcw,
-  Check
+  Bell, CheckCircle, AlertTriangle, Info, ShieldAlert, Settings, Filter,
+  ArrowLeft, X, Volume2, Globe, MapPin, Clock, Sparkles, ExternalLink,
+  RotateCcw, Check, Navigation, RefreshCw, Search, Thermometer, Wind,
+  Droplets, Loader2, Mail, Smartphone, ShieldCheck, AlertOctagon, CheckCircle2
 } from 'lucide-react';
 import { Navbar } from '@/components/Navbar';
 import { Sidebar } from '@/components/Sidebar';
-import { EmailPreferenceToggle } from '@/components/EmailPreferenceToggle';
+
 import {
-  getSmartAlerts,
-  getAlertSettings,
-  saveAlertSettings,
-  markSmartAlertRead,
-  dismissSmartAlert,
-  clearDismissedAlerts,
-  getUserProfile,
+  getSmartAlerts, getAlertSettings, saveAlertSettings, markSmartAlertRead,
+  dismissSmartAlert, clearDismissedAlerts, getUserProfile, saveUserProfile,
+  addSmartAlerts, getNotificationLogs, saveRecipientProfile, getRecipientProfiles
 } from '@/lib/store';
 import {
-  AlertPriority,
-  AlertSettings,
-  SmartAlert,
-  UserProfile,
+  AlertPriority, AlertSettings, SmartAlert, UserProfile, LocationData,
+  WeatherData, NotificationLog, RecipientNotificationProfile
 } from '@/lib/types';
 import {
-  getNotificationPermissionStatus,
-  requestNotificationPermission,
-  NotificationPermissionState,
+  getNotificationPermissionStatus, requestNotificationPermission, NotificationPermissionState
 } from '@/lib/notification-service';
+import {
+  fetchWeatherData, searchLocations, reverseGeocode, getWeatherConditionText
+} from '@/lib/weather-api';
 
 function NotificationsContent() {
   const router = useRouter();
@@ -56,96 +38,236 @@ function NotificationsContent() {
   const [settings, setSettings] = useState<AlertSettings>(getAlertSettings());
   const [profile, setProfile] = useState<UserProfile>(getUserProfile());
   const [permissionStatus, setPermissionStatus] = useState<NotificationPermissionState>('default');
-  
+
+  // Real-time Environmental & Location States
+  const [currentLocation, setCurrentLocation] = useState<LocationData>(
+    profile.location || {
+      name: 'Chennai',
+      locality: 'Tamil Nadu, India',
+      latitude: 13.0827,
+      longitude: 80.2707,
+      country: 'India',
+    }
+  );
+  const [locationSource, setLocationSource] = useState<'LIVE_GPS' | 'SAVED_LOCATION' | 'MANUAL_LOCATION' | 'UNAVAILABLE'>('SAVED_LOCATION');
+  const [gpsAccuracy, setGpsAccuracy] = useState<number | undefined>(undefined);
+  const [weatherData, setWeatherData] = useState<WeatherData | null>(null);
+  const [isLoadingLocation, setIsLoadingLocation] = useState(false);
+  const [isLoadingWeather, setIsLoadingWeather] = useState(false);
+  const [weatherError, setWeatherError] = useState<string | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<string>(new Date().toLocaleTimeString());
+
+  // Search & Filter States
+  const [searchQuery, setSearchQuery] = useState('');
   const [selectedPriority, setSelectedPriority] = useState<string>('ALL');
   const [selectedAlert, setSelectedAlert] = useState<SmartAlert | null>(null);
   const [showPreferences, setShowPreferences] = useState(false);
-  const [permissionMsg, setPermissionMsg] = useState<string | null>(null);
+
+  // Manual Geocoding Search
+  const [locationSearchQuery, setLocationSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<LocationData[]>([]);
+  const [isSearchingLocation, setIsSearchingLocation] = useState(false);
+
+  // Test Dispatch States
+  const [isTestingRecipient, setIsTestingRecipient] = useState<string | null>(null);
+  const [testDispatchResults, setTestDispatchResults] = useState<Record<string, { status: string; id?: string; error?: string }>>({});
+  const [logs, setLogs] = useState<NotificationLog[]>([]);
+
+  const loadRealTimeData = async (loc: LocationData) => {
+    setIsLoadingWeather(true);
+    setWeatherError(null);
+    try {
+      const data = await fetchWeatherData(loc.latitude, loc.longitude, loc.name);
+      setWeatherData(data);
+      setLastUpdated(new Date().toLocaleTimeString());
+    } catch (err) {
+      setWeatherError('Live weather currently unavailable');
+    } finally {
+      setIsLoadingWeather(false);
+    }
+  };
 
   useEffect(() => {
-    setProfile(getUserProfile());
+    const p = getUserProfile();
+    setProfile(p);
     setSettings(getAlertSettings());
-    const smartAlertsList = getSmartAlerts();
-    setAlerts(smartAlertsList);
+    setAlerts(getSmartAlerts());
+    setLogs(getNotificationLogs());
     setPermissionStatus(getNotificationPermissionStatus());
 
-    // Deep link selection
-    if (deepLinkId) {
-      const found = smartAlertsList.find(a => a.id === deepLinkId);
-      if (found) {
-        setSelectedAlert(found);
-        markSmartAlertRead(found.id);
-      }
+    const initialLoc: LocationData = p.location || {
+      name: 'Chennai',
+      locality: 'Tamil Nadu, India',
+      latitude: 13.0827,
+      longitude: 80.2707,
+      country: 'India',
+    };
+    setCurrentLocation(initialLoc);
+    loadRealTimeData(initialLoc);
+  // loadRealTimeData is defined outside and does not change identity — it is safe to omit.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+
+  const handleDetectGpsLocation = () => {
+    if (!navigator.geolocation) {
+      alert('Browser geolocation is not supported on this device.');
+      return;
     }
-  }, [deepLinkId]);
+    setIsLoadingLocation(true);
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const { latitude, longitude, accuracy } = pos.coords;
+        const resolvedLoc = await reverseGeocode(latitude, longitude);
+        resolvedLoc.gps_accuracy = Math.round(accuracy);
+        setCurrentLocation(resolvedLoc);
+        setLocationSource('LIVE_GPS');
+        setGpsAccuracy(Math.round(accuracy));
+        saveUserProfile({ location: resolvedLoc });
+        await loadRealTimeData(resolvedLoc);
+        setIsLoadingLocation(false);
+      },
+      (err) => {
+        setIsLoadingLocation(false);
+        setLocationSource('UNAVAILABLE');
+        alert(`Live location unavailable — permission not granted (${err.message}). You can select a saved location or search manually.`);
+      },
+      { timeout: 10000, enableHighAccuracy: true }
+    );
+  };
 
-  const refreshData = () => {
-    const smartAlertsList = getSmartAlerts();
-    setAlerts(smartAlertsList);
-    setSettings(getAlertSettings());
-    setPermissionStatus(getNotificationPermissionStatus());
+  const handleLocationSearch = async (query: string) => {
+    setLocationSearchQuery(query);
+    if (query.trim().length < 2) {
+      setSearchResults([]);
+      return;
+    }
+    setIsSearchingLocation(true);
+    const results = await searchLocations(query);
+    setSearchResults(results);
+    setIsSearchingLocation(false);
+  };
+
+  const handleSelectLocation = async (loc: LocationData) => {
+    setCurrentLocation(loc);
+    setLocationSource('MANUAL_LOCATION');
+    setGpsAccuracy(undefined);
+    saveUserProfile({ location: loc });
+    setSearchResults([]);
+    setLocationSearchQuery('');
+    await loadRealTimeData(loc);
   };
 
   const handleRequestPermission = async () => {
     const status = await requestNotificationPermission();
     setPermissionStatus(status);
-    if (status === 'granted') {
-      const updated = saveAlertSettings({ browser_notifications_enabled: true });
-      setSettings(updated);
-      setPermissionMsg('Browser notifications successfully enabled!');
-    } else if (status === 'denied') {
-      const updated = saveAlertSettings({ browser_notifications_enabled: false });
-      setSettings(updated);
-      setPermissionMsg('Browser notification permission is blocked in browser settings. Please unblock site permissions to receive desktop alerts.');
+  };
+
+  const handleTestDispatchRecipient = async (email?: string, sendToAll: boolean = false) => {
+    const key = sendToAll ? 'ALL' : (email || 'default');
+    setIsTestingRecipient(key);
+
+    let activeLat = currentLocation.latitude;
+    let activeLon = currentLocation.longitude;
+    let activeName = currentLocation.name;
+    let activeSource = locationSource;
+    let activeAccuracy = gpsAccuracy;
+    let activeTimestamp = new Date().toISOString();
+
+    if (locationSource === 'LIVE_GPS') {
+      if (!navigator.geolocation) {
+        setIsTestingRecipient(null);
+        alert('Fresh GPS location unavailable. Email was not sent using LIVE GPS.');
+        return;
+      }
+
+      try {
+        const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject, {
+            enableHighAccuracy: true,
+            timeout: 8000,
+            maximumAge: 0,
+          });
+        });
+
+        activeLat = pos.coords.latitude;
+        activeLon = pos.coords.longitude;
+        activeAccuracy = Math.round(pos.coords.accuracy);
+        activeTimestamp = new Date(pos.timestamp || Date.now()).toISOString();
+
+        const resolved = await reverseGeocode(activeLat, activeLon);
+        activeName = resolved.name;
+
+        setCurrentLocation({
+          name: activeName,
+          locality: resolved.locality,
+          latitude: activeLat,
+          longitude: activeLon,
+          country: resolved.country,
+        });
+        setGpsAccuracy(activeAccuracy);
+      } catch (err: any) {
+        setIsTestingRecipient(null);
+        alert('Fresh GPS location unavailable. Email was not sent using LIVE GPS.');
+        return;
+      }
+    }
+
+    try {
+      const response = await fetch('/api/admin/test-notifications', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          targetEmail: email,
+          sendToAll,
+          clientLocation: {
+            latitude: activeLat,
+            longitude: activeLon,
+            location_name: activeName,
+            location_source: activeSource,
+            gps_accuracy: activeAccuracy,
+            timestamp: activeTimestamp,
+          },
+        }),
+      });
+
+
+      const data = await response.json();
+      if (data.success && Array.isArray(data.results)) {
+        const newResults: Record<string, { status: string; id?: string; error?: string }> = { ...testDispatchResults };
+        data.results.forEach((r: { recipient: string; success: boolean; id?: string; error?: string }) => {
+          newResults[r.recipient] = {
+            status: r.success ? 'SENT' : 'FAILED',
+            id: r.id,
+            error: r.error,
+          };
+        });
+        setTestDispatchResults(newResults);
+        setLogs(getNotificationLogs());
+      } else {
+        alert(`Test dispatch failed: ${data.error || 'Unknown error'}`);
+      }
+    } catch (err: any) {
+      alert(`Error calling test dispatch API: ${err?.message || 'Network error'}`);
+    } finally {
+      setIsTestingRecipient(null);
     }
   };
 
-  const handleToggleSetting = (key: keyof AlertSettings, val: any) => {
-    const updated = saveAlertSettings({ [key]: val });
-    setSettings(updated);
-    refreshData();
-  };
-
-  const handleMarkRead = (id: string) => {
-    const updated = markSmartAlertRead(id);
-    setAlerts(updated);
-  };
-
-  const handleDismiss = (id: string) => {
-    const updated = dismissSmartAlert(id);
-    setAlerts(updated);
-  };
-
-  const handleClearDismissed = () => {
-    const updated = clearDismissedAlerts();
-    setAlerts(updated);
-  };
-
-  const handleOpenDetail = (alert: SmartAlert) => {
-    setSelectedAlert(alert);
-    handleMarkRead(alert.id);
-  };
-
-  const filteredAlerts = alerts.filter((a) => {
-    if (selectedPriority === 'ALL') return !a.dismissed;
-    if (selectedPriority === 'UNREAD') return !a.read && !a.dismissed;
-    return a.priority === selectedPriority && !a.dismissed;
+  const filteredAlerts = alerts.filter(alert => {
+    if (selectedPriority !== 'ALL' && alert.priority !== selectedPriority) return false;
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      return (
+        alert.title.toLowerCase().includes(q) ||
+        alert.message.toLowerCase().includes(q) ||
+        (alert.location_name && alert.location_name.toLowerCase().includes(q))
+      );
+    }
+    return true;
   });
 
-  const unreadCount = alerts.filter(a => !a.read && !a.dismissed).length;
-
-  const getPriorityBadge = (priority: AlertPriority) => {
-    switch (priority) {
-      case 'CRITICAL':
-        return <span className="px-2 py-0.5 rounded text-[10px] font-bold font-mono uppercase bg-rose-950 text-rose-300 border border-rose-800">CRITICAL</span>;
-      case 'HIGH PRIORITY':
-        return <span className="px-2 py-0.5 rounded text-[10px] font-bold font-mono uppercase bg-amber-950 text-amber-300 border border-amber-800">HIGH PRIORITY</span>;
-      case 'CAUTION':
-        return <span className="px-2 py-0.5 rounded text-[10px] font-bold font-mono uppercase bg-yellow-950 text-yellow-300 border border-yellow-800">CAUTION</span>;
-      default:
-        return <span className="px-2 py-0.5 rounded text-[10px] font-bold font-mono uppercase bg-blue-950 text-blue-300 border border-blue-800">INFO</span>;
-    }
-  };
+  const unreadCount = alerts.filter(a => !a.read).length;
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 font-sans flex flex-col">
@@ -169,7 +291,7 @@ function NotificationsContent() {
               <div>
                 <h1 className="text-xl font-bold text-white tracking-tight">NOTIFICATION CENTER & SMART ALERTS</h1>
                 <p className="text-xs text-slate-400 font-mono mt-0.5">
-                  Proactive Location-Aware Heat Safety Alerts & Event History
+                  Real-Time Location-Aware Heat Safety Alerts & Persistent History
                 </p>
               </div>
             </div>
@@ -177,366 +299,279 @@ function NotificationsContent() {
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setShowPreferences(!showPreferences)}
-                className="px-3.5 py-2 text-xs font-semibold rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition flex items-center gap-1.5"
+                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl border border-slate-700 transition flex items-center gap-1.5"
               >
-                <Settings className="w-4 h-4" />
+                <Settings className="w-4 h-4 text-emerald-400" />
                 <span>Preferences</span>
               </button>
-              {alerts.some(a => a.dismissed) && (
-                <button
-                  onClick={handleClearDismissed}
-                  className="px-3 py-2 text-xs font-semibold rounded-xl bg-slate-800/60 hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition flex items-center gap-1"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">Clear Dismissed</span>
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* Permission Status Banner */}
-          <div className="p-4 rounded-xl bg-slate-900 border border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center shrink-0">
-                <Volume2 className="w-4 h-4 text-emerald-400" />
-              </div>
-              <div>
-                <div className="font-semibold text-white flex items-center gap-2">
-                  <span>Browser Desktop Push Notifications:</span>
-                  <span className={`font-mono text-[11px] uppercase font-bold ${
-                    permissionStatus === 'granted' ? 'text-emerald-400' : permissionStatus === 'denied' ? 'text-rose-400' : 'text-amber-400'
-                  }`}>
-                    {permissionStatus === 'granted' ? 'ACTIVE (GRANTED)' : permissionStatus === 'denied' ? 'BLOCKED (DENIED)' : 'NOT PERMITTED (DEFAULT)'}
-                  </span>
-                </div>
-                <p className="text-slate-400 text-[11px] mt-0.5">
-                  Receive instant native browser notifications when heat risk transitions to HIGH or EXTREME.
-                </p>
-              </div>
-            </div>
-
-            {permissionStatus !== 'granted' && (
               <button
-                onClick={handleRequestPermission}
-                className="w-full sm:w-auto px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs rounded-xl shadow-xs transition shrink-0"
+                onClick={() => loadRealTimeData(currentLocation)}
+                disabled={isLoadingWeather}
+                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-xl transition flex items-center gap-1.5"
               >
-                Enable Desktop Push
+                <RefreshCw className={`w-4 h-4 ${isLoadingWeather ? 'animate-spin' : ''}`} />
+                <span>Refresh Live Data</span>
               </button>
-            )}
-          </div>
-
-          {permissionMsg && (
-            <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800 text-xs font-mono text-amber-300 flex items-center justify-between">
-              <span>{permissionMsg}</span>
-              <button onClick={() => setPermissionMsg(null)} className="text-slate-500 hover:text-white"><X className="w-4 h-4" /></button>
             </div>
-          )}
+          </div>
 
           {/* Preferences Drawer */}
           {showPreferences && (
-            <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 space-y-4 shadow-xl">
-              <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-                <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                  <Settings className="w-4 h-4 text-emerald-400" />
-                  <span>Notification & Alert Preferences</span>
-                </h3>
-                <button onClick={() => setShowPreferences(false)} className="text-slate-400 hover:text-white">
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-                <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between">
-                  <div>
-                    <div className="font-semibold text-white">Enable Smart Alerts</div>
-                    <div className="text-[11px] text-slate-400">Process risk transitions & triggers</div>
-                  </div>
-                  <input
-                    type="checkbox"
-                    checked={settings.alerts_enabled}
-                    onChange={(e) => handleToggleSetting('alerts_enabled', e.target.checked)}
-                    className="w-4 h-4 accent-emerald-500 rounded cursor-pointer"
-                  />
-                </div>
-
-                <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between">
-                  <div>
-                    <div className="font-semibold text-white">Minimum Alert Severity</div>
-                    <div className="text-[11px] text-slate-400">Filter out lower-level advisories</div>
-                  </div>
-                  <select
-                    value={settings.min_severity}
-                    onChange={(e) => handleToggleSetting('min_severity', e.target.value as AlertPriority)}
-                    className="bg-slate-900 border border-slate-700 text-white text-xs rounded-lg px-2 py-1 font-mono"
-                  >
-                    <option value="INFO">INFO (All)</option>
-                    <option value="CAUTION">CAUTION</option>
-                    <option value="HIGH PRIORITY">HIGH PRIORITY</option>
-                    <option value="CRITICAL">CRITICAL</option>
-                  </select>
-                </div>
-
-                <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between">
-                  <div>
-                    <div className="font-semibold text-white">Forecast Peak Warnings</div>
-                    <div className="text-[11px] text-slate-400">Alert on upcoming 24h risk spikes</div>
-                  </div>
-                  <input
-                    type="checkbox"
-                    checked={settings.forecast_alerts_enabled}
-                    onChange={(e) => handleToggleSetting('forecast_alerts_enabled', e.target.checked)}
-                    className="w-4 h-4 accent-emerald-500 rounded cursor-pointer"
-                  />
-                </div>
-
-                <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between">
-                  <div>
-                    <div className="font-semibold text-white">Location Change Advisories</div>
-                    <div className="text-[11px] text-slate-400">Alert when moving to higher-risk areas</div>
-                  </div>
-                  <input
-                    type="checkbox"
-                    checked={settings.location_alerts_enabled ?? true}
-                    onChange={(e) => handleToggleSetting('location_alerts_enabled', e.target.checked)}
-                    className="w-4 h-4 accent-emerald-500 rounded cursor-pointer"
-                  />
-                </div>
-
-                <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between">
-                  <div>
-                    <div className="font-semibold text-white">Risk Recovery Alerts</div>
-                    <div className="text-[11px] text-slate-400">Notify when risk safely drops to MODERATE/LOW</div>
-                  </div>
-                  <input
-                    type="checkbox"
-                    checked={settings.recovery_alerts_enabled ?? true}
-                    onChange={(e) => handleToggleSetting('recovery_alerts_enabled', e.target.checked)}
-                    className="w-4 h-4 accent-emerald-500 rounded cursor-pointer"
-                  />
-                </div>
-
-                {/* Email Delivery (Resend Integration) */}
-                <div className="col-span-1 md:col-span-2">
-                  <EmailPreferenceToggle />
-                </div>
-
-
-                {/* SMS Delivery */}
-                <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between opacity-70">
-                  <div>
-                    <div className="font-semibold text-slate-300 flex items-center gap-2">
-                      <span>SMS / Phone Alerts</span>
-                      <span className="text-[9px] font-mono font-bold bg-slate-800 text-amber-400 px-1.5 py-0.5 rounded border border-amber-800/40">
-                        NOT CONFIGURED
-                      </span>
-                    </div>
-                    <div className="text-[10px] text-slate-500">Requires Twilio API gateway connection</div>
-                  </div>
-                  <input type="checkbox" disabled checked={false} className="w-4 h-4 cursor-not-allowed" />
-                </div>
+            <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 space-y-4 shadow-lg">
+              <h2 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                <Settings className="w-4 h-4 text-emerald-400" />
+                <span>Notification Preferences</span>
+              </h2>
+              <div className="text-xs text-slate-300 font-mono">
+                System notifications are configured for instant real-time dispatch via Resend Transactional Email.
               </div>
             </div>
           )}
 
-          {/* Filter Bar */}
-          <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-900/60 p-3 rounded-xl border border-slate-800">
-            <div className="flex items-center gap-1.5 overflow-x-auto text-xs font-mono">
-              {['ALL', 'UNREAD', 'CRITICAL', 'HIGH PRIORITY', 'CAUTION', 'INFO'].map((p) => (
+
+          {/* Real-time Environmental & Location Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Location Card */}
+            <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-mono font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
+                  <MapPin className="w-4 h-4" />
+                  <span>Real-Time Location</span>
+                </span>
                 <button
-                  key={p}
-                  onClick={() => setSelectedPriority(p)}
-                  className={`px-3 py-1.5 rounded-lg transition font-semibold whitespace-nowrap ${
-                    selectedPriority === p
-                      ? 'bg-emerald-600 text-white shadow-xs'
-                      : 'bg-slate-800 text-slate-400 hover:text-white'
-                  }`}
+                  onClick={handleDetectGpsLocation}
+                  disabled={isLoadingLocation}
+                  className="px-2.5 py-1 text-[11px] font-semibold bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 rounded-lg transition flex items-center gap-1"
                 >
-                  {p}
+                  {isLoadingLocation ? <Loader2 className="w-3 h-3 animate-spin" /> : <Navigation className="w-3 h-3" />}
+                  <span>Detect GPS</span>
                 </button>
-              ))}
+              </div>
+
+              <div>
+                <div className="text-base font-bold text-white truncate">{currentLocation.name}</div>
+                <div className="text-xs text-slate-400">{currentLocation.locality || currentLocation.country}</div>
+                <div className="text-[11px] font-mono text-slate-500 mt-1">
+                  Coords: {currentLocation.latitude.toFixed(4)}°, {currentLocation.longitude.toFixed(4)}°
+                  {gpsAccuracy && ` (Accuracy: ±${gpsAccuracy}m)`}
+                </div>
+                <div className="text-[10px] font-mono text-emerald-400 mt-0.5">
+                  Source: {locationSource === 'LIVE_GPS' ? '✓ LIVE GPS (CONSENTED)' : locationSource === 'UNAVAILABLE' ? '❌ GPS DENIED / UNAVAILABLE' : 'SAVED PROFILE LOCATION'}
+                </div>
+              </div>
+
+              {/* Manual Search */}
+              <div className="relative pt-1">
+                <input
+                  type="text"
+                  placeholder="Search location manually..."
+                  value={locationSearchQuery}
+                  onChange={(e) => handleLocationSearch(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 text-xs rounded-xl px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+                />
+                {searchResults.length > 0 && (
+                  <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-slate-900 border border-slate-700 rounded-xl shadow-xl max-h-48 overflow-y-auto">
+                    {searchResults.map((res, i) => (
+                      <button
+                        key={i}
+                        onClick={() => handleSelectLocation(res)}
+                        className="w-full text-left px-3 py-2 text-xs hover:bg-slate-800 border-b border-slate-800 last:border-0 text-slate-200"
+                      >
+                        <div className="font-bold text-white">{res.name}</div>
+                        <div className="text-[10px] text-slate-400">{res.locality}</div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
 
-            <div className="text-xs text-slate-400 font-mono">
-              Showing {filteredAlerts.length} {filteredAlerts.length === 1 ? 'alert' : 'alerts'}
+            {/* Weather Card */}
+            <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-mono font-bold text-sky-400 uppercase tracking-wider flex items-center gap-1.5">
+                  <Thermometer className="w-4 h-4" />
+                  <span>Real-Time Weather</span>
+                </span>
+                <span className="text-[10px] font-mono text-slate-500">Updated: {lastUpdated}</span>
+              </div>
+
+              {isLoadingWeather ? (
+                <div className="p-4 text-center text-xs text-slate-400 flex items-center justify-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin text-sky-400" />
+                  <span>Fetching Open-Meteo observations...</span>
+                </div>
+              ) : weatherError ? (
+                <div className="p-3 bg-rose-950/40 border border-rose-800/60 rounded-xl text-xs text-rose-300">
+                  {weatherError}
+                </div>
+              ) : weatherData ? (
+                <div className="space-y-2">
+                  <div className="flex items-baseline justify-between">
+                    <div>
+                      <span className="text-3xl font-extrabold text-white">{weatherData.temperature}°C</span>
+                      <span className="text-xs text-slate-400 ml-2">Feels {weatherData.apparent_temperature}°C</span>
+                    </div>
+                    <span className="text-xs font-semibold px-2 py-0.5 rounded bg-sky-950 text-sky-300 border border-sky-800">
+                      {getWeatherConditionText(weatherData.weather_code)}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 text-xs font-mono pt-1">
+                    <div className="flex items-center gap-1.5 text-slate-400">
+                      <Droplets className="w-3.5 h-3.5 text-blue-400" />
+                      <span>Humidity: {weatherData.relative_humidity}%</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-slate-400">
+                      <Wind className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Wind: {weatherData.wind_speed} km/h</span>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="text-xs text-slate-500 italic">Live weather currently unavailable</div>
+              )}
+            </div>
+
+            {/* Test Email Dispatch Panel */}
+            <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-mono font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+                  <Mail className="w-4 h-4" />
+                  <span>Test Notification Dispatch</span>
+                </span>
+                <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-950 text-amber-400 border border-amber-800 uppercase">
+                  RESEND & TWILIO
+                </span>
+              </div>
+
+              <p className="text-xs text-slate-400 leading-relaxed">
+                Dispatch an immediate test alert using real live weather observations and dynamic heat risk analysis for your active location.
+              </p>
+
+
+              <div className="pt-1 flex gap-2">
+                <button
+                  onClick={() => handleTestDispatchRecipient(profile.email || '99240040560@klu.ac.in', false)}
+                  disabled={isTestingRecipient !== null}
+                  className="flex-1 px-3 py-2 text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl transition flex items-center justify-center gap-1.5 shadow-xs"
+                >
+                  {isTestingRecipient ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Mail className="w-3.5 h-3.5" />}
+                  <span>Send Test Email</span>
+                </button>
+                <button
+                  onClick={() => handleTestDispatchRecipient(undefined, true)}
+                  disabled={isTestingRecipient !== null}
+                  className="px-3 py-2 text-xs font-semibold bg-sky-600 hover:bg-sky-500 text-white rounded-xl transition flex items-center justify-center gap-1.5 shadow-xs"
+                >
+                  <span>Test All (4)</span>
+                </button>
+              </div>
             </div>
           </div>
 
-          {/* Alert List */}
-          {filteredAlerts.length === 0 ? (
-            <div className="p-12 text-center bg-slate-900/40 rounded-2xl border border-slate-800 space-y-3">
-              <CheckCircle className="w-10 h-10 text-emerald-400 mx-auto" />
-              <div className="text-sm font-semibold text-white">No active notifications</div>
-              <p className="text-xs text-slate-400 max-w-sm mx-auto">
-                No alert events match your selected priority filter. All environmental conditions and location triggers are normal.
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {filteredAlerts.map((alert) => (
-                <div
-                  key={alert.id}
-                  className={`p-5 rounded-2xl border transition shadow-sm ${
-                    alert.read
-                      ? 'bg-slate-900/60 border-slate-800/80 text-slate-300'
-                      : 'bg-slate-900 border-slate-700 text-white ring-1 ring-emerald-500/20'
-                  }`}
-                >
-                  <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
-                    <div className="space-y-2 flex-1">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        {getPriorityBadge(alert.priority)}
-                        <span className="text-xs font-mono text-slate-400 flex items-center gap-1">
-                          <MapPin className="w-3 h-3 text-emerald-400" />
-                          {alert.location_name || profile.location?.name || 'Selected Location'}
-                        </span>
-                        <span className="text-xs font-mono text-slate-500 flex items-center gap-1">
-                          <Clock className="w-3 h-3" />
-                          {new Date(alert.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </span>
-                        <span className="px-2 py-0.5 bg-slate-800 text-slate-300 text-[10px] font-mono rounded">
-                          {alert.source_status}
-                        </span>
+          {/* Test Recipients Status */}
+          <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-3">
+            <h3 className="text-xs font-mono font-bold text-slate-300 uppercase tracking-wider">
+              Registered Recipient Status & Testing
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs font-mono">
+              {[
+                { email: '99240040560@klu.ac.in', loc: 'Chennai', age: 'Age: 20' },
+                { email: '99240040571@klu.ac.in', loc: 'Vijayawada', age: 'Age: 21' },
+                { email: '99240040875@klu.ac.in', loc: 'Guntur', age: 'Age: Not Provided (Adult Default)' },
+                { email: '99240040159@klu.ac.in', loc: 'Hyderabad', age: 'Age: 22' },
+              ].map((rec) => {
+                const res = testDispatchResults[rec.email];
+                return (
+                  <div key={rec.email} className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
+                    <div>
+                      <div className="font-bold text-white truncate">{rec.email}</div>
+                      <div className="text-[10px] text-slate-400 mt-0.5">{rec.loc} • {rec.age}</div>
+                    </div>
+
+                    {res && (
+                      <div className={`text-[10px] font-bold ${res.status === 'SENT' ? 'text-emerald-400' : 'text-rose-400'}`}>
+                        {res.status === 'SENT' ? `✓ SENT (ID: ${res.id?.slice(0, 10)}...)` : `✗ FAILED (${res.error})`}
                       </div>
+                    )}
 
-                      <h3 className="text-base font-bold text-white flex items-center gap-2">
-                        <span>{alert.title}</span>
-                        {!alert.read && (
-                          <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block animate-pulse" />
-                        )}
-                      </h3>
-
-                      <p className="text-xs text-slate-300 leading-relaxed">
-                        {alert.message}
-                      </p>
-                    </div>
-
-                    <div className="flex items-center gap-2 shrink-0 pt-2 sm:pt-0">
-                      <button
-                        onClick={() => handleOpenDetail(alert)}
-                        className="px-3 py-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 text-xs font-semibold transition flex items-center gap-1.5"
-                      >
-                        <Sparkles className="w-3.5 h-3.5" />
-                        <span>Explainable Breakdown</span>
-                      </button>
-
-                      <button
-                        onClick={() => handleDismiss(alert.id)}
-                        className="p-1.5 text-slate-500 hover:text-slate-300 rounded-lg hover:bg-slate-800 transition"
-                        title="Dismiss alert"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
-                    </div>
+                    <button
+                      onClick={() => handleTestDispatchRecipient(rec.email, false)}
+                      disabled={isTestingRecipient === rec.email}
+                      className="w-full py-1 text-[10px] font-semibold bg-slate-800 hover:bg-slate-700 text-sky-300 border border-slate-700 rounded-lg transition flex items-center justify-center gap-1"
+                    >
+                      {isTestingRecipient === rec.email ? <Loader2 className="w-3 h-3 animate-spin" /> : <Mail className="w-3 h-3" />}
+                      <span>Test Dispatch</span>
+                    </button>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
-          )}
-        </main>
-      </div>
+          </div>
 
-      {/* Explainable Notification Detail View Modal */}
-      {selectedAlert && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-xs">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-2xl w-full p-6 space-y-6 shadow-2xl overflow-y-auto max-h-[90vh]">
-            <div className="flex items-start justify-between border-b border-slate-800 pb-4">
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  {getPriorityBadge(selectedAlert.priority)}
-                  <span className="px-2 py-0.5 bg-slate-800 text-slate-300 text-[10px] font-mono rounded">
-                    {selectedAlert.source_status}
-                  </span>
-                </div>
-                <h2 className="text-xl font-extrabold text-white">{selectedAlert.title}</h2>
-              </div>
-              <button
-                onClick={() => setSelectedAlert(null)}
-                className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition"
-              >
-                <X className="w-5 h-5" />
-              </button>
+          {/* Persistent Notification History Table */}
+          <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <h2 className="text-sm font-mono font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                <Clock className="w-4 h-4 text-emerald-400" />
+                <span>Persistent Notification & Delivery History ({logs.length})</span>
+              </h2>
             </div>
 
-            {/* Current Conditions & Risk */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 font-mono">
-              <div className="p-3 bg-slate-950 rounded-xl border border-slate-800">
-                <div className="text-[10px] text-slate-500 uppercase font-semibold">Risk Score</div>
-                <div className="text-xl font-bold text-amber-400 mt-1">{selectedAlert.trigger_data.risk_score} / 100</div>
-                <div className="text-[10px] text-slate-400">{selectedAlert.trigger_data.risk_level}</div>
-              </div>
+            {logs.length === 0 ? (
+              <div className="p-8 text-center bg-slate-950/50 rounded-xl border border-slate-800/80 space-y-2">
+                <CheckCircle2 className="w-8 h-8 text-emerald-400 mx-auto" />
+                <div className="text-xs font-semibold text-slate-300">No dispatch history logs yet</div>
+                <p className="text-[11px] text-slate-500">
+                  Click &quot;Send Test Email&quot; or trigger the hourly cron job to create notification records.
+                </p>
 
-              <div className="p-3 bg-slate-950 rounded-xl border border-slate-800">
-                <div className="text-[10px] text-slate-500 uppercase font-semibold">Temperature</div>
-                <div className="text-xl font-bold text-white mt-1">{selectedAlert.trigger_data.temperature ?? '--'}°C</div>
-                <div className="text-[10px] text-slate-400">Apparent: {selectedAlert.trigger_data.apparent_temperature ?? '--'}°C</div>
               </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="border-b border-slate-800 text-slate-400 font-mono text-[11px] uppercase">
+                      <th className="pb-3 px-3">Status</th>
+                      <th className="pb-3 px-3">Recipient</th>
+                      <th className="pb-3 px-3">Type</th>
+                      <th className="pb-3 px-3">Risk Level</th>
+                      <th className="pb-3 px-3">Location</th>
+                      <th className="pb-3 px-3">Temp</th>
+                      <th className="pb-3 px-3">Sent At</th>
+                      <th className="pb-3 px-3">Provider ID</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/60 font-mono">
+                    {logs.map((log) => (
+                      <tr key={log.id} className="hover:bg-slate-800/40 transition">
+                        <td className="py-2.5 px-3">
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${log.status === 'SENT' ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' : 'bg-rose-950 text-rose-400 border border-rose-800'}`}>
+                            {log.status}
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-3 text-white font-semibold">{log.recipient_email}</td>
+                        <td className="py-2.5 px-3 text-slate-300">{log.alert_type}</td>
+                        <td className="py-2.5 px-3">
+                          <span className={`font-bold ${log.risk_level === 'EXTREME' ? 'text-rose-400' : log.risk_level === 'HIGH' ? 'text-amber-400' : 'text-emerald-400'}`}>
 
-              <div className="p-3 bg-slate-950 rounded-xl border border-slate-800">
-                <div className="text-[10px] text-slate-500 uppercase font-semibold">Relative Humidity</div>
-                <div className="text-xl font-bold text-blue-400 mt-1">{selectedAlert.trigger_data.humidity ?? '--'}%</div>
-                <div className="text-[10px] text-slate-400">Moisture load</div>
-              </div>
-
-              <div className="p-3 bg-slate-950 rounded-xl border border-slate-800">
-                <div className="text-[10px] text-slate-500 uppercase font-semibold">Location Context</div>
-                <div className="text-sm font-bold text-emerald-400 mt-1 truncate">{selectedAlert.location_name || profile.location?.name || 'Chennai'}</div>
-                <div className="text-[10px] text-slate-400">{new Date(selectedAlert.timestamp).toLocaleTimeString()}</div>
-              </div>
-            </div>
-
-            {/* Why This Alert Was Generated */}
-            <div className="p-4 bg-slate-950 rounded-xl border border-slate-800 space-y-2">
-              <div className="text-xs font-mono font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
-                <Info className="w-4 h-4" />
-                <span>WHY THIS ALERT WAS GENERATED</span>
-              </div>
-              <p className="text-xs text-slate-300 leading-relaxed font-sans">
-                {selectedAlert.why_generated || selectedAlert.message}
-              </p>
-              <div className="text-[11px] font-mono text-slate-500 pt-1">
-                Rule Identifier: <span className="text-slate-300">{selectedAlert.rule_id}</span> | Deduplication Key: <span className="text-slate-300">{selectedAlert.dedup_key}</span>
-              </div>
-            </div>
-
-            {/* XAI Risk Drivers */}
-            {selectedAlert.drivers && selectedAlert.drivers.length > 0 && (
-              <div className="space-y-2">
-                <div className="text-xs font-mono font-bold text-emerald-400 uppercase tracking-wider">
-                  PRIMARY XAI RISK DRIVERS
-                </div>
-                <div className="space-y-2">
-                  {selectedAlert.drivers.map((d, i) => (
-                    <div key={i} className="flex items-center justify-between text-xs font-mono bg-slate-950 p-2.5 rounded-lg border border-slate-800">
-                      <span className="text-slate-300 font-sans">{d.name}</span>
-                      <span className="text-emerald-400 font-bold">{d.impact_percent}% impact</span>
-                    </div>
-                  ))}
-                </div>
+                            {log.risk_level} ({log.risk_score}/100)
+                          </span>
+                        </td>
+                        <td className="py-2.5 px-3 text-slate-300">{log.location_name}</td>
+                        <td className="py-2.5 px-3 text-slate-300">{log.temperature ? `${log.temperature}°C` : '--'}</td>
+                        <td className="py-2.5 px-3 text-slate-400">{new Date(log.sent_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
+                        <td className="py-2.5 px-3 text-slate-500 truncate max-w-[120px]">{log.provider_message_id || 'N/A'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             )}
-
-            {/* Recommended Preventive Action */}
-            <div className="p-4 bg-emerald-950/30 rounded-xl border border-emerald-800/50 space-y-2">
-              <div className="text-xs font-mono font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
-                <CheckCircle className="w-4 h-4" />
-                <span>RECOMMENDED PREVENTIVE ACTION</span>
-              </div>
-              <p className="text-xs text-emerald-200 leading-relaxed font-sans">
-                {selectedAlert.recommended_action}
-              </p>
-            </div>
-
-            <div className="pt-2 flex justify-end">
-              <button
-                onClick={() => setSelectedAlert(null)}
-                className="px-5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold transition"
-              >
-                Close Breakdown
-              </button>
-            </div>
           </div>
-        </div>
-      )}
+        </main>
+      </div>
     </div>
   );
 }
@@ -544,8 +579,8 @@ function NotificationsContent() {
 export default function NotificationsPage() {
   return (
     <Suspense fallback={
-      <div className="min-h-screen bg-slate-950 text-white font-mono text-xs p-12 text-center animate-pulse">
-        Loading HeatShield Notification Center...
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-8">
+        <Loader2 className="w-8 h-8 animate-spin text-emerald-400" />
       </div>
     }>
       <NotificationsContent />

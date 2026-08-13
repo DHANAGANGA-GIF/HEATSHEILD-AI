@@ -15,13 +15,15 @@ export const DEFAULT_LOCATIONS: LocationData[] = [
 export async function fetchWeatherData(
   lat: number,
   lon: number,
-  locationName: string = 'Current Location'
+  locationName: string = 'Current Location',
+  skipCache: boolean = false
 ): Promise<WeatherData> {
   const cacheKey = `${WEATHER_CACHE_KEY}${lat.toFixed(2)}_${lon.toFixed(2)}`;
 
-  // Try cache first (within 15-min TTL)
-  if (typeof window !== 'undefined') {
+  // Try cache first (within 15-min TTL) unless skipCache is requested
+  if (!skipCache && typeof window !== 'undefined') {
     const cachedStr = localStorage.getItem(cacheKey);
+
     if (cachedStr) {
       try {
         const cachedObj = JSON.parse(cachedStr) as { data: WeatherData; timestamp: number };
@@ -184,3 +186,82 @@ function generateFallbackHourly(baseTemp: number, baseHumidity: number): HourlyF
   }
   return forecasts;
 }
+
+export function getWeatherConditionText(code: number): string {
+  switch (code) {
+    case 0: return 'Clear sky';
+    case 1: return 'Mainly clear';
+    case 2: return 'Partly cloudy';
+    case 3: return 'Overcast';
+    case 45: return 'Foggy';
+    case 48: return 'Depositing rime fog';
+    case 51: return 'Light drizzle';
+    case 53: return 'Moderate drizzle';
+    case 55: return 'Dense drizzle';
+    case 61: return 'Slight rain';
+    case 63: return 'Moderate rain';
+    case 65: return 'Heavy rain';
+    case 71: return 'Slight snow';
+    case 75: return 'Heavy snow';
+    case 80: return 'Rain showers';
+    case 95: return 'Thunderstorm';
+    default: return 'Clear';
+  }
+}
+
+export async function reverseGeocode(lat: number, lon: number): Promise<LocationData> {
+  try {
+    // OpenStreetMap Nominatim reverse geocoding
+    const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=10`;
+    const response = await fetch(url, {
+      headers: { 'User-Agent': 'HeatShield-AI/1.0 (environmental-safety@heatshield.org)' },
+      signal: AbortSignal.timeout(5000),
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      const addr = data.address || {};
+      const name = addr.city || addr.town || addr.village || addr.suburb || addr.county || data.display_name?.split(',')[0] || 'Detected Location';
+      const locality = [addr.state, addr.country].filter(Boolean).join(', ');
+
+      return {
+        name,
+        locality: locality || 'GPS Coordinates',
+        latitude: Math.round(lat * 10000) / 10000,
+        longitude: Math.round(lon * 10000) / 10000,
+        country: addr.country,
+      };
+    }
+  } catch (err) {
+    console.warn('Nominatim reverse geocoding failed, trying secondary client', err);
+  }
+
+  try {
+    const backupUrl = `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=en`;
+    const response = await fetch(backupUrl, { signal: AbortSignal.timeout(4000) });
+    if (response.ok) {
+      const data = await response.json();
+      const city = data.city || data.locality || data.principalSubdivision || 'Detected Location';
+      const locality = [data.principalSubdivision, data.countryName].filter(Boolean).join(', ');
+      return {
+        name: city,
+        locality: locality || 'GPS Coordinates',
+        latitude: Math.round(lat * 10000) / 10000,
+        longitude: Math.round(lon * 10000) / 10000,
+        country: data.countryName,
+      };
+    }
+  } catch (err) {
+    console.warn('Backup reverse geocoding failed', err);
+  }
+
+  return {
+    name: 'Coordinates available — location name unavailable',
+    locality: `Coordinates: ${lat.toFixed(4)}°, ${lon.toFixed(4)}°`,
+    latitude: lat,
+    longitude: lon,
+  };
+}
+
+
+
