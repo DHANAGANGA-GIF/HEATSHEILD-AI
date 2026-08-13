@@ -4,7 +4,7 @@ import { getRecipientProfiles, saveNotificationLog } from '@/lib/store';
 import { fetchWeatherData, reverseGeocode, getWeatherConditionText } from '@/lib/weather-api';
 import { calculateRiskAssessment } from '@/lib/risk-engine';
 import { generatePersonalizedGuidance, MEDICAL_SAFETY_DISCLAIMER } from '@/lib/guidance-engine';
-import { SmartAlert, NotificationLog, RecipientNotificationProfile, WeatherData } from '@/lib/types';
+import { SmartAlert, NotificationLog, RecipientNotificationProfile } from '@/lib/types';
 
 
 export const dynamic = 'force-dynamic';
@@ -12,7 +12,10 @@ export const dynamic = 'force-dynamic';
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { targetEmail, targetPhone, sendToAll, clientLocation, weatherSnapshot } = body as {
+    // weatherSnapshot from client is intentionally NOT destructured here.
+    // The server is the sole authority for weather data, risk calculation,
+    // and data quality labels. See fetch below (skipCache=true).
+    const { targetEmail, targetPhone, sendToAll, clientLocation } = body as {
       targetEmail?: string;
       targetPhone?: string;
       sendToAll?: boolean;
@@ -23,8 +26,8 @@ export async function POST(request: Request) {
         location_source?: 'LIVE_GPS' | 'SAVED_LOCATION' | 'MANUAL_LOCATION' | 'UNAVAILABLE';
         gps_accuracy?: number;
       };
-      weatherSnapshot?: WeatherData;
     };
+
 
     const allRecipients = getRecipientProfiles();
     let targetRecipients: RecipientNotificationProfile[] = allRecipients;
@@ -71,12 +74,14 @@ export async function POST(request: Request) {
           }
         }
 
-        let weather: WeatherData;
-        if (weatherSnapshot && weatherSnapshot.temperature !== undefined && !weatherSnapshot.is_fallback) {
-          weather = weatherSnapshot;
-        } else {
-          weather = await fetchWeatherData(lat, lon, locName, true);
-        }
+        // SERVER IS THE SOLE WEATHER AUTHORITY.
+        // Always fetch a fresh Open-Meteo observation with skipCache=true.
+        // The client weatherSnapshot is NEVER used as email data — it is only
+        // accepted for display reference (so the UI can confirm what was sent).
+        // This guarantees: data quality label, risk score, and email content
+        // all originate from a single server-controlled immutable snapshot.
+        const weather = await fetchWeatherData(lat, lon, locName, true);
+
 
         if (weather.is_fallback) {
           results.push({
@@ -88,6 +93,8 @@ export async function POST(request: Request) {
           continue;
         }
 
+        // Data quality: LIVE = successful fresh provider response.
+        // CACHED = server-side stale fallback (still never labelled LIVE).
         const weatherStatus = weather.is_cached ? 'CACHED' : 'LIVE';
         const weatherConditionText = getWeatherConditionText(weather.weather_code);
 
