@@ -133,8 +133,14 @@ export async function POST(request: Request) {
       locationName: locName,
       recipientName: recipientName || recipientEmail.split('@')[0],
       locationStatus: locationStatusLabel,
+      coordinates: { latitude: lat, longitude: lon },
       gpsAccuracy: clientLocation?.gps_accuracy,
+      weatherCondition: weatherConditionText,
+      weatherObservedAt: weather.timestamp,
+      dataQualityStatus: weatherStatus,
+      riskCalculatedAt: riskAssessment.timestamp,
     });
+
 
     if (!result.success) {
       return NextResponse.json(

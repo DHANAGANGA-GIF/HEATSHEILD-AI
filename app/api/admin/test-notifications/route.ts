@@ -167,7 +167,12 @@ export async function POST(request: Request) {
           locationName: locName,
           recipientName: recipient.display_name || recipient.email,
           locationStatus: locationStatusLabel,
+          coordinates: { latitude: lat, longitude: lon },
           gpsAccuracy: clientLocation?.gps_accuracy,
+          weatherCondition: weatherConditionText,
+          weatherObservedAt: weather.timestamp,
+          dataQualityStatus: weatherStatus,
+          riskCalculatedAt: riskAssessment.timestamp,
         });
 
         // Log record
