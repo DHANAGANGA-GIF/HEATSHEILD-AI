@@ -4,7 +4,7 @@ import { getRecipientProfiles, saveNotificationLog } from '@/lib/store';
 import { fetchWeatherData, reverseGeocode, getWeatherConditionText } from '@/lib/weather-api';
 import { calculateRiskAssessment } from '@/lib/risk-engine';
 import { generatePersonalizedGuidance, MEDICAL_SAFETY_DISCLAIMER } from '@/lib/guidance-engine';
-import { SmartAlert, NotificationLog, RecipientNotificationProfile } from '@/lib/types';
+import { SmartAlert, NotificationLog, RecipientNotificationProfile, WeatherData } from '@/lib/types';
 
 
 export const dynamic = 'force-dynamic';
@@ -12,7 +12,7 @@ export const dynamic = 'force-dynamic';
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { targetEmail, targetPhone, sendToAll, clientLocation } = body as {
+    const { targetEmail, targetPhone, sendToAll, clientLocation, weatherSnapshot } = body as {
       targetEmail?: string;
       targetPhone?: string;
       sendToAll?: boolean;
@@ -23,6 +23,7 @@ export async function POST(request: Request) {
         location_source?: 'LIVE_GPS' | 'SAVED_LOCATION' | 'MANUAL_LOCATION' | 'UNAVAILABLE';
         gps_accuracy?: number;
       };
+      weatherSnapshot?: WeatherData;
     };
 
     const allRecipients = getRecipientProfiles();
@@ -35,7 +36,7 @@ export async function POST(request: Request) {
           id: `rec_${Date.now()}`,
           email: targetEmail.toLowerCase(),
           display_name: targetEmail.split('@')[0],
-          location_name: clientLocation?.location_name || 'Current Location',
+          location_name: clientLocation?.location_name || 'Location Unavailable',
           latitude: clientLocation?.latitude ?? 13.0827,
           longitude: clientLocation?.longitude ?? 80.2707,
           location_source: clientLocation?.location_source || 'MANUAL_LOCATION',
@@ -70,7 +71,13 @@ export async function POST(request: Request) {
           }
         }
 
-        const weather = await fetchWeatherData(lat, lon, locName, true);
+        let weather: WeatherData;
+        if (weatherSnapshot && weatherSnapshot.temperature !== undefined && !weatherSnapshot.is_fallback) {
+          weather = weatherSnapshot;
+        } else {
+          weather = await fetchWeatherData(lat, lon, locName, true);
+        }
+
         if (weather.is_fallback) {
           results.push({
             recipient: recipient.email,
@@ -83,6 +90,7 @@ export async function POST(request: Request) {
 
         const weatherStatus = weather.is_cached ? 'CACHED' : 'LIVE';
         const weatherConditionText = getWeatherConditionText(weather.weather_code);
+
 
 
         const ageGroup = recipient.age !== undefined

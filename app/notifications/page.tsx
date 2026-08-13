@@ -228,8 +228,10 @@ function NotificationsContent() {
             gps_accuracy: activeAccuracy,
             timestamp: activeTimestamp,
           },
+          weatherSnapshot: weatherData || undefined,
         }),
       });
+
 
 
       const data = await response.json();
