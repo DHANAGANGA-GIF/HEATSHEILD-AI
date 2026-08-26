@@ -23,6 +23,170 @@ export interface SendEmailResult {
   error?: string;
 }
 
+export interface EmailServiceStatus {
+  mode: 'SANDBOX' | 'PRODUCTION' | 'NOT_READY';
+  configured: boolean;
+  domain: string;
+  domainVerified: boolean;
+  senderConfigured: boolean;
+  message: string;
+}
+
+// In-memory cache for Resend domain verification to avoid excessive API requests
+let domainVerificationCache: {
+  domain: string;
+  verified: boolean;
+  status: string;
+  timestamp: number;
+} | null = null;
+
+const CACHE_TTL_MS = 60 * 1000; // 1 minute
+
+/**
+ * Returns the public status of the transactional email service.
+ * Authoritative: checks Resend API to verify whether the custom domain is actually verified.
+ * NEVER exposes secret keys, DNS records, or private tokens.
+ */
+export async function getEmailServiceStatus(): Promise<EmailServiceStatus> {
+  const apiKey = process.env.RESEND_API_KEY;
+  const fromAddress = process.env.EMAIL_FROM;
+  const hasKey = Boolean(apiKey && apiKey.startsWith('re_') && !apiKey.includes('your_'));
+
+  if (!hasKey) {
+    return {
+      mode: 'NOT_READY',
+      configured: false,
+      domain: '',
+      domainVerified: false,
+      senderConfigured: false,
+      message: 'Email service is not configured. Missing or invalid RESEND_API_KEY.',
+    };
+  }
+
+  if (!fromAddress || !fromAddress.trim()) {
+    return {
+      mode: 'NOT_READY',
+      configured: true,
+      domain: '',
+      domainVerified: false,
+      senderConfigured: false,
+      message: 'Email service is not configured. Missing EMAIL_FROM environment variable.',
+    };
+  }
+
+  const domainMatch = fromAddress.match(/@([a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
+  if (!domainMatch) {
+    return {
+      mode: 'NOT_READY',
+      configured: true,
+      domain: '',
+      domainVerified: false,
+      senderConfigured: false,
+      message: 'EMAIL_FROM has an invalid email format or missing domain.',
+    };
+  }
+
+  const domain = domainMatch[1].toLowerCase();
+
+  // If using the official Resend Sandbox sender
+  if (domain === 'resend.dev' || fromAddress.includes('onboarding@resend.dev')) {
+    return {
+      mode: 'SANDBOX',
+      configured: true,
+      domain: 'resend.dev',
+      domainVerified: false,
+      senderConfigured: true,
+      message: 'Resend sandbox mode — emails can only be sent to the Resend account owner.',
+    };
+  }
+
+  // Custom domain: Check if the domain is verified with Resend
+  const now = Date.now();
+  if (domainVerificationCache && domainVerificationCache.domain === domain && (now - domainVerificationCache.timestamp) < CACHE_TTL_MS) {
+    if (domainVerificationCache.verified) {
+      return {
+        mode: 'PRODUCTION',
+        configured: true,
+        domain,
+        domainVerified: true,
+        senderConfigured: true,
+        message: `Production email delivery enabled for ${domain}.`,
+      };
+    }
+    return {
+      mode: 'NOT_READY',
+      configured: true,
+      domain,
+      domainVerified: false,
+      senderConfigured: true,
+      message: `Domain "${domain}" is not verified in Resend (status: ${domainVerificationCache.status}).`,
+    };
+  }
+
+  try {
+    const resend = new Resend(apiKey);
+    const listResult = await resend.domains.list();
+
+    if (listResult.error) {
+      return {
+        mode: 'NOT_READY',
+        configured: true,
+        domain,
+        domainVerified: false,
+        senderConfigured: true,
+        message: `Unable to verify domain status with Resend: ${listResult.error.message}`,
+      };
+    }
+
+    const domainList = listResult.data?.data || [];
+    const matched = domainList.find((d: any) => d.name?.toLowerCase() === domain);
+
+    if (!matched) {
+      domainVerificationCache = { domain, verified: false, status: 'not_found', timestamp: now };
+      return {
+        mode: 'NOT_READY',
+        configured: true,
+        domain,
+        domainVerified: false,
+        senderConfigured: true,
+        message: `Domain "${domain}" is not registered in your Resend account. Production email delivery is not ready.`,
+      };
+    }
+
+    const isVerified = matched.status === 'verified';
+    domainVerificationCache = { domain, verified: isVerified, status: matched.status || 'unverified', timestamp: now };
+
+    if (!isVerified) {
+      return {
+        mode: 'NOT_READY',
+        configured: true,
+        domain,
+        domainVerified: false,
+        senderConfigured: true,
+        message: `Domain "${domain}" is currently "${matched.status}" (pending verification in Resend).`,
+      };
+    }
+
+    return {
+      mode: 'PRODUCTION',
+      configured: true,
+      domain,
+      domainVerified: true,
+      senderConfigured: true,
+      message: `Production email delivery enabled for ${domain}.`,
+    };
+  } catch (err: any) {
+    return {
+      mode: 'NOT_READY',
+      configured: true,
+      domain,
+      domainVerified: false,
+      senderConfigured: true,
+      message: `Error checking domain status with Resend: ${err?.message || 'Network exception'}`,
+    };
+  }
+}
+
 /**
  * Server-only transactional email service for HeatShield AI using Resend.
  * Reads API key securely from process.env.RESEND_API_KEY.
@@ -31,6 +195,14 @@ export interface SendEmailResult {
 export async function sendAlertEmail(options: SendEmailOptions): Promise<SendEmailResult> {
   const apiKey = process.env.RESEND_API_KEY;
   const fromAddress = process.env.EMAIL_FROM || 'HeatShield AI Alerts <onboarding@resend.dev>';
+  const isProduction = process.env.NODE_ENV === 'production' || process.env.VERCEL_ENV === 'production';
+
+  if (!fromAddress || !fromAddress.includes('@')) {
+    return {
+      success: false,
+      error: 'Email service is misconfigured. EMAIL_FROM must be a valid email address.',
+    };
+  }
 
   const {
     to,
@@ -207,9 +379,15 @@ export async function sendAlertEmail(options: SendEmailOptions): Promise<SendEma
   `;
 
   if (!apiKey || !apiKey.startsWith('re_') || apiKey.includes('your_')) {
+    if (isProduction) {
+      return {
+        success: false,
+        error: 'Email service is not configured. RESEND_API_KEY is missing or invalid.',
+      };
+    }
     return {
       success: true,
-      id: `resend_sandbox_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      id: `resend_simulated_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
     };
   }
 

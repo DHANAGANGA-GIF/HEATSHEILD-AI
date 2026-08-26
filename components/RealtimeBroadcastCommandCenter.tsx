@@ -23,7 +23,10 @@ import { getRecipientProfiles, getNotificationLogs } from '@/lib/store';
 import { RecipientNotificationProfile, NotificationLog, RiskLevel } from '@/lib/types';
 import { BroadcastResultItem } from '@/lib/broadcast-service';
 
+import { useAuth } from '@/lib/firebase/auth-context';
+
 export const RealtimeBroadcastCommandCenter: React.FC = () => {
+  const { firebaseUser, getIdToken } = useAuth();
   const [recipients, setRecipients] = useState<RecipientNotificationProfile[]>([]);
   const [logs, setLogs] = useState<NotificationLog[]>([]);
   const [isBroadcasting, setIsBroadcasting] = useState(false);
@@ -49,22 +52,32 @@ export const RealtimeBroadcastCommandCenter: React.FC = () => {
   }, []);
 
   const handleExecuteBroadcast = async () => {
+    if (!firebaseUser) {
+      setStatusMessage('❌ Authentication required: Please sign in to trigger alert broadcasts.');
+      return;
+    }
+
     setIsBroadcasting(true);
     setBroadcastProgress(10);
     setStatusMessage(null);
     setBroadcastResults([]);
 
-    const sendToAll = selectedRecipient === 'ALL';
-    const targetEmail = sendToAll ? undefined : selectedRecipient;
-
     try {
+      const idToken = await getIdToken();
+      if (!idToken) {
+        setStatusMessage('❌ Authentication expired. Please sign in again.');
+        setIsBroadcasting(false);
+        return;
+      }
+
       setBroadcastProgress(35);
       const res = await fetch('/api/broadcast/live-alerts', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${idToken}`,
+        },
         body: JSON.stringify({
-          sendToAll,
-          targetEmail,
           minRiskLevel: minRiskFilter !== 'ALL' ? minRiskFilter : undefined,
           customSubject: customSubject.trim() || undefined,
         }),
@@ -77,10 +90,13 @@ export const RealtimeBroadcastCommandCenter: React.FC = () => {
         setBroadcastProgress(100);
         setBroadcastResults(data.results);
         setLastBroadcastTime(new Date().toLocaleTimeString());
+        const dest = data.verifiedRecipient || firebaseUser.email;
         setStatusMessage(
-          `✓ Real-Time Broadcast Complete: ${data.successfulDispatches} of ${data.totalRecipients} subscribers received live weather & precautions!`
+          `✓ Real-Time Broadcast Complete: Live weather & precautions dispatched to ${dest}!`
         );
         loadData();
+      } else if (res.status === 401) {
+        setStatusMessage('❌ Authentication required. Please sign in again.');
       } else {
         setStatusMessage(`❌ Broadcast dispatch failed: ${data.error || 'Unknown error'}`);
       }

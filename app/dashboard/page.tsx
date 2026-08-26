@@ -17,7 +17,7 @@ import { evaluateHeatRisk } from '@/lib/risk-engine';
 import { getUserProfile, saveUserProfile } from '@/lib/store';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { LocationSource } from '@/lib/constants';
-import { LocationData, RiskAssessment, TechMode, WeatherData } from '@/lib/types';
+import { LocationData, RiskAssessment, TechMode, WeatherData, UserProfile } from '@/lib/types';
 import Link from 'next/link';
 import { Clock, Sliders, MessageSquare, ArrowRight, ChevronDown, ChevronUp, Radio } from 'lucide-react';
 import { RealtimeLiveLocationTracker } from '@/components/RealtimeLiveLocationTracker';
@@ -28,7 +28,8 @@ export default function DashboardPage() {
   const router = useRouter();
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [techMode, setTechMode] = useState<TechMode>('technical');
-  const [profile, setProfile] = useState(getUserProfile());
+  const { firebaseUser, appProfile, isAuthenticated, loading: authLoading } = useAuth();
+  const [profile, setProfile] = useState<UserProfile>(() => appProfile || getUserProfile());
   const [weather, setWeather] = useState<WeatherData | null>(null);
   const [risk, setRisk] = useState<RiskAssessment | null>(null);
   const [loading, setLoading] = useState(true);
@@ -40,11 +41,18 @@ export default function DashboardPage() {
   const refreshIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const requestSeqRef = useRef<number>(0);
 
+  // Sync profile when Firebase auth resolves
+  useEffect(() => {
+    if (appProfile) {
+      setProfile(appProfile);
+    }
+  }, [appProfile]);
+
   // RACE-CONDITION & STALE REQUEST PROTECTED DATA LOADER
   const loadData = useCallback(async (loc: LocationData) => {
     const currentSeq = ++requestSeqRef.current;
     setLoading(true);
-    const p = getUserProfile();
+    const p = appProfile || getUserProfile();
     setProfile(p);
     
     const wData = await fetchWeatherData(loc.latitude, loc.longitude, loc.name);
@@ -63,15 +71,13 @@ export default function DashboardPage() {
     });
     setRisk(rData);
     setLoading(false);
-  }, []);
+  }, [appProfile]);
 
   const loadDashboardData = useCallback(async () => {
-    const p = getUserProfile();
+    const p = appProfile || getUserProfile();
     const loc = p.location || { name: 'Chennai', latitude: 13.0827, longitude: 80.2707 };
     await loadData(loc);
-  }, [loadData]);
-
-  const { isAuthenticated, loading: authLoading } = useAuth();
+  }, [appProfile, loadData]);
 
   useEffect(() => {
     if (!authLoading) {
@@ -104,6 +110,11 @@ export default function DashboardPage() {
   };
 
   const currentLocation = profile.location || { name: 'Chennai', latitude: 13.0827, longitude: 80.2707 };
+
+  // Derive display identity from authenticated user
+  const displayUserName = firebaseUser?.displayName || appProfile?.name || (firebaseUser?.email ? firebaseUser.email.split('@')[0] : 'User');
+  const displayUserEmail = firebaseUser?.email || appProfile?.email || '';
+  const displayRole = (appProfile?.role || profile.role || 'user').toUpperCase();
 
   // Calculate weather freshness & stale protection
   const weatherAgeMins = weather ? Math.floor((Date.now() - new Date(weather.timestamp).getTime()) / 60000) : 0;
@@ -163,7 +174,7 @@ export default function DashboardPage() {
                 OPERATIONAL HEAT RISK DASHBOARD
               </h1>
               <p className="text-xs text-slate-500 mt-0.5 font-mono">
-                Contextual Heat Strain Assessment for {profile.name || 'User'} ({profile.role.toUpperCase()} MODE)
+                Contextual Heat Strain Assessment for <span className="font-semibold text-slate-800">{displayUserName}</span> {displayUserEmail ? <span className="text-slate-400">({displayUserEmail})</span> : null} • <span className="text-emerald-700 font-bold">{displayRole} MODE</span>
               </p>
             </div>
 

@@ -10,9 +10,9 @@ const COMMUNITY_REPORTS_KEY = 'heatshield_community_reports';
 const ALERTS_KEY = 'heatshield_alerts';
 
 export const DEFAULT_USER_PROFILE: UserProfile = {
-  id: 'usr_demo_101',
-  email: 'demo.user@heatshield.org',
-  name: 'Demo User',
+  id: '',
+  email: '',
+  name: '',
   age_group: 'adult',
   exposure: 'occasional',
   activity_level: 'moderate',
@@ -21,11 +21,11 @@ export const DEFAULT_USER_PROFILE: UserProfile = {
   language: 'en',
   role: 'user',
   location: {
-    name: 'Chennai',
-    locality: 'Tamil Nadu, India',
-    latitude: 13.0827,
-    longitude: 80.2707,
-    country: 'India',
+    name: 'My Location',
+    locality: '',
+    latitude: 0,
+    longitude: 0,
+    country: '',
   },
   created_at: new Date().toISOString(),
 };
@@ -110,11 +110,13 @@ export function getUserProfile(): UserProfile {
   if (typeof window === 'undefined') return DEFAULT_USER_PROFILE;
   const stored = localStorage.getItem(PROFILE_KEY);
   if (!stored) {
-    localStorage.setItem(PROFILE_KEY, JSON.stringify(DEFAULT_USER_PROFILE));
+    // Do NOT seed localStorage with the demo profile.
+    // The auth context will write the real profile after Firebase login.
     return DEFAULT_USER_PROFILE;
   }
   try {
-    return JSON.parse(stored);
+    const parsed: UserProfile = JSON.parse(stored);
+    return parsed;
   } catch (e) {
     return DEFAULT_USER_PROFILE;
   }
@@ -134,7 +136,12 @@ export function clearSessionCookie(): void {
 
 export function saveUserProfile(profile: Partial<UserProfile>): UserProfile {
   const current = getUserProfile();
-  const updated = { ...current, authenticated: true, updated_at: new Date().toISOString(), ...profile };
+  // If saving for a new/different user UID, do NOT merge with the previous user's profile
+  const isDifferentUser = (profile.id && current.id && profile.id !== current.id) ||
+    (profile.firebase_uid && current.firebase_uid && profile.firebase_uid !== current.firebase_uid);
+  const base = isDifferentUser ? DEFAULT_USER_PROFILE : current;
+  const updated = { ...base, authenticated: true, updated_at: new Date().toISOString(), ...profile };
+
   if (typeof window !== 'undefined') {
     localStorage.setItem(PROFILE_KEY, JSON.stringify(updated));
     if (updated.id || updated.firebase_uid) {
@@ -149,9 +156,9 @@ export function saveUserProfile(profile: Partial<UserProfile>): UserProfile {
         user_id: updated.id,
         email: updated.email,
         display_name: updated.name || updated.email.split('@')[0],
-        location_name: updated.location?.name || 'Chennai',
-        latitude: updated.location?.latitude ?? 13.0827,
-        longitude: updated.location?.longitude ?? 80.2707,
+        location_name: updated.location?.name || 'My Location',
+        latitude: updated.location?.latitude ?? 0,
+        longitude: updated.location?.longitude ?? 0,
         location_source: updated.location?.gps_accuracy ? 'LIVE_GPS' : 'SAVED_LOCATION',
         email_alerts_enabled: true,
         hourly_summary_enabled: true,
@@ -180,6 +187,10 @@ export function linkFirebaseUID(uid: string): UserProfile {
 export function clearUserProfile(): void {
   if (typeof window !== 'undefined') {
     localStorage.removeItem(PROFILE_KEY);
+    localStorage.removeItem(SAVED_LOCATIONS_KEY);
+    localStorage.removeItem(SMART_ALERTS_KEY);
+    localStorage.removeItem(RECIPIENT_PROFILES_KEY);
+    localStorage.removeItem(NOTIFICATION_LOGS_KEY);
     clearSessionCookie();
   }
 }
@@ -670,72 +681,16 @@ export function recordAlertCooldowns(dedupKeys: string[]): void {
 const RECIPIENT_PROFILES_KEY = 'heatshield_recipient_profiles';
 const NOTIFICATION_LOGS_KEY = 'heatshield_notification_logs';
 
-export const INITIAL_REGISTERED_RECIPIENTS: RecipientNotificationProfile[] = [
-  {
-    id: 'rec_klu_560',
-    email: '99240040560@klu.ac.in',
-    display_name: 'KLU Student 560',
-    age: 20,
-    location_name: 'Chennai',
-    latitude: 13.0827,
-    longitude: 80.2707,
-    location_source: 'MANUAL_LOCATION',
-    email_alerts_enabled: true,
-    hourly_summary_enabled: true,
-    critical_alerts_enabled: true,
-    forecast_alerts_enabled: true,
-    created_at: new Date().toISOString(),
-  },
-  {
-    id: 'rec_klu_571',
-    email: '99240040571@klu.ac.in',
-    display_name: 'KLU Student 571',
-    age: 21,
-    location_name: 'Vijayawada',
-    latitude: 16.5062,
-    longitude: 80.6480,
-    location_source: 'MANUAL_LOCATION',
-    email_alerts_enabled: true,
-    hourly_summary_enabled: true,
-    critical_alerts_enabled: true,
-    forecast_alerts_enabled: true,
-    created_at: new Date().toISOString(),
-  },
-  {
-    id: 'rec_klu_875',
-    email: '99240040875@klu.ac.in',
-    display_name: 'KLU Student 875',
-    age: undefined, // Missing age: must not be guessed!
-    location_name: 'Guntur',
-    latitude: 16.3067,
-    longitude: 80.4365,
-    location_source: 'MANUAL_LOCATION',
-    email_alerts_enabled: true,
-    hourly_summary_enabled: true,
-    critical_alerts_enabled: true,
-    forecast_alerts_enabled: true,
-    created_at: new Date().toISOString(),
-  },
-  {
-    id: 'rec_klu_159',
-    email: '99240040159@klu.ac.in',
-    display_name: 'KLU Student 159',
-    age: 22,
-    location_name: 'Hyderabad',
-    latitude: 17.3850,
-    longitude: 78.4867,
-    location_source: 'MANUAL_LOCATION',
-    email_alerts_enabled: true,
-    hourly_summary_enabled: true,
-    critical_alerts_enabled: true,
-    forecast_alerts_enabled: true,
-    created_at: new Date().toISOString(),
-  },
-];
+/**
+ * Initially empty — real recipients are registered dynamically from Firebase Auth.
+ * When a user logs in and saves their profile, they are added to this pool.
+ * NO hardcoded test/demo/personal email addresses.
+ */
+export const INITIAL_REGISTERED_RECIPIENTS: RecipientNotificationProfile[] = [];
 
 // Server-side in-memory fallbacks for Node process lifecycle
 let globalServerLogs: NotificationLog[] = [];
-let globalServerRecipients: RecipientNotificationProfile[] = [...INITIAL_REGISTERED_RECIPIENTS];
+let globalServerRecipients: RecipientNotificationProfile[] = []; // Start empty — no hardcoded recipients
 
 export function getRecipientProfiles(): RecipientNotificationProfile[] {
   if (typeof window === 'undefined') {
@@ -743,13 +698,15 @@ export function getRecipientProfiles(): RecipientNotificationProfile[] {
   }
   const stored = localStorage.getItem(RECIPIENT_PROFILES_KEY);
   if (!stored) {
-    localStorage.setItem(RECIPIENT_PROFILES_KEY, JSON.stringify(INITIAL_REGISTERED_RECIPIENTS));
-    return INITIAL_REGISTERED_RECIPIENTS;
+    // Start empty — no seeding with test/demo addresses
+    return [];
   }
   try {
-    return JSON.parse(stored);
+    const parsed: RecipientNotificationProfile[] = JSON.parse(stored);
+    // Filter out any legacy KLU test addresses that may still be in localStorage
+    return parsed.filter(p => !p.email.endsWith('@klu.ac.in') && p.email !== 'demo.user@heatshield.org');
   } catch {
-    return INITIAL_REGISTERED_RECIPIENTS;
+    return [];
   }
 }
 

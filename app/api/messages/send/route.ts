@@ -1,11 +1,34 @@
 import { NextResponse } from 'next/server';
 import { sendRealtimeEmail, sendRealtimeSms } from '@/lib/communication-service';
+import { verifyFirebaseToken, extractBearerToken } from '@/lib/firebase/admin';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
+    // ── Mandatory Firebase Authentication ──────────────────────────────────
+    const authHeader = request.headers.get('authorization');
+    const idToken = extractBearerToken(authHeader);
+
+    if (!idToken || idToken.length <= 20) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Authentication required. A valid Firebase ID token must be provided in the Authorization header.',
+        },
+        { status: 401 }
+      );
+    }
+
+    const decoded = await verifyFirebaseToken(idToken);
+    if (!decoded) {
+      return NextResponse.json(
+        { success: false, error: 'Invalid or expired authentication token. Please sign in again.' },
+        { status: 401 }
+      );
+    }
+
+    const body = await request.json().catch(() => ({}));
     const { target, channel, message, subject, recipientName, locationName } = body as {
       target?: string;
       channel?: 'EMAIL' | 'SMS';
@@ -15,13 +38,6 @@ export async function POST(request: Request) {
       locationName?: string;
     };
 
-    if (!target || typeof target !== 'string' || target.trim().length === 0) {
-      return NextResponse.json(
-        { success: false, error: 'Target recipient (Email or Phone Number) is required.' },
-        { status: 400 }
-      );
-    }
-
     if (!message || typeof message !== 'string' || message.trim().length === 0) {
       return NextResponse.json(
         { success: false, error: 'Message content is required.' },
@@ -29,8 +45,27 @@ export async function POST(request: Request) {
       );
     }
 
-    const cleanTarget = target.trim();
-    const selectedChannel = channel || (cleanTarget.includes('@') ? 'EMAIL' : 'SMS');
+    const selectedChannel = channel || 'EMAIL';
+
+    let cleanTarget = '';
+    if (selectedChannel === 'EMAIL') {
+      if (!decoded.email) {
+        return NextResponse.json(
+          { success: false, error: 'Authenticated account has no email address.' },
+          { status: 400 }
+        );
+      }
+      // Single source of truth: verified email
+      cleanTarget = decoded.email;
+    } else {
+      if (!target || typeof target !== 'string' || target.trim().length < 7) {
+        return NextResponse.json(
+          { success: false, error: 'Valid phone number is required for SMS dispatch.' },
+          { status: 400 }
+        );
+      }
+      cleanTarget = target.trim();
+    }
 
     let result;
     if (selectedChannel === 'EMAIL') {

@@ -49,6 +49,18 @@ function NotificationsContent() {
   // Authoritative email derived ONLY from the authenticated Firebase user.
   // NEVER from localStorage, client state, or the request body.
   const authorizedEmail: string = firebaseUser?.email || authProfile?.email || '';
+  const [emailDeliveryMode, setEmailDeliveryMode] = useState<'SANDBOX' | 'PRODUCTION' | 'NOT_CONFIGURED'>('SANDBOX');
+  const [emailDeliveryMessage, setEmailDeliveryMessage] = useState<string>('Resend sandbox mode — emails can only be sent to the Resend account owner.');
+
+  useEffect(() => {
+    fetch('/api/email/status')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.mode) setEmailDeliveryMode(data.mode);
+        if (data.message) setEmailDeliveryMessage(data.message);
+      })
+      .catch(() => {});
+  }, []);
 
   // Real-time Environmental & Location States
   const [currentLocation, setCurrentLocation] = useState<LocationData>(
@@ -155,12 +167,15 @@ function NotificationsContent() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Sync directMessageTarget when auth state resolves (e.g. after login)
+  // Sync targets when auth state resolves (e.g. after login)
   useEffect(() => {
     if (authorizedEmail) {
       setDirectMessageTarget(authorizedEmail);
+      if (otpChannel === 'EMAIL') {
+        setOtpTarget(authorizedEmail);
+      }
     }
-  }, [authorizedEmail]);
+  }, [authorizedEmail, otpChannel]);
 
   const handleDetectGpsLocation = () => {
     if (!navigator.geolocation) {
@@ -447,9 +462,13 @@ function NotificationsContent() {
     }
     setIsTestingRecipient('DIRECT_MSG');
     try {
+      const idToken = await getIdToken();
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (idToken) headers['Authorization'] = `Bearer ${idToken}`;
+
       const res = await fetch('/api/messages/send', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           target: directMessageTarget.trim(),
           channel: directMessageChannel,
@@ -664,13 +683,28 @@ function NotificationsContent() {
                       </p>
                     </div>
 
-                    <div className="p-3 bg-slate-900/80 border border-slate-800 rounded-xl text-[11px] text-slate-400 space-y-1">
-                      <div className="flex items-center gap-1.5 font-semibold text-slate-300 font-mono">
-                        <AlertCircle className="w-3.5 h-3.5 text-sky-400" />
-                        <span>Point-in-Time GPS Snapshot Dispatch</span>
+                    <div className="p-3 bg-slate-900/80 border border-slate-800 rounded-xl text-[11px] text-slate-400 space-y-1.5">
+                      <div className="flex flex-wrap items-center justify-between gap-1.5 font-semibold text-slate-300 font-mono">
+                        <div className="flex items-center gap-1.5">
+                          <AlertCircle className="w-3.5 h-3.5 text-sky-400" />
+                          <span>Point-in-Time GPS Snapshot Dispatch</span>
+                        </div>
+                        {emailDeliveryMode === 'SANDBOX' ? (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-amber-950/80 text-amber-300 border border-amber-800/60">
+                            EMAIL DELIVERY: SANDBOX
+                          </span>
+                        ) : emailDeliveryMode === 'PRODUCTION' ? (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-emerald-950/80 text-emerald-300 border border-emerald-800/60">
+                            EMAIL DELIVERY: PRODUCTION
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-rose-950/80 text-rose-300 border border-rose-800/60">
+                            EMAIL DELIVERY: NOT READY
+                          </span>
+                        )}
                       </div>
                       <p className="text-[10px] leading-relaxed">
-                        Environmental snapshot reports are captured at dispatch and transmitted to your authenticated email. When using <code className="text-emerald-400">onboarding@resend.dev</code>, Resend delivers to the authorized test owner. To send to arbitrary public domains, verify your custom domain in Resend.
+                        {emailDeliveryMessage}
                       </p>
                     </div>
 
@@ -685,41 +719,43 @@ function NotificationsContent() {
                       </button>
                       <button
                         onClick={() => handleTestDispatchRecipient(undefined, true)}
-                        disabled={isTestingRecipient !== null}
-                        className="px-4 py-2.5 bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold rounded-xl transition flex items-center justify-center gap-1.5"
+                        disabled={isTestingRecipient !== null || getRecipientProfiles().length === 0}
+                        className="px-4 py-2.5 bg-sky-600 hover:bg-sky-500 disabled:opacity-50 text-white text-xs font-bold rounded-xl transition flex items-center justify-center gap-1.5"
                       >
-                        <span>Dispatch to All (4)</span>
+                        <span>Dispatch to All ({getRecipientProfiles().length})</span>
                       </button>
                     </div>
                   </div>
 
-                  {/* Registered Recipients Quick Test */}
+                  {/* Registered Recipients — dynamically loaded from authenticated user profiles */}
                   <div className="bg-slate-950/60 p-4 rounded-2xl border border-slate-800 space-y-3">
                     <h3 className="text-xs font-bold font-mono text-slate-300 uppercase tracking-wider">
-                      Batch Recipient Matrix
+                      Registered Recipients
                     </h3>
                     <div className="space-y-2 max-h-48 overflow-y-auto">
-                      {[
-                        { email: '99240040560@klu.ac.in', loc: 'Chennai' },
-                        { email: '99240040571@klu.ac.in', loc: 'Vijayawada' },
-                        { email: '99240040875@klu.ac.in', loc: 'Guntur' },
-                        { email: '99240040159@klu.ac.in', loc: 'Hyderabad' },
-                      ].map((r) => (
-                        <div key={r.email} className="p-2.5 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-between text-xs">
-                          <div>
-                            <div className="font-bold text-white font-mono text-[11px]">{r.email}</div>
-                            <div className="text-[10px] text-slate-500">{r.loc}</div>
-                          </div>
-                          <button
-                            onClick={() => handleTestDispatchRecipient(r.email, false)}
-                            disabled={isTestingRecipient === r.email}
-                            className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-emerald-300 border border-slate-700 rounded-lg text-[10px] font-semibold transition flex items-center gap-1"
-                          >
-                            {isTestingRecipient === r.email ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
-                            <span>Send</span>
-                          </button>
+                      {getRecipientProfiles().length === 0 ? (
+                        <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 text-[11px] text-slate-400 font-mono text-center space-y-1">
+                          <p className="font-semibold text-slate-300">No registered recipients yet</p>
+                          <p>Recipients are added automatically when authenticated users save their profile. Use &ldquo;Send Live Report to My Email&rdquo; on the left to dispatch to your own verified email.</p>
                         </div>
-                      ))}
+                      ) : (
+                        getRecipientProfiles().map((r) => (
+                          <div key={r.email} className="p-2.5 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-between text-xs">
+                            <div>
+                              <div className="font-bold text-white font-mono text-[11px]">{r.email}</div>
+                              <div className="text-[10px] text-slate-500">{r.location_name || 'Location unknown'}</div>
+                            </div>
+                            <button
+                              onClick={() => handleTestDispatchRecipient(r.email, false)}
+                              disabled={isTestingRecipient === r.email}
+                              className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-emerald-300 border border-slate-700 rounded-lg text-[10px] font-semibold transition flex items-center gap-1"
+                            >
+                              {isTestingRecipient === r.email ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
+                              <span>Send</span>
+                            </button>
+                          </div>
+                        ))
+                      )}
                     </div>
                   </div>
                 </div>

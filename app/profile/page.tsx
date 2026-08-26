@@ -6,7 +6,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Navbar } from '@/components/Navbar';
 import { Sidebar } from '@/components/Sidebar';
-import { getUserProfile, saveUserProfile, logoutUser } from '@/lib/store';
+import { getUserProfile, saveUserProfile, logoutUser, DEFAULT_USER_PROFILE } from '@/lib/store';
 import { UserProfile } from '@/lib/types';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import {
@@ -60,12 +60,24 @@ export default function ProfilePage() {
   }, [resendCooldown]);
 
   useEffect(() => {
-    const current = appProfile || getUserProfile();
-    if (firebaseUser?.email) {
-      current.email = firebaseUser.email;
-      current.firebase_uid = firebaseUser.uid;
-      current.id = firebaseUser.uid;
+    if (!firebaseUser) {
+      setProfile(DEFAULT_USER_PROFILE);
+      setPhoneInput('');
+      setIsPhoneVerified(false);
+      return;
     }
+
+    const base = appProfile || getUserProfile();
+    const isSame = base.id === firebaseUser.uid || base.firebase_uid === firebaseUser.uid;
+    const cleanBase = isSame ? base : DEFAULT_USER_PROFILE;
+
+    const current: UserProfile = {
+      ...cleanBase,
+      email: firebaseUser.email || '',
+      firebase_uid: firebaseUser.uid,
+      id: firebaseUser.uid,
+      name: firebaseUser.displayName || cleanBase.name || (firebaseUser.email ? firebaseUser.email.split('@')[0] : 'User'),
+    };
     setProfile(current);
     if (current.sms_phone) {
       setPhoneInput(current.sms_phone);

@@ -16,11 +16,14 @@ import {
   RefreshCw,
   Sparkles,
   Shield,
-  Gauge
+  Gauge,
+  ShieldCheck
 } from 'lucide-react';
 import { reverseGeocode, fetchWeatherData, getWeatherConditionText } from '@/lib/weather-api';
 import { getUserProfile, saveUserProfile } from '@/lib/store';
 import { LocationData, WeatherData } from '@/lib/types';
+import { useAuth } from '@/lib/firebase/auth-context';
+import { writeUserLocation } from '@/lib/firebase/firestore';
 
 interface RealtimeLiveLocationTrackerProps {
   onLocationUpdate?: (location: LocationData) => void;
@@ -29,6 +32,23 @@ interface RealtimeLiveLocationTrackerProps {
 export const RealtimeLiveLocationTracker: React.FC<RealtimeLiveLocationTrackerProps> = ({
   onLocationUpdate,
 }) => {
+  // AUTHORITY: The authenticated Firebase user determines the email recipient.
+  // The user CANNOT type a different email address into the dispatch field.
+  const { firebaseUser, appProfile: authProfile, getIdToken } = useAuth();
+  const authorizedEmail: string = firebaseUser?.email || authProfile?.email || '';
+  const [emailDeliveryMode, setEmailDeliveryMode] = useState<'SANDBOX' | 'PRODUCTION' | 'NOT_CONFIGURED'>('SANDBOX');
+  const [emailDeliveryMessage, setEmailDeliveryMessage] = useState<string>('Resend sandbox mode — emails can only be sent to the Resend account owner.');
+
+  useEffect(() => {
+    fetch('/api/email/status')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.mode) setEmailDeliveryMode(data.mode);
+        if (data.message) setEmailDeliveryMessage(data.message);
+      })
+      .catch(() => {});
+  }, []);
+
   const [profile, setProfile] = useState(getUserProfile());
   const [isWatching, setIsWatching] = useState(false);
   const [coords, setCoords] = useState<{
@@ -41,26 +61,24 @@ export const RealtimeLiveLocationTracker: React.FC<RealtimeLiveLocationTrackerPr
   } | null>(null);
 
   const [resolvedName, setResolvedName] = useState<string>(
-    profile.location?.name || 'Chennai'
+    profile.location?.name || ''
   );
   const [resolvedLocality, setResolvedLocality] = useState<string>(
-    profile.location?.locality || 'Tamil Nadu, India'
+    profile.location?.locality || ''
   );
 
   const [liveWeather, setLiveWeather] = useState<WeatherData | null>(null);
   const [isFetchingWeather, setIsFetchingWeather] = useState(false);
   const [dispatchStatus, setDispatchStatus] = useState<'idle' | 'sending' | 'success' | 'error'>('idle');
   const [dispatchMessage, setDispatchMessage] = useState<string | null>(null);
-  const [targetEmail, setTargetEmail] = useState(profile.email || 'user@heatshield.org');
 
   const watchIdRef = useRef<number | null>(null);
   const lastGeocodedCoords = useRef<{ lat: number; lon: number } | null>(null);
 
-  // Sync profile email
+  // Sync profile location from localStorage on mount
   useEffect(() => {
     const p = getUserProfile();
     setProfile(p);
-    if (p.email) setTargetEmail(p.email);
     if (p.location) {
       setCoords({
         latitude: p.location.latitude,
@@ -103,7 +121,7 @@ export const RealtimeLiveLocationTracker: React.FC<RealtimeLiveLocationTrackerPr
       ? Math.hypot(prev.lat - latitude, prev.lon - longitude)
       : 1;
 
-    // If moved > ~50m or first run, reverse geocode
+    // If moved >~50m or first run, reverse geocode and sync
     if (distanceDelta > 0.0005) {
       lastGeocodedCoords.current = { lat: latitude, lon: longitude };
       try {
@@ -114,6 +132,23 @@ export const RealtimeLiveLocationTracker: React.FC<RealtimeLiveLocationTrackerPr
         saveUserProfile({ location: resolved });
         if (onLocationUpdate) onLocationUpdate(resolved);
         await loadWeatherForCoords(latitude, longitude, resolved.name);
+
+        // Write location to Firestore locations/{uid} — non-blocking, per-user isolation
+        if (firebaseUser?.uid) {
+          writeUserLocation(firebaseUser.uid, {
+            latitude,
+            longitude,
+            accuracy: Math.round(accuracy),
+            altitude: altitude ? Math.round(altitude) : null,
+            speed: speed ? Math.round(speed * 3.6) : null,
+            heading: heading ? Math.round(heading) : null,
+            locationName: resolved.name,
+            locationLocality: resolved.locality || '',
+            locationSource: 'LIVE_GPS',
+          }).catch(() => {
+            // Non-fatal — localStorage update succeeded
+          });
+        }
       } catch {
         const fallbackLoc: LocationData = {
           name: 'Current Live GPS Location',
@@ -125,6 +160,16 @@ export const RealtimeLiveLocationTracker: React.FC<RealtimeLiveLocationTrackerPr
         saveUserProfile({ location: fallbackLoc });
         if (onLocationUpdate) onLocationUpdate(fallbackLoc);
         await loadWeatherForCoords(latitude, longitude, 'Live Location');
+
+        // Write fallback location to Firestore
+        if (firebaseUser?.uid) {
+          writeUserLocation(firebaseUser.uid, {
+            latitude,
+            longitude,
+            accuracy: Math.round(accuracy),
+            locationSource: 'LIVE_GPS',
+          }).catch(() => {});
+        }
       }
     }
   };
@@ -163,49 +208,68 @@ export const RealtimeLiveLocationTracker: React.FC<RealtimeLiveLocationTrackerPr
     setIsWatching(false);
   };
 
-  // Dispatch live report to email
+  // Dispatch live report to the authenticated user's own email via Firebase-authenticated endpoint.
+  // The recipient is ALWAYS the server-verified Firebase email — never a user-typed value.
   const handleSendLiveReport = async () => {
-    if (!targetEmail || !targetEmail.includes('@')) {
-      alert('Please enter a valid recipient email address.');
+    if (!authorizedEmail) {
+      alert('You must be signed in to dispatch a live safety report.');
+      return;
+    }
+
+    if (!coords) {
+      alert('Live GPS location is required. Please enable GPS tracking first.');
       return;
     }
 
     setDispatchStatus('sending');
     setDispatchMessage(null);
 
-    const lat = coords?.latitude || 13.0827;
-    const lon = coords?.longitude || 80.2707;
-
     try {
+      // Get a fresh Firebase ID token — the server uses this to derive the recipient.
+      const idToken = await getIdToken();
+      if (!idToken) {
+        setDispatchStatus('error');
+        setDispatchMessage('Authentication required. Please sign in again.');
+        return;
+      }
+
       const res = await fetch('/api/broadcast/live-alerts', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${idToken}`,
+        },
         body: JSON.stringify({
-          targetEmail: targetEmail.trim(),
-          sendToAll: false,
+          // NOTE: Do NOT include targetEmail — the server derives it from the JWT.
           clientLocation: {
-            latitude: lat,
-            longitude: lon,
+            latitude: coords.latitude,
+            longitude: coords.longitude,
             location_name: resolvedName,
-            location_source: coords ? 'LIVE_GPS' : 'SAVED_LOCATION',
-            gps_accuracy: coords?.accuracy,
+            location_source: 'LIVE_GPS',
+            gps_accuracy: coords.accuracy,
           },
           customSubject: `HeatShield AI | Real-Time Live GPS Heat Safety Report for ${resolvedName}`,
         }),
       });
 
       const data = await res.json();
-      if (data.success && data.results?.[0]?.success) {
+      if (res.ok && data.success && data.results?.[0]?.success) {
         setDispatchStatus('success');
-        setDispatchMessage(`✓ Real-time live report & precautions dispatched to ${targetEmail}!`);
-        setTimeout(() => setDispatchStatus('idle'), 5000);
+        // Show the server-verified recipient for confirmation (not any user-supplied value)
+        const confirmedEmail = data.verifiedRecipient || authorizedEmail;
+        setDispatchMessage(`✓ Live safety report sent successfully to ${confirmedEmail}!`);
+        setTimeout(() => setDispatchStatus('idle'), 6000);
+      } else if (res.status === 401) {
+        setDispatchStatus('error');
+        setDispatchMessage('Authentication required. Please sign in again to send live reports.');
       } else {
         setDispatchStatus('error');
-        setDispatchMessage(data.error || data.results?.[0]?.error || 'Failed to dispatch email.');
+        const errDetail = data.error || data.message || data.results?.[0]?.error;
+        setDispatchMessage(errDetail || 'Email delivery is currently unavailable. Please try again later.');
       }
     } catch (err: any) {
       setDispatchStatus('error');
-      setDispatchMessage('Network error dispatching live safety report.');
+      setDispatchMessage('Email delivery is currently unavailable. Please try again later.');
     }
   };
 
@@ -370,29 +434,44 @@ export const RealtimeLiveLocationTracker: React.FC<RealtimeLiveLocationTrackerPr
 
       {/* Real-time Email Dispatch Strip */}
       <div className="mt-5 p-4 rounded-2xl bg-slate-950 border border-slate-800/80 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4 relative z-10">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2 text-xs font-bold text-white font-mono">
+        <div className="space-y-1.5">
+          <div className="flex flex-wrap items-center gap-2 text-xs font-bold text-white font-mono">
             <Sparkles className="w-4 h-4 text-emerald-400" />
             <span>INSTANT REAL-TIME SAFETY & PRECAUTIONS DISPATCH</span>
+            {emailDeliveryMode === 'SANDBOX' ? (
+              <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-amber-950/80 text-amber-300 border border-amber-800/60 flex items-center gap-1">
+                EMAIL DELIVERY: SANDBOX
+              </span>
+            ) : emailDeliveryMode === 'PRODUCTION' ? (
+              <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-emerald-950/80 text-emerald-300 border border-emerald-800/60 flex items-center gap-1">
+                EMAIL DELIVERY: PRODUCTION
+              </span>
+            ) : (
+              <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-rose-950/80 text-rose-300 border border-rose-800/60 flex items-center gap-1">
+                EMAIL DELIVERY: NOT READY
+              </span>
+            )}
           </div>
           <p className="text-[11px] text-slate-400">
-            Send your live GPS coordinates, thermal risk index, and 7 personalized emergency precautions directly to your email.
+            {emailDeliveryMessage}
           </p>
         </div>
 
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-          <input
-            type="email"
-            value={targetEmail}
-            onChange={(e) => setTargetEmail(e.target.value)}
-            placeholder="your-email@domain.com"
-            className="bg-slate-900 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-500 font-mono focus:outline-none focus:border-emerald-500 min-w-[240px]"
-          />
+          {/* SECURITY: Email is locked to the authenticated Firebase user.
+              The user cannot type a different recipient. */}
+          <div className="bg-slate-900 border border-emerald-800/50 rounded-xl px-3.5 py-2 text-xs text-emerald-300 font-mono flex items-center gap-2 min-w-[240px]">
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+            <span className="truncate">
+              {authorizedEmail || (firebaseUser ? 'Your authenticated account does not have an email address.' : 'Sign in to enable dispatch')}
+            </span>
+          </div>
 
           <button
             onClick={handleSendLiveReport}
-            disabled={dispatchStatus === 'sending'}
-            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold font-mono rounded-xl transition flex items-center justify-center gap-2 shadow-md shadow-emerald-950/40 disabled:opacity-50"
+            disabled={dispatchStatus === 'sending' || !authorizedEmail || !coords}
+            title={!authorizedEmail ? (firebaseUser ? 'Your authenticated account does not have an email address.' : 'Sign in to dispatch') : !coords ? 'Enable GPS tracking first' : 'Send live GPS report'}
+            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold font-mono rounded-xl transition flex items-center justify-center gap-2 shadow-md shadow-emerald-950/40 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {dispatchStatus === 'sending' ? (
               <>

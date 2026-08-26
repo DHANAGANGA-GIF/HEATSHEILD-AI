@@ -228,7 +228,21 @@ export async function sendRealtimeEmail(options: EmailDispatchOptions): Promise<
     }
   }
 
-  // Resilient Sandbox Dispatch when RESEND_API_KEY is not configured (e.g. offline testing)
+  const isProduction = process.env.NODE_ENV === 'production' || process.env.VERCEL_ENV === 'production';
+
+  if (isProduction) {
+    return {
+      success: false,
+      channel: 'EMAIL',
+      recipient: to,
+      provider: 'Resend',
+      status: 'FAILED',
+      error: 'Email service is not configured. RESEND_API_KEY is missing or invalid.',
+      timestamp,
+    };
+  }
+
+  // Simulated sandbox dispatch for test and offline development environments
   const simulatedId = `msg_sandbox_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
   return {
     success: true,

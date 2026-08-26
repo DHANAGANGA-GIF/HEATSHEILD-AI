@@ -33,7 +33,8 @@ import {
   updateProfile,
 } from 'firebase/auth';
 import { firebaseAuth, isFirebaseConfigured } from './client';
-import { getUserProfile, saveUserProfile, clearUserProfile, setSessionCookie, clearSessionCookie } from '@/lib/store';
+import { getUserProfile, saveUserProfile, clearUserProfile, setSessionCookie, clearSessionCookie, DEFAULT_USER_PROFILE } from '@/lib/store';
+import { writeUserProfile } from './firestore';
 import { UserProfile } from '@/lib/types';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -122,22 +123,36 @@ export function FirebaseAuthProvider({ children }: { children: ReactNode }) {
     if (!user) {
       setAppProfile(null);
       clearSessionCookie();
+      clearUserProfile();
       return;
     }
     const stored = getUserProfile();
+    const isSameUser = stored && (stored.id === user.uid || stored.firebase_uid === user.uid);
+    const baseProfile = isSameUser ? stored : DEFAULT_USER_PROFILE;
+
     const merged: UserProfile = {
-      ...stored,
+      ...baseProfile,
       id: user.uid,
       firebase_uid: user.uid,
-      email: user.email || stored.email,
-      name: user.displayName || stored.name,
+      email: user.email || '',
+      name: user.displayName || (user.email ? user.email.split('@')[0] : 'User'),
       authenticated: true,
-      onboarded: stored.onboarded ?? true,
+      onboarded: isSameUser ? (stored.onboarded ?? true) : true,
     };
-    // Persist so rest of app sees consistent profile and edge middleware cookie is set
+    // Persist locally so rest of app sees consistent profile
     saveUserProfile(merged);
     setSessionCookie(user.uid);
     setAppProfile(merged);
+
+    // Write to Firestore users/{uid} — non-blocking, does NOT delay auth
+    writeUserProfile(user.uid, {
+      uid: user.uid,
+      email: user.email || '',
+      displayName: user.displayName || merged.name || '',
+      role: merged.role || 'user',
+    }).catch(() => {
+      // Firestore write failure is non-critical — local state is already set
+    });
   }, []);
 
   // ── Firebase auth state listener ──────────────────────────────────────────
@@ -287,11 +302,11 @@ export function FirebaseAuthProvider({ children }: { children: ReactNode }) {
       // 4. Clear localStorage profile and cached location/weather
       clearUserProfile();
       if (typeof window !== 'undefined') {
-        // Clear weather cache on logout (prevents stale data for next user)
+        // Clear all heatshield storage on logout (prevents stale data for next user)
         const keysToRemove: string[] = [];
         for (let i = 0; i < localStorage.length; i++) {
           const key = localStorage.key(i);
-          if (key && (key.startsWith('heatshield_weather_cache_') || key === 'heatshield_user_profile')) {
+          if (key && key.startsWith('heatshield_')) {
             keysToRemove.push(key);
           }
         }

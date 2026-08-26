@@ -6,12 +6,16 @@ import { calculateRiskAssessment } from '../lib/risk-engine';
 import { generatePersonalizedGuidance } from '../lib/guidance-engine';
 
 test('1. Broadcast Engine: Dispatches live thermal alerts & precautions to all registered users', async () => {
+  // Register sample test recipients dynamically for test run
+  saveRecipientProfile({ email: 'user1@example.com', display_name: 'Test User 1', location_name: 'Chennai', latitude: 13.0827, longitude: 80.2707 });
+  saveRecipientProfile({ email: 'user2@example.com', display_name: 'Test User 2', location_name: 'Vijayawada', latitude: 16.5062, longitude: 80.6480 });
+
   const result = await broadcastLiveAlertsToAllRecipients({
     sendToAll: true,
   });
 
   assert.strictEqual(result.success, true);
-  assert.ok(result.totalRecipients >= 4, 'Should broadcast to all registered recipients');
+  assert.ok(result.totalRecipients >= 2, 'Should broadcast to all registered recipients');
   assert.strictEqual(result.successfulDispatches, result.totalRecipients);
   assert.strictEqual(result.failedDispatches, 0);
 
@@ -28,7 +32,7 @@ test('1. Broadcast Engine: Dispatches live thermal alerts & precautions to all r
 });
 
 test('2. Broadcast Engine: Single recipient target dispatch with custom subject', async () => {
-  const target = '99240040560@klu.ac.in';
+  const target = 'subscriber@example.com';
   const customSub = 'Emergency Heat Advisory - Immediate Action Required';
 
   const result = await broadcastLiveAlertsToAllRecipients({

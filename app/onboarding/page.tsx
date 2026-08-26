@@ -7,9 +7,11 @@ import { Shield, Check, MapPin, Search, ArrowRight, Lock } from 'lucide-react';
 import { saveUserProfile, getUserProfile } from '@/lib/store';
 import { ActivityLevel, AgeGroup, CoolingAccess, ExposureDuration, ExposureType, Language, LocationData } from '@/lib/types';
 import { DEFAULT_LOCATIONS, searchLocations } from '@/lib/weather-api';
+import { useAuth } from '@/lib/firebase/auth-context';
 
 export default function OnboardingPage() {
   const router = useRouter();
+  const { getIdToken } = useAuth();
   const [step, setStep] = useState(1);
 
   // Form State
@@ -66,13 +68,14 @@ export default function OnboardingPage() {
       onboarded: true,
     });
 
-    if (updated.email) {
+    getIdToken().then((idToken) => {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (idToken) headers['Authorization'] = `Bearer ${idToken}`;
+
       fetch('/api/broadcast/live-alerts', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
-          targetEmail: updated.email,
-          sendToAll: false,
           clientLocation: {
             latitude: location.latitude,
             longitude: location.longitude,
@@ -83,7 +86,7 @@ export default function OnboardingPage() {
           customSubject: `HeatShield AI | Active Heat Protection & Guidance for ${location.name}`,
         }),
       }).catch(() => {});
-    }
+    });
 
     router.push('/dashboard');
   };

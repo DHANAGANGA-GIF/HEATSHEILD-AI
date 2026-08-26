@@ -104,16 +104,6 @@ function LoginContent() {
         setLoading(false);
         return;
       }
-      // Send welcome alert email (non-blocking)
-      fetch('/api/broadcast/live-alerts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          targetEmail: email,
-          sendToAll: false,
-          customSubject: `HeatShield AI | Welcome & Live Heat Safety Alert for ${name || email.split('@')[0]}`,
-        }),
-      }).catch(() => {});
       setSuccessMsg('Account created! Redirecting...');
       performRedirect('/onboarding');
     } else {
@@ -181,11 +171,6 @@ function LoginContent() {
             authenticated: true,
             onboarded: false,
           });
-          fetch('/api/broadcast/live-alerts', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ targetEmail: data.user.email || email, sendToAll: false }),
-          }).catch(() => {});
           setSuccessMsg('Account registered! Redirecting...');
           performRedirect('/onboarding');
         }
