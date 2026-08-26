@@ -340,36 +340,34 @@ function NotificationsContent() {
 
   // 3. OTP & Magic Link Generator
   const handleGenerateOtp = async () => {
-    if (!otpTarget.trim()) {
-      setOtpError('Please enter a target phone number or email.');
-      return;
-    }
     setIsGeneratingOtp(true);
     setOtpError(null);
     setOtpVerificationSuccess(null);
     try {
+      const idToken = await getIdToken();
+      const authHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (idToken) authHeaders['Authorization'] = `Bearer ${idToken}`;
+
       const res = await fetch('/api/auth/otp/send', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders,
         body: JSON.stringify({
-          target: otpTarget.trim(),
           channel: otpChannel,
+          target: otpChannel === 'SMS' ? customPhone.trim() : undefined,
         }),
       });
       const data = await res.json();
       if (data.success) {
         setGeneratedOtpData({
-          otpCode: data.demoOtpCode,
-          magicLink: data.magicLink,
           sessionId: data.otpSessionId,
-          target: otpTarget.trim(),
+          target: otpChannel === 'EMAIL' ? (authorizedEmail || profile.email) : customPhone.trim(),
         });
 
         // Save OTP log
         const logItem: NotificationLog = {
           id: `log_otp_${Date.now()}`,
           recipient_id: profile.id || 'rec_user',
-          recipient_email: otpTarget.trim(),
+          recipient_email: (otpChannel === 'EMAIL' ? (authorizedEmail || profile.email) : customPhone.trim()) || '',
           alert_type: 'SECURITY_OTP_MAGIC_LINK',
           risk_level: 'LOW',
           location_name: currentLocation.name,
@@ -405,27 +403,30 @@ function NotificationsContent() {
 
   const handleVerifyOtpCode = async () => {
     if (verifyOtpInput.trim().length !== 6) {
-      setOtpError('Please enter the 6-digit code.');
+      setOtpError('Please enter the full 6-digit code.');
       return;
     }
     setIsVerifyingOtp(true);
     setOtpError(null);
     try {
+      const idToken = await getIdToken();
+      const authHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (idToken) authHeaders['Authorization'] = `Bearer ${idToken}`;
+
       const res = await fetch('/api/auth/otp/verify', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders,
         body: JSON.stringify({
-          target: generatedOtpData?.target || otpTarget.trim(),
           otpCode: verifyOtpInput.trim(),
         }),
       });
       const data = await res.json();
       if (data.success) {
-        setOtpVerificationSuccess(`✓ Identity Verified! ${data.target} is certified for real-time heat alerts.`);
+        setOtpVerificationSuccess(`✓ Identity Verified! ${data.target || 'Your account'} is certified for real-time heat alerts.`);
         if (otpChannel === 'SMS') {
-          saveUserProfile({ sms_phone: data.target, authenticated: true });
+          saveUserProfile({ sms_phone: data.target || customPhone.trim(), authenticated: true });
         } else {
-          saveUserProfile({ email: data.target, authenticated: true });
+          saveUserProfile({ email: data.target || authorizedEmail || profile.email, authenticated: true });
         }
       } else {
         setOtpError(data.error || 'Invalid OTP code.');
@@ -654,12 +655,22 @@ function NotificationsContent() {
                       </label>
                       <div className="w-full bg-slate-950 border border-emerald-800/50 rounded-xl px-3 py-2 text-xs text-emerald-300 font-mono flex items-center gap-2">
                         <ShieldCheck className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                        <span className="truncate">
+                        <span className="truncate font-bold">
                           {authorizedEmail || 'Sign in to see your email'}
                         </span>
                       </div>
-                      <p className="text-[10px] text-slate-500 mt-1">
-                        Recipient is verified server-side from your Firebase session. Cannot be changed by the client.
+                      <p className="text-[10px] text-slate-400 mt-1 font-mono">
+                        Report will be sent to your verified email: <span className="text-emerald-400">{authorizedEmail || 'Sign in to see email'}</span>
+                      </p>
+                    </div>
+
+                    <div className="p-3 bg-slate-900/80 border border-slate-800 rounded-xl text-[11px] text-slate-400 space-y-1">
+                      <div className="flex items-center gap-1.5 font-semibold text-slate-300 font-mono">
+                        <AlertCircle className="w-3.5 h-3.5 text-sky-400" />
+                        <span>Point-in-Time GPS Snapshot Dispatch</span>
+                      </div>
+                      <p className="text-[10px] leading-relaxed">
+                        Environmental snapshot reports are captured at dispatch and transmitted to your authenticated email. When using <code className="text-emerald-400">onboarding@resend.dev</code>, Resend delivers to the authorized test owner. To send to arbitrary public domains, verify your custom domain in Resend.
                       </p>
                     </div>
 

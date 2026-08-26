@@ -114,7 +114,7 @@ export async function sendAlertEmail(options: SendEmailOptions): Promise<SendEma
       </head>
       <body>
         <div class="container">
-          <div class="header">HEATSHIELD AI SAFETY SYSTEM | REAL-TIME TEST NOTIFICATION</div>
+          <div class="header">HEATSHIELD AI SAFETY SYSTEM | LIVE POINT-IN-TIME GPS REPORT</div>
           <div class="title">${alert.title}</div>
           <div>
             <span class="badge">${alert.priority}</span>
@@ -123,10 +123,10 @@ export async function sendAlertEmail(options: SendEmailOptions): Promise<SendEma
 
           <div class="meta-bar">
             <strong>${greeting}</strong><br/>
-            <strong>Notification ID:</strong> ${alert.id}<br/>
+            <strong>Snapshot Notice:</strong> Point-in-Time Environmental Snapshot (Captured at dispatch)<br/>
             <strong>Recipient:</strong> ${to}<br/>
             <strong>Location:</strong> ${loc}<br/>
-            <strong>Coordinates:</strong> ${coordsStr}<br/>
+            <strong>GPS Coordinates:</strong> ${coordsStr}<br/>
             <strong>Location Source:</strong> ${locSourceStr}<br/>
             <strong>GPS Accuracy:</strong> ${accuracyStr}<br/>
             <strong>Generated At:</strong> ${alertTime}
@@ -220,7 +220,7 @@ export async function sendAlertEmail(options: SendEmailOptions): Promise<SendEma
       to: [to],
       subject: subject,
       html: htmlContent,
-      text: `${alert.title}\nNotification ID: ${alert.id}\nPriority: ${alert.priority}\nRisk Level: ${alert.trigger_data.risk_level} (${alert.trigger_data.risk_score}/100)\nLocation: ${loc}\nCoordinates: ${coordsStr}\nLocation Source: ${locSourceStr}\nGPS Accuracy: ${accuracyStr}\nData Quality: ${qualityStr}\nObservation Time: ${observedTimeStr}\n\nTemperature: ${alert.trigger_data.temperature}°C\nFeels-Like: ${alert.trigger_data.apparent_temperature}°C\nHumidity: ${alert.trigger_data.humidity}%\nWind: ${alert.trigger_data.wind_speed} km/h\nCondition: ${conditionStr}\n\nWhy Generated:\n${alert.why_generated || 'Environmental evaluation'}\n\nRecommended Action:\n${alert.recommended_action}\n\nPrecautions:\n${precautionsList.join('\n')}\n\nDisclaimer: This is informational environmental safety guidance, not a medical diagnosis.`,
+      text: `${alert.title}\nSnapshot Notice: Point-in-Time Environmental Snapshot (Captured at dispatch)\nNotification ID: ${alert.id}\nPriority: ${alert.priority}\nRisk Level: ${alert.trigger_data.risk_level} (${alert.trigger_data.risk_score}/100)\nLocation: ${loc}\nGPS Coordinates: ${coordsStr}\nLocation Source: ${locSourceStr}\nGPS Accuracy: ${accuracyStr}\nData Quality: ${qualityStr}\nObservation Time: ${observedTimeStr}\n\nTemperature: ${alert.trigger_data.temperature}°C\nFeels-Like: ${alert.trigger_data.apparent_temperature}°C\nHumidity: ${alert.trigger_data.humidity}%\nWind: ${alert.trigger_data.wind_speed} km/h\nCondition: ${conditionStr}\n\nWhy Generated:\n${alert.why_generated || 'Environmental evaluation'}\n\nRecommended Action:\n${alert.recommended_action}\n\nPrecautions:\n${precautionsList.join('\n')}\n\nDisclaimer: This is informational environmental safety guidance, not a medical diagnosis.`,
     });
 
     if (response.error) {
