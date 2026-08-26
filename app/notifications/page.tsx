@@ -7,15 +7,18 @@ import {
   Bell, CheckCircle, AlertTriangle, Info, ShieldAlert, Settings, Filter,
   ArrowLeft, X, Volume2, Globe, MapPin, Clock, Sparkles, ExternalLink,
   RotateCcw, Check, Navigation, RefreshCw, Search, Thermometer, Wind,
-  Droplets, Loader2, Mail, Smartphone, ShieldCheck, AlertOctagon, CheckCircle2
+  Droplets, Loader2, Mail, Smartphone, ShieldCheck, AlertOctagon, CheckCircle2,
+  KeyRound, Send, MessageSquare, Copy, CheckCheck, AlertCircle
 } from 'lucide-react';
 import { Navbar } from '@/components/Navbar';
 import { Sidebar } from '@/components/Sidebar';
+import { RealtimeLiveLocationTracker } from '@/components/RealtimeLiveLocationTracker';
+import { RealtimeBroadcastCommandCenter } from '@/components/RealtimeBroadcastCommandCenter';
 
 import {
   getSmartAlerts, getAlertSettings, saveAlertSettings, markSmartAlertRead,
   dismissSmartAlert, clearDismissedAlerts, getUserProfile, saveUserProfile,
-  addSmartAlerts, getNotificationLogs, saveRecipientProfile, getRecipientProfiles
+  addSmartAlerts, getNotificationLogs, saveNotificationLog, saveRecipientProfile, getRecipientProfiles
 } from '@/lib/store';
 import {
   AlertPriority, AlertSettings, SmartAlert, UserProfile, LocationData,
@@ -27,17 +30,25 @@ import {
 import {
   fetchWeatherData, searchLocations, reverseGeocode, getWeatherConditionText
 } from '@/lib/weather-api';
+import { useAuth } from '@/lib/firebase/auth-context';
 
 function NotificationsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const deepLinkId = searchParams ? searchParams.get('id') : null;
 
+  // ── AUTHORITY: Firebase authenticated user is the ONLY email identity source ──
+  const { firebaseUser, appProfile: authProfile, getIdToken } = useAuth();
+
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [alerts, setAlerts] = useState<SmartAlert[]>([]);
   const [settings, setSettings] = useState<AlertSettings>(getAlertSettings());
   const [profile, setProfile] = useState<UserProfile>(getUserProfile());
   const [permissionStatus, setPermissionStatus] = useState<NotificationPermissionState>('default');
+
+  // Authoritative email derived ONLY from the authenticated Firebase user.
+  // NEVER from localStorage, client state, or the request body.
+  const authorizedEmail: string = firebaseUser?.email || authProfile?.email || '';
 
   // Real-time Environmental & Location States
   const [currentLocation, setCurrentLocation] = useState<LocationData>(
@@ -68,10 +79,39 @@ function NotificationsContent() {
   const [searchResults, setSearchResults] = useState<LocationData[]>([]);
   const [isSearchingLocation, setIsSearchingLocation] = useState(false);
 
+  // Active Communication Dispatch Tab
+  const [activeDispatchTab, setActiveDispatchTab] = useState<'EMAIL' | 'SMS' | 'OTP' | 'MESSAGE'>('EMAIL');
+
+  // Multi-Channel Dispatch States
+  // customEmail is READ-ONLY display; actual dispatch always uses authorizedEmail
+  const [customEmail] = useState('');
+  const [customPhone, setCustomPhone] = useState(profile.sms_phone || '');
+  const [directMessageText, setDirectMessageText] = useState('');
+  const [directMessageSubject, setDirectMessageSubject] = useState('');
+  const [directMessageChannel, setDirectMessageChannel] = useState<'EMAIL' | 'SMS'>('EMAIL');
+  const [directMessageTarget, setDirectMessageTarget] = useState('');
+
+  // OTP & Magic Link States
+  const [otpTarget, setOtpTarget] = useState(profile.sms_phone || profile.email || '');
+  const [otpChannel, setOtpChannel] = useState<'EMAIL' | 'SMS'>('SMS');
+  const [isGeneratingOtp, setIsGeneratingOtp] = useState(false);
+  const [generatedOtpData, setGeneratedOtpData] = useState<{
+    otpCode?: string;
+    magicLink?: string;
+    sessionId?: string;
+    target?: string;
+  } | null>(null);
+  const [verifyOtpInput, setVerifyOtpInput] = useState('');
+  const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
+  const [otpVerificationSuccess, setOtpVerificationSuccess] = useState<string | null>(null);
+  const [otpError, setOtpError] = useState<string | null>(null);
+  const [copiedLink, setCopiedLink] = useState(false);
+
   // Test Dispatch States
   const [isTestingRecipient, setIsTestingRecipient] = useState<string | null>(null);
   const [testDispatchResults, setTestDispatchResults] = useState<Record<string, { status: string; id?: string; error?: string }>>({});
   const [logs, setLogs] = useState<NotificationLog[]>([]);
+  const [logFilter, setLogFilter] = useState<'ALL' | 'EMAIL' | 'SMS' | 'OTP'>('ALL');
 
   const loadRealTimeData = async (loc: LocationData) => {
     setIsLoadingWeather(true);
@@ -94,6 +134,14 @@ function NotificationsContent() {
     setAlerts(getSmartAlerts());
     setLogs(getNotificationLogs());
     setPermissionStatus(getNotificationPermissionStatus());
+    // NOTE: Do NOT set customEmail from localStorage here.
+    // Email identity is derived exclusively from firebaseUser (see authorizedEmail above).
+    if (p.sms_phone) {
+      setCustomPhone(p.sms_phone);
+      setOtpTarget(p.sms_phone);
+    } else if (p.email) {
+      setOtpTarget(p.email);
+    }
 
     const initialLoc: LocationData = p.location || {
       name: 'Chennai',
@@ -104,10 +152,15 @@ function NotificationsContent() {
     };
     setCurrentLocation(initialLoc);
     loadRealTimeData(initialLoc);
-  // loadRealTimeData is defined outside and does not change identity — it is safe to omit.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Sync directMessageTarget when auth state resolves (e.g. after login)
+  useEffect(() => {
+    if (authorizedEmail) {
+      setDirectMessageTarget(authorizedEmail);
+    }
+  }, [authorizedEmail]);
 
   const handleDetectGpsLocation = () => {
     if (!navigator.geolocation) {
@@ -132,7 +185,7 @@ function NotificationsContent() {
         setLocationSource('UNAVAILABLE');
         alert(`Live location unavailable — permission not granted (${err.message}). You can select a saved location or search manually.`);
       },
-      { timeout: 10000, enableHighAccuracy: true }
+      { timeout: 10000, enableHighAccuracy: true, maximumAge: 0 }
     );
   };
 
@@ -158,13 +211,17 @@ function NotificationsContent() {
     await loadRealTimeData(loc);
   };
 
-  const handleRequestPermission = async () => {
-    const status = await requestNotificationPermission();
-    setPermissionStatus(status);
-  };
-
+  // 1. Email Alert Dispatcher — sends to the authenticated user's email ONLY.
+  // The server verifies the Firebase ID token and ignores any client-supplied recipient.
   const handleTestDispatchRecipient = async (email?: string, sendToAll: boolean = false) => {
-    const key = sendToAll ? 'ALL' : (email || 'default');
+    // SECURITY: Always use the server-verified authorizedEmail for single dispatch.
+    // For sendToAll (admin batch), the server uses its own registered recipient list.
+    if (!sendToAll && !authorizedEmail) {
+      alert('You must be signed in to dispatch a heat alert to your email.');
+      return;
+    }
+
+    const key = sendToAll ? 'ALL' : (email || authorizedEmail);
     setIsTestingRecipient(key);
 
     let activeLat = currentLocation.latitude;
@@ -172,53 +229,20 @@ function NotificationsContent() {
     let activeName = currentLocation.name;
     let activeSource = locationSource;
     let activeAccuracy = gpsAccuracy;
-    let activeTimestamp = new Date().toISOString();
-
-    if (locationSource === 'LIVE_GPS') {
-      if (!navigator.geolocation) {
-        setIsTestingRecipient(null);
-        alert('Fresh GPS location unavailable. Email was not sent using LIVE GPS.');
-        return;
-      }
-
-      try {
-        const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
-          navigator.geolocation.getCurrentPosition(resolve, reject, {
-            enableHighAccuracy: true,
-            timeout: 8000,
-            maximumAge: 0,
-          });
-        });
-
-        activeLat = pos.coords.latitude;
-        activeLon = pos.coords.longitude;
-        activeAccuracy = Math.round(pos.coords.accuracy);
-        activeTimestamp = new Date(pos.timestamp || Date.now()).toISOString();
-
-        const resolved = await reverseGeocode(activeLat, activeLon);
-        activeName = resolved.name;
-
-        setCurrentLocation({
-          name: activeName,
-          locality: resolved.locality,
-          latitude: activeLat,
-          longitude: activeLon,
-          country: resolved.country,
-        });
-        setGpsAccuracy(activeAccuracy);
-      } catch (err: any) {
-        setIsTestingRecipient(null);
-        alert('Fresh GPS location unavailable. Email was not sent using LIVE GPS.');
-        return;
-      }
-    }
 
     try {
+      // Obtain a fresh Firebase ID token to authenticate the server request.
+      const idToken = await getIdToken();
+      const authHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (idToken) authHeaders['Authorization'] = `Bearer ${idToken}`;
+
       const response = await fetch('/api/admin/test-notifications', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders,
         body: JSON.stringify({
-          targetEmail: email,
+          // SECURITY: Do NOT send targetEmail for single dispatch.
+          // The server derives the recipient from the verified Firebase UID.
+          // For sendToAll batch mode, the server uses its own recipient list.
           sendToAll,
           clientLocation: {
             latitude: activeLat,
@@ -226,13 +250,9 @@ function NotificationsContent() {
             location_name: activeName,
             location_source: activeSource,
             gps_accuracy: activeAccuracy,
-            timestamp: activeTimestamp,
           },
-          weatherSnapshot: weatherData || undefined,
         }),
       });
-
-
 
       const data = await response.json();
       if (data.success && Array.isArray(data.results)) {
@@ -246,26 +266,249 @@ function NotificationsContent() {
         });
         setTestDispatchResults(newResults);
         setLogs(getNotificationLogs());
+      } else if (response.status === 401) {
+        alert('Authentication required. Please sign in again to send heat alerts.');
       } else {
-        alert(`Test dispatch failed: ${data.error || 'Unknown error'}`);
+        alert(`Dispatch failed: ${data.error || 'Unknown error'}`);
       }
     } catch (err: any) {
-      alert(`Error calling test dispatch API: ${err?.message || 'Network error'}`);
+      alert(`Error calling dispatch API: ${err?.message || 'Network error'}`);
     } finally {
       setIsTestingRecipient(null);
     }
   };
 
-  const filteredAlerts = alerts.filter(alert => {
-    if (selectedPriority !== 'ALL' && alert.priority !== selectedPriority) return false;
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      return (
-        alert.title.toLowerCase().includes(q) ||
-        alert.message.toLowerCase().includes(q) ||
-        (alert.location_name && alert.location_name.toLowerCase().includes(q))
-      );
+  // 2. Phone SMS Dispatcher
+  const handleSendPhoneSms = async () => {
+    if (!customPhone.trim()) {
+      alert('Please enter a valid phone number (e.g. +919876543210)');
+      return;
     }
+    setIsTestingRecipient('SMS_' + customPhone);
+    try {
+      const msg = `Thermal Warning: Temperature is ${weatherData?.temperature || 36}°C in ${currentLocation.name}. Seek shade and hydrate immediately.`;
+      const res = await fetch('/api/messages/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          target: customPhone.trim(),
+          channel: 'SMS',
+          message: msg,
+          locationName: currentLocation.name,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        // Save into local notification logs
+        const logItem: NotificationLog = {
+          id: `log_sms_${Date.now()}`,
+          recipient_id: profile.id || 'rec_user',
+          recipient_email: customPhone.trim(),
+          alert_type: 'SMS_THERMAL_ALERT',
+          risk_level: 'HIGH',
+          location_name: currentLocation.name,
+          latitude: currentLocation.latitude,
+          longitude: currentLocation.longitude,
+          location_status: locationSource,
+          temperature: weatherData?.temperature || 36,
+          feels_like_temperature: weatherData?.apparent_temperature || 40,
+          humidity: weatherData?.relative_humidity || 65,
+          weather_condition: 'High Heat Index',
+          weather_status: 'LIVE',
+          risk_score: 78,
+          precautions: ['Drink clean water every 30 mins', 'Move to shaded rest area'],
+          provider: data.provider || 'Twilio',
+          provider_message_id: data.id,
+          status: 'SENT',
+          idempotency_key: `sms_${Date.now()}`,
+          scheduled_for: new Date().toISOString(),
+          sent_at: new Date().toISOString(),
+          created_at: new Date().toISOString(),
+        };
+        saveNotificationLog(logItem);
+        setLogs(getNotificationLogs());
+        alert(`✓ Real-Time SMS dispatched to ${customPhone}!\nStatus: ${data.status}\nMessage SID: ${data.id}`);
+      } else {
+        alert(`SMS dispatch failed: ${data.error}`);
+      }
+    } catch (err: any) {
+      alert(`Network error sending SMS: ${err?.message}`);
+    } finally {
+      setIsTestingRecipient(null);
+    }
+  };
+
+  // 3. OTP & Magic Link Generator
+  const handleGenerateOtp = async () => {
+    if (!otpTarget.trim()) {
+      setOtpError('Please enter a target phone number or email.');
+      return;
+    }
+    setIsGeneratingOtp(true);
+    setOtpError(null);
+    setOtpVerificationSuccess(null);
+    try {
+      const res = await fetch('/api/auth/otp/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          target: otpTarget.trim(),
+          channel: otpChannel,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setGeneratedOtpData({
+          otpCode: data.demoOtpCode,
+          magicLink: data.magicLink,
+          sessionId: data.otpSessionId,
+          target: otpTarget.trim(),
+        });
+
+        // Save OTP log
+        const logItem: NotificationLog = {
+          id: `log_otp_${Date.now()}`,
+          recipient_id: profile.id || 'rec_user',
+          recipient_email: otpTarget.trim(),
+          alert_type: 'SECURITY_OTP_MAGIC_LINK',
+          risk_level: 'LOW',
+          location_name: currentLocation.name,
+          latitude: currentLocation.latitude,
+          longitude: currentLocation.longitude,
+          location_status: locationSource,
+          temperature: weatherData?.temperature || 32,
+          feels_like_temperature: weatherData?.apparent_temperature || 35,
+          humidity: weatherData?.relative_humidity || 55,
+          weather_condition: 'Security Dispatch',
+          weather_status: 'LIVE',
+          risk_score: 20,
+          precautions: ['Do not share OTP with third parties'],
+          provider: data.channel === 'EMAIL' ? 'Resend' : 'Twilio',
+          provider_message_id: data.otpSessionId,
+          status: 'SENT',
+          idempotency_key: `otp_${Date.now()}`,
+          scheduled_for: new Date().toISOString(),
+          sent_at: new Date().toISOString(),
+          created_at: new Date().toISOString(),
+        };
+        saveNotificationLog(logItem);
+        setLogs(getNotificationLogs());
+      } else {
+        setOtpError(data.error || 'Failed to generate OTP.');
+      }
+    } catch (err: any) {
+      setOtpError('Network error requesting OTP.');
+    } finally {
+      setIsGeneratingOtp(false);
+    }
+  };
+
+  const handleVerifyOtpCode = async () => {
+    if (verifyOtpInput.trim().length !== 6) {
+      setOtpError('Please enter the 6-digit code.');
+      return;
+    }
+    setIsVerifyingOtp(true);
+    setOtpError(null);
+    try {
+      const res = await fetch('/api/auth/otp/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          target: generatedOtpData?.target || otpTarget.trim(),
+          otpCode: verifyOtpInput.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setOtpVerificationSuccess(`✓ Identity Verified! ${data.target} is certified for real-time heat alerts.`);
+        if (otpChannel === 'SMS') {
+          saveUserProfile({ sms_phone: data.target, authenticated: true });
+        } else {
+          saveUserProfile({ email: data.target, authenticated: true });
+        }
+      } else {
+        setOtpError(data.error || 'Invalid OTP code.');
+      }
+    } catch (err: any) {
+      setOtpError('Error verifying OTP.');
+    } finally {
+      setIsVerifyingOtp(false);
+    }
+  };
+
+  // 4. Direct Message Broadcaster
+  const handleSendDirectMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!directMessageTarget.trim() || !directMessageText.trim()) {
+      alert('Recipient and message text are required.');
+      return;
+    }
+    setIsTestingRecipient('DIRECT_MSG');
+    try {
+      const res = await fetch('/api/messages/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          target: directMessageTarget.trim(),
+          channel: directMessageChannel,
+          subject: directMessageSubject || 'HeatShield AI Advisory',
+          message: directMessageText.trim(),
+          locationName: currentLocation.name,
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        const logItem: NotificationLog = {
+          id: `log_msg_${Date.now()}`,
+          recipient_id: profile.id || 'rec_user',
+          recipient_email: directMessageTarget.trim(),
+          alert_type: `${directMessageChannel}_DIRECT_BROADCAST`,
+          risk_level: 'MODERATE',
+          location_name: currentLocation.name,
+          latitude: currentLocation.latitude,
+          longitude: currentLocation.longitude,
+          location_status: locationSource,
+          temperature: weatherData?.temperature || 34,
+          feels_like_temperature: weatherData?.apparent_temperature || 38,
+          humidity: weatherData?.relative_humidity || 60,
+          weather_condition: 'Advisory Broadcast',
+          weather_status: 'LIVE',
+          risk_score: 55,
+          precautions: ['Follow emergency heat protocols'],
+          provider: data.provider || 'Resend',
+          provider_message_id: data.id,
+          status: 'SENT',
+          idempotency_key: `msg_${Date.now()}`,
+          scheduled_for: new Date().toISOString(),
+          sent_at: new Date().toISOString(),
+          created_at: new Date().toISOString(),
+        };
+        saveNotificationLog(logItem);
+        setLogs(getNotificationLogs());
+        setDirectMessageText('');
+        alert(`✓ Direct message dispatched to ${directMessageTarget} via ${directMessageChannel}!\nID: ${data.id}`);
+      } else {
+        alert(`Failed to send message: ${data.error}`);
+      }
+    } catch (err: any) {
+      alert(`Network error: ${err?.message}`);
+    } finally {
+      setIsTestingRecipient(null);
+    }
+  };
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedLink(true);
+    setTimeout(() => setCopiedLink(false), 2500);
+  };
+
+  const filteredLogs = logs.filter((log) => {
+    if (logFilter === 'ALL') return true;
+    if (logFilter === 'EMAIL') return log.alert_type.includes('EMAIL') || log.alert_type === 'TEST_DISPATCH';
+    if (logFilter === 'SMS') return log.alert_type.includes('SMS');
+    if (logFilter === 'OTP') return log.alert_type.includes('OTP');
     return true;
   });
 
@@ -291,244 +534,488 @@ function NotificationsContent() {
                 )}
               </div>
               <div>
-                <h1 className="text-xl font-bold text-white tracking-tight">NOTIFICATION CENTER & SMART ALERTS</h1>
+                <h1 className="text-xl font-bold text-white tracking-tight">REAL-TIME NOTIFICATION & DISPATCH CENTER</h1>
                 <p className="text-xs text-slate-400 font-mono mt-0.5">
-                  Real-Time Location-Aware Heat Safety Alerts & Persistent History
+                  Multi-Channel Heat Alerts, Phone SMS, OTP Verification & Direct Messaging
                 </p>
               </div>
             </div>
 
             <div className="flex items-center gap-2">
               <button
-                onClick={() => setShowPreferences(!showPreferences)}
-                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl border border-slate-700 transition flex items-center gap-1.5"
-              >
-                <Settings className="w-4 h-4 text-emerald-400" />
-                <span>Preferences</span>
-              </button>
-              <button
                 onClick={() => loadRealTimeData(currentLocation)}
                 disabled={isLoadingWeather}
-                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-xl transition flex items-center gap-1.5"
+                className="px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-xl transition flex items-center gap-1.5 shadow-sm"
               >
                 <RefreshCw className={`w-4 h-4 ${isLoadingWeather ? 'animate-spin' : ''}`} />
-                <span>Refresh Live Data</span>
+                <span>Refresh Live Telemetry</span>
               </button>
             </div>
           </div>
 
-          {/* Preferences Drawer */}
-          {showPreferences && (
-            <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 space-y-4 shadow-lg">
-              <h2 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                <Settings className="w-4 h-4 text-emerald-400" />
-                <span>Notification Preferences</span>
-              </h2>
-              <div className="text-xs text-slate-300 font-mono">
-                System notifications are configured for instant real-time dispatch via Resend Transactional Email.
+          {/* REAL-TIME LIVE GPS & SENSOR TELEMETRY STREAM */}
+          <RealtimeLiveLocationTracker
+            onLocationUpdate={(loc) => {
+              setCurrentLocation(loc);
+              setLocationSource('LIVE_GPS');
+              setGpsAccuracy(loc.gps_accuracy);
+            }}
+          />
+
+          {/* REAL-TIME MULTI-USER BROADCAST COMMAND CENTER */}
+          <RealtimeBroadcastCommandCenter />
+
+          {/* REAL-TIME MULTI-CHANNEL DISPATCH & OTP HUB */}
+          <div className="bg-slate-900 rounded-3xl border border-slate-800 shadow-2xl p-6 space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-800">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex items-center justify-center">
+                  <Sparkles className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-base font-bold text-white font-mono tracking-tight">
+                    REAL-TIME DISPATCH & OTP VERIFICATION GATEWAY
+                  </h2>
+                  <p className="text-xs text-slate-400">
+                    Live transactional multi-channel delivery engine connecting the website directly to Email & Phone
+                  </p>
+                </div>
               </div>
-            </div>
-          )}
 
-
-          {/* Real-time Environmental & Location Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {/* Location Card */}
-            <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-mono font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
-                  <MapPin className="w-4 h-4" />
-                  <span>Real-Time Location</span>
-                </span>
+              {/* Tabs */}
+              <div className="flex items-center gap-1.5 bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs font-mono">
                 <button
-                  onClick={handleDetectGpsLocation}
-                  disabled={isLoadingLocation}
-                  className="px-2.5 py-1 text-[11px] font-semibold bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 rounded-lg transition flex items-center gap-1"
+                  onClick={() => setActiveDispatchTab('EMAIL')}
+                  className={`px-3 py-1.5 rounded-lg font-bold transition flex items-center gap-1.5 ${
+                    activeDispatchTab === 'EMAIL'
+                      ? 'bg-emerald-600 text-white shadow-xs'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
                 >
-                  {isLoadingLocation ? <Loader2 className="w-3 h-3 animate-spin" /> : <Navigation className="w-3 h-3" />}
-                  <span>Detect GPS</span>
+                  <Mail className="w-3.5 h-3.5" />
+                  <span>Email Dispatch</span>
+                </button>
+
+                <button
+                  onClick={() => setActiveDispatchTab('SMS')}
+                  className={`px-3 py-1.5 rounded-lg font-bold transition flex items-center gap-1.5 ${
+                    activeDispatchTab === 'SMS'
+                      ? 'bg-emerald-600 text-white shadow-xs'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <Smartphone className="w-3.5 h-3.5" />
+                  <span>Phone SMS</span>
+                </button>
+
+                <button
+                  onClick={() => setActiveDispatchTab('OTP')}
+                  className={`px-3 py-1.5 rounded-lg font-bold transition flex items-center gap-1.5 ${
+                    activeDispatchTab === 'OTP'
+                      ? 'bg-emerald-600 text-white shadow-xs'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <KeyRound className="w-3.5 h-3.5" />
+                  <span>OTP + Magic Link</span>
+                </button>
+
+                <button
+                  onClick={() => setActiveDispatchTab('MESSAGE')}
+                  className={`px-3 py-1.5 rounded-lg font-bold transition flex items-center gap-1.5 ${
+                    activeDispatchTab === 'MESSAGE'
+                      ? 'bg-emerald-600 text-white shadow-xs'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <MessageSquare className="w-3.5 h-3.5" />
+                  <span>Direct Message</span>
                 </button>
               </div>
-
-              <div>
-                <div className="text-base font-bold text-white truncate">{currentLocation.name}</div>
-                <div className="text-xs text-slate-400">{currentLocation.locality || currentLocation.country}</div>
-                <div className="text-[11px] font-mono text-slate-500 mt-1">
-                  Coords: {currentLocation.latitude.toFixed(4)}°, {currentLocation.longitude.toFixed(4)}°
-                  {gpsAccuracy && ` (Accuracy: ±${gpsAccuracy}m)`}
-                </div>
-                <div className="text-[10px] font-mono text-emerald-400 mt-0.5">
-                  Source: {locationSource === 'LIVE_GPS' ? '✓ LIVE GPS (CONSENTED)' : locationSource === 'UNAVAILABLE' ? '❌ GPS DENIED / UNAVAILABLE' : 'SAVED PROFILE LOCATION'}
-                </div>
-              </div>
-
-              {/* Manual Search */}
-              <div className="relative pt-1">
-                <input
-                  type="text"
-                  placeholder="Search location manually..."
-                  value={locationSearchQuery}
-                  onChange={(e) => handleLocationSearch(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 text-xs rounded-xl px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
-                />
-                {searchResults.length > 0 && (
-                  <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-slate-900 border border-slate-700 rounded-xl shadow-xl max-h-48 overflow-y-auto">
-                    {searchResults.map((res, i) => (
-                      <button
-                        key={i}
-                        onClick={() => handleSelectLocation(res)}
-                        className="w-full text-left px-3 py-2 text-xs hover:bg-slate-800 border-b border-slate-800 last:border-0 text-slate-200"
-                      >
-                        <div className="font-bold text-white">{res.name}</div>
-                        <div className="text-[10px] text-slate-400">{res.locality}</div>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
             </div>
 
-            {/* Weather Card */}
-            <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-mono font-bold text-sky-400 uppercase tracking-wider flex items-center gap-1.5">
-                  <Thermometer className="w-4 h-4" />
-                  <span>Real-Time Weather</span>
-                </span>
-                <span className="text-[10px] font-mono text-slate-500">Updated: {lastUpdated}</span>
-              </div>
+            {/* TAB 1: EMAIL DISPATCH */}
+            {activeDispatchTab === 'EMAIL' && (
+              <div className="space-y-4 animate-fade-in">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-3 bg-slate-950/60 p-4 rounded-2xl border border-slate-800">
+                    <h3 className="text-xs font-bold font-mono text-emerald-400 uppercase tracking-wider">
+                      Send Instant Thermal Risk Alert to Email
+                    </h3>
+                    <p className="text-xs text-slate-400">
+                      Dispatches an automated high-priority email notification containing real-time temperature, heat index, and personalized precautions for {currentLocation.name}.
+                    </p>
 
-              {isLoadingWeather ? (
-                <div className="p-4 text-center text-xs text-slate-400 flex items-center justify-center gap-2">
-                  <Loader2 className="w-4 h-4 animate-spin text-sky-400" />
-                  <span>Fetching Open-Meteo observations...</span>
-                </div>
-              ) : weatherError ? (
-                <div className="p-3 bg-rose-950/40 border border-rose-800/60 rounded-xl text-xs text-rose-300">
-                  {weatherError}
-                </div>
-              ) : weatherData ? (
-                <div className="space-y-2">
-                  <div className="flex items-baseline justify-between">
+                    {/* SECURITY: Recipient is LOCKED to the authenticated Firebase user.
+                        The server verifies the ID token and ignores any client-supplied email. */}
                     <div>
-                      <span className="text-3xl font-extrabold text-white">{weatherData.temperature}°C</span>
-                      <span className="text-xs text-slate-400 ml-2">Feels {weatherData.apparent_temperature}°C</span>
-                    </div>
-                    <span className="text-xs font-semibold px-2 py-0.5 rounded bg-sky-950 text-sky-300 border border-sky-800">
-                      {getWeatherConditionText(weatherData.weather_code)}
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2 text-xs font-mono pt-1">
-                    <div className="flex items-center gap-1.5 text-slate-400">
-                      <Droplets className="w-3.5 h-3.5 text-blue-400" />
-                      <span>Humidity: {weatherData.relative_humidity}%</span>
-                    </div>
-                    <div className="flex items-center gap-1.5 text-slate-400">
-                      <Wind className="w-3.5 h-3.5 text-emerald-400" />
-                      <span>Wind: {weatherData.wind_speed} km/h</span>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="text-xs text-slate-500 italic">Live weather currently unavailable</div>
-              )}
-            </div>
-
-            {/* Test Email Dispatch Panel */}
-            <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-mono font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
-                  <Mail className="w-4 h-4" />
-                  <span>Test Notification Dispatch</span>
-                </span>
-                <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-amber-950 text-amber-400 border border-amber-800 uppercase">
-                  RESEND & TWILIO
-                </span>
-              </div>
-
-              <p className="text-xs text-slate-400 leading-relaxed">
-                Dispatch an immediate test alert using real live weather observations and dynamic heat risk analysis for your active location.
-              </p>
-
-
-              <div className="pt-1 flex gap-2">
-                <button
-                  onClick={() => handleTestDispatchRecipient(profile.email || '99240040560@klu.ac.in', false)}
-                  disabled={isTestingRecipient !== null}
-                  className="flex-1 px-3 py-2 text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl transition flex items-center justify-center gap-1.5 shadow-xs"
-                >
-                  {isTestingRecipient ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Mail className="w-3.5 h-3.5" />}
-                  <span>Send Test Email</span>
-                </button>
-                <button
-                  onClick={() => handleTestDispatchRecipient(undefined, true)}
-                  disabled={isTestingRecipient !== null}
-                  className="px-3 py-2 text-xs font-semibold bg-sky-600 hover:bg-sky-500 text-white rounded-xl transition flex items-center justify-center gap-1.5 shadow-xs"
-                >
-                  <span>Test All (4)</span>
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Test Recipients Status */}
-          <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-3">
-            <h3 className="text-xs font-mono font-bold text-slate-300 uppercase tracking-wider">
-              Registered Recipient Status & Testing
-            </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs font-mono">
-              {[
-                { email: '99240040560@klu.ac.in', loc: 'Chennai', age: 'Age: 20' },
-                { email: '99240040571@klu.ac.in', loc: 'Vijayawada', age: 'Age: 21' },
-                { email: '99240040875@klu.ac.in', loc: 'Guntur', age: 'Age: Not Provided (Adult Default)' },
-                { email: '99240040159@klu.ac.in', loc: 'Hyderabad', age: 'Age: 22' },
-              ].map((rec) => {
-                const res = testDispatchResults[rec.email];
-                return (
-                  <div key={rec.email} className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
-                    <div>
-                      <div className="font-bold text-white truncate">{rec.email}</div>
-                      <div className="text-[10px] text-slate-400 mt-0.5">{rec.loc} • {rec.age}</div>
-                    </div>
-
-                    {res && (
-                      <div className={`text-[10px] font-bold ${res.status === 'SENT' ? 'text-emerald-400' : 'text-rose-400'}`}>
-                        {res.status === 'SENT' ? `✓ SENT (ID: ${res.id?.slice(0, 10)}...)` : `✗ FAILED (${res.error})`}
+                      <label className="block text-xs font-semibold text-slate-300 mb-1">
+                        Authenticated Recipient (Server-Verified)
+                      </label>
+                      <div className="w-full bg-slate-950 border border-emerald-800/50 rounded-xl px-3 py-2 text-xs text-emerald-300 font-mono flex items-center gap-2">
+                        <ShieldCheck className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                        <span className="truncate">
+                          {authorizedEmail || 'Sign in to see your email'}
+                        </span>
                       </div>
-                    )}
+                      <p className="text-[10px] text-slate-500 mt-1">
+                        Recipient is verified server-side from your Firebase session. Cannot be changed by the client.
+                      </p>
+                    </div>
+
+                    <div className="flex gap-2 pt-1">
+                      <button
+                        onClick={() => handleTestDispatchRecipient(undefined, false)}
+                        disabled={isTestingRecipient !== null || !authorizedEmail}
+                        className="flex-1 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-bold rounded-xl transition flex items-center justify-center gap-2 shadow-md shadow-emerald-950/40"
+                      >
+                        {isTestingRecipient === authorizedEmail ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
+                        <span>Send Live Report to My Email</span>
+                      </button>
+                      <button
+                        onClick={() => handleTestDispatchRecipient(undefined, true)}
+                        disabled={isTestingRecipient !== null}
+                        className="px-4 py-2.5 bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold rounded-xl transition flex items-center justify-center gap-1.5"
+                      >
+                        <span>Dispatch to All (4)</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Registered Recipients Quick Test */}
+                  <div className="bg-slate-950/60 p-4 rounded-2xl border border-slate-800 space-y-3">
+                    <h3 className="text-xs font-bold font-mono text-slate-300 uppercase tracking-wider">
+                      Batch Recipient Matrix
+                    </h3>
+                    <div className="space-y-2 max-h-48 overflow-y-auto">
+                      {[
+                        { email: '99240040560@klu.ac.in', loc: 'Chennai' },
+                        { email: '99240040571@klu.ac.in', loc: 'Vijayawada' },
+                        { email: '99240040875@klu.ac.in', loc: 'Guntur' },
+                        { email: '99240040159@klu.ac.in', loc: 'Hyderabad' },
+                      ].map((r) => (
+                        <div key={r.email} className="p-2.5 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-between text-xs">
+                          <div>
+                            <div className="font-bold text-white font-mono text-[11px]">{r.email}</div>
+                            <div className="text-[10px] text-slate-500">{r.loc}</div>
+                          </div>
+                          <button
+                            onClick={() => handleTestDispatchRecipient(r.email, false)}
+                            disabled={isTestingRecipient === r.email}
+                            className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-emerald-300 border border-slate-700 rounded-lg text-[10px] font-semibold transition flex items-center gap-1"
+                          >
+                            {isTestingRecipient === r.email ? <Loader2 className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
+                            <span>Send</span>
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* TAB 2: PHONE SMS DISPATCH */}
+            {activeDispatchTab === 'SMS' && (
+              <div className="space-y-4 animate-fade-in">
+                <div className="max-w-xl mx-auto bg-slate-950/60 p-5 rounded-2xl border border-slate-800 space-y-4">
+                  <div className="flex items-center gap-2">
+                    <Smartphone className="w-5 h-5 text-emerald-400" />
+                    <div>
+                      <h3 className="text-xs font-bold font-mono text-emerald-400 uppercase tracking-wider">
+                        Live Phone SMS & WhatsApp Advisory Dispatch
+                      </h3>
+                      <p className="text-xs text-slate-400">
+                        Dispatches real-time thermal alerts and emergency SMS advisories to any international or domestic mobile number.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 mb-1">Mobile Phone Number (E.164 format)</label>
+                    <input
+                      type="tel"
+                      value={customPhone}
+                      onChange={(e) => setCustomPhone(e.target.value)}
+                      placeholder="+91 98765 43210 or +1 234 567 8900"
+                      className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-emerald-500 font-mono"
+                    />
+                  </div>
+
+                  <div className="p-3 bg-slate-900 border border-slate-800 rounded-xl text-xs space-y-1">
+                    <span className="text-[10px] text-slate-500 font-mono uppercase block">SMS Preview:</span>
+                    <p className="text-slate-300 font-mono text-[11px] leading-relaxed">
+                      &quot;[HeatShield AI Alert] Thermal Warning: Temperature is {weatherData?.temperature || 36}°C in {currentLocation.name}. Seek shade and hydrate immediately.&quot;
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={handleSendPhoneSms}
+                    disabled={isTestingRecipient !== null}
+                    className="w-full py-3 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 font-bold text-xs rounded-xl transition flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20"
+                  >
+                    {isTestingRecipient === 'SMS_' + customPhone ? <Loader2 className="w-4 h-4 animate-spin" /> : <Smartphone className="w-4 h-4" />}
+                    <span>Dispatch Real-Time SMS to Phone</span>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* TAB 3: OTP & MAGIC LINK HUB */}
+            {activeDispatchTab === 'OTP' && (
+              <div className="space-y-4 animate-fade-in">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* OTP Generator Card */}
+                  <div className="bg-slate-950/60 p-5 rounded-2xl border border-slate-800 space-y-4">
+                    <div>
+                      <h3 className="text-xs font-bold font-mono text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
+                        <KeyRound className="w-4 h-4" />
+                        <span>Generate & Dispatch Security OTP + Magic Link</span>
+                      </h3>
+                      <p className="text-xs text-slate-400 mt-1">
+                        Creates an encrypted 6-digit OTP passcode with a direct 1-click magic verification URL sent directly to Email or Phone SMS.
+                      </p>
+                    </div>
+
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setOtpChannel('SMS')}
+                        className={`flex-1 py-1.5 rounded-lg text-xs font-mono font-bold transition ${
+                          otpChannel === 'SMS' ? 'bg-emerald-600 text-white' : 'bg-slate-900 text-slate-400'
+                        }`}
+                      >
+                        📱 via Phone SMS
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setOtpChannel('EMAIL')}
+                        className={`flex-1 py-1.5 rounded-lg text-xs font-mono font-bold transition ${
+                          otpChannel === 'EMAIL' ? 'bg-emerald-600 text-white' : 'bg-slate-900 text-slate-400'
+                        }`}
+                      >
+                        📧 via Email
+                      </button>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-300 mb-1">
+                        Recipient {otpChannel === 'SMS' ? 'Phone Number' : 'Email Address'}
+                      </label>
+                      <input
+                        type="text"
+                        value={otpTarget}
+                        onChange={(e) => setOtpTarget(e.target.value)}
+                        placeholder={otpChannel === 'SMS' ? '+919876543210' : 'user@example.com'}
+                        className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500 font-mono"
+                      />
+                    </div>
 
                     <button
-                      onClick={() => handleTestDispatchRecipient(rec.email, false)}
-                      disabled={isTestingRecipient === rec.email}
-                      className="w-full py-1 text-[10px] font-semibold bg-slate-800 hover:bg-slate-700 text-sky-300 border border-slate-700 rounded-lg transition flex items-center justify-center gap-1"
+                      onClick={handleGenerateOtp}
+                      disabled={isGeneratingOtp}
+                      className="w-full py-2.5 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 font-bold text-xs rounded-xl transition flex items-center justify-center gap-2"
                     >
-                      {isTestingRecipient === rec.email ? <Loader2 className="w-3 h-3 animate-spin" /> : <Mail className="w-3 h-3" />}
-                      <span>Test Dispatch</span>
+                      {isGeneratingOtp ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                      <span>Send OTP & Magic Link</span>
                     </button>
+
+                    {otpError && (
+                      <div className="p-3 bg-rose-950/60 border border-rose-800/80 rounded-xl text-xs text-rose-300 flex items-start gap-2">
+                        <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                        <span>{otpError}</span>
+                      </div>
+                    )}
                   </div>
-                );
-              })}
-            </div>
+
+                  {/* OTP Live Verification & Link Card */}
+                  <div className="bg-slate-950/60 p-5 rounded-2xl border border-slate-800 space-y-4">
+                    <h3 className="text-xs font-bold font-mono text-sky-400 uppercase tracking-wider flex items-center gap-1.5">
+                      <ShieldCheck className="w-4 h-4" />
+                      <span>Live Verification Sandbox & Code Validator</span>
+                    </h3>
+
+                    {generatedOtpData ? (
+                      <div className="space-y-3">
+                        <div className="bg-slate-900 border border-slate-800 rounded-xl p-3 space-y-2 font-mono text-xs">
+                          <div className="flex justify-between items-center text-slate-400">
+                            <span>Dispatched OTP Code:</span>
+                            <span className="text-emerald-400 font-bold text-base tracking-widest">{generatedOtpData.otpCode}</span>
+                          </div>
+                          {generatedOtpData.magicLink && (
+                            <div className="pt-2 border-t border-slate-800 space-y-1">
+                              <div className="flex items-center justify-between">
+                                <span className="text-[10px] text-slate-500 uppercase">Magic 1-Click Link:</span>
+                                <button
+                                  onClick={() => copyToClipboard(generatedOtpData.magicLink!)}
+                                  className="text-[10px] text-sky-400 hover:text-sky-300 flex items-center gap-1"
+                                >
+                                  {copiedLink ? <CheckCheck className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                                  <span>{copiedLink ? 'Copied!' : 'Copy Link'}</span>
+                                </button>
+                              </div>
+                              <a
+                                href={generatedOtpData.magicLink}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-sky-400 hover:underline text-[11px] block truncate font-mono bg-slate-950 p-1.5 rounded-lg border border-slate-800"
+                              >
+                                {generatedOtpData.magicLink}
+                              </a>
+                            </div>
+                          )}
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-300 mb-1">
+                            Enter 6-Digit Passcode to Verify
+                          </label>
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              maxLength={6}
+                              value={verifyOtpInput}
+                              onChange={(e) => setVerifyOtpInput(e.target.value.replace(/\D/g, ''))}
+                              placeholder={generatedOtpData.otpCode || '123456'}
+                              className="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-center text-base font-mono tracking-widest font-bold text-emerald-400 focus:outline-none focus:border-emerald-500"
+                            />
+                            <button
+                              onClick={handleVerifyOtpCode}
+                              disabled={isVerifyingOtp || verifyOtpInput.length !== 6}
+                              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold text-xs rounded-xl transition flex items-center gap-1.5"
+                            >
+                              {isVerifyingOtp ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ShieldCheck className="w-3.5 h-3.5" />}
+                              <span>Verify Code</span>
+                            </button>
+                          </div>
+                        </div>
+
+                        {otpVerificationSuccess && (
+                          <div className="p-3 bg-emerald-950/60 border border-emerald-800/80 rounded-xl text-xs text-emerald-300 flex items-start gap-2 animate-fade-in">
+                            <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" />
+                            <span>{otpVerificationSuccess}</span>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="p-6 text-center text-xs text-slate-500 border border-dashed border-slate-800 rounded-xl">
+                        Click &quot;Send OTP & Magic Link&quot; to generate an encrypted passcode and test real-time validation.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* TAB 4: DIRECT MESSAGE BROADCASTER */}
+            {activeDispatchTab === 'MESSAGE' && (
+              <div className="space-y-4 animate-fade-in">
+                <form onSubmit={handleSendDirectMessage} className="max-w-2xl mx-auto bg-slate-950/60 p-5 rounded-2xl border border-slate-800 space-y-4">
+                  <div className="flex items-center gap-2">
+                    <MessageSquare className="w-5 h-5 text-emerald-400" />
+                    <div>
+                      <h3 className="text-xs font-bold font-mono text-emerald-400 uppercase tracking-wider">
+                        Direct Message & Custom Thermal Advisory Broadcaster
+                      </h3>
+                      <p className="text-xs text-slate-400">
+                        Dispatch tailored advisory instructions or emergency alerts from the dashboard to any recipient.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-300 mb-1">Dispatch Channel</label>
+                      <select
+                        value={directMessageChannel}
+                        onChange={(e) => setDirectMessageChannel(e.target.value as any)}
+                        className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500 font-mono"
+                      >
+                        <option value="EMAIL">📧 Email Dispatch</option>
+                        <option value="SMS">📱 Phone SMS Dispatch</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-300 mb-1">Recipient Address or Number</label>
+                      <input
+                        type="text"
+                        value={directMessageTarget}
+                        onChange={(e) => setDirectMessageTarget(e.target.value)}
+                        placeholder={directMessageChannel === 'EMAIL' ? 'user@example.com' : '+919876543210'}
+                        className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500 font-mono"
+                      />
+                    </div>
+                  </div>
+
+                  {directMessageChannel === 'EMAIL' && (
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-300 mb-1">Email Subject Header</label>
+                      <input
+                        type="text"
+                        value={directMessageSubject}
+                        onChange={(e) => setDirectMessageSubject(e.target.value)}
+                        placeholder="HeatShield AI | Immediate Thermal Advisory"
+                        className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500"
+                      />
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-300 mb-1">Message Body Content</label>
+                    <textarea
+                      rows={3}
+                      value={directMessageText}
+                      onChange={(e) => setDirectMessageText(e.target.value)}
+                      placeholder="Write your custom heat safety advisory or instructions..."
+                      className="w-full bg-slate-900 border border-slate-800 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-emerald-500"
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={isTestingRecipient !== null}
+                    className="w-full py-3 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 font-bold text-xs rounded-xl transition flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/20"
+                  >
+                    {isTestingRecipient === 'DIRECT_MSG' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                    <span>Dispatch Custom Message Now</span>
+                  </button>
+                </form>
+              </div>
+            )}
           </div>
 
-          {/* Persistent Notification History Table */}
+          {/* Persistent Multi-Channel Delivery Logs Table */}
           <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <h2 className="text-sm font-mono font-bold text-white uppercase tracking-wider flex items-center gap-2">
                 <Clock className="w-4 h-4 text-emerald-400" />
-                <span>Persistent Notification & Delivery History ({logs.length})</span>
+                <span>Multi-Channel Delivery & Audit Logs ({filteredLogs.length})</span>
               </h2>
+
+              {/* Log Filters */}
+              <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800 text-[11px] font-mono">
+                {(['ALL', 'EMAIL', 'SMS', 'OTP'] as const).map((filter) => (
+                  <button
+                    key={filter}
+                    onClick={() => setLogFilter(filter)}
+                    className={`px-2.5 py-1 rounded-lg font-bold transition ${
+                      logFilter === filter ? 'bg-emerald-600 text-white' : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    {filter}
+                  </button>
+                ))}
+              </div>
             </div>
 
-            {logs.length === 0 ? (
+            {filteredLogs.length === 0 ? (
               <div className="p-8 text-center bg-slate-950/50 rounded-xl border border-slate-800/80 space-y-2">
                 <CheckCircle2 className="w-8 h-8 text-emerald-400 mx-auto" />
-                <div className="text-xs font-semibold text-slate-300">No dispatch history logs yet</div>
+                <div className="text-xs font-semibold text-slate-300">No dispatch history logs for this filter</div>
                 <p className="text-[11px] text-slate-500">
-                  Click &quot;Send Test Email&quot; or trigger the hourly cron job to create notification records.
+                  Use any of the dispatch tabs above to send real-time alerts or verification OTPs.
                 </p>
-
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -536,37 +1023,46 @@ function NotificationsContent() {
                   <thead>
                     <tr className="border-b border-slate-800 text-slate-400 font-mono text-[11px] uppercase">
                       <th className="pb-3 px-3">Status</th>
+                      <th className="pb-3 px-3">Channel / Type</th>
                       <th className="pb-3 px-3">Recipient</th>
-                      <th className="pb-3 px-3">Type</th>
-                      <th className="pb-3 px-3">Risk Level</th>
                       <th className="pb-3 px-3">Location</th>
                       <th className="pb-3 px-3">Temp</th>
-                      <th className="pb-3 px-3">Sent At</th>
+                      <th className="pb-3 px-3">Dispatched At</th>
                       <th className="pb-3 px-3">Provider ID</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800/60 font-mono">
-                    {logs.map((log) => (
-                      <tr key={log.id} className="hover:bg-slate-800/40 transition">
-                        <td className="py-2.5 px-3">
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${log.status === 'SENT' ? 'bg-emerald-950 text-emerald-400 border border-emerald-800' : 'bg-rose-950 text-rose-400 border border-rose-800'}`}>
-                            {log.status}
-                          </span>
-                        </td>
-                        <td className="py-2.5 px-3 text-white font-semibold">{log.recipient_email}</td>
-                        <td className="py-2.5 px-3 text-slate-300">{log.alert_type}</td>
-                        <td className="py-2.5 px-3">
-                          <span className={`font-bold ${log.risk_level === 'EXTREME' ? 'text-rose-400' : log.risk_level === 'HIGH' ? 'text-amber-400' : 'text-emerald-400'}`}>
-
-                            {log.risk_level} ({log.risk_score}/100)
-                          </span>
-                        </td>
-                        <td className="py-2.5 px-3 text-slate-300">{log.location_name}</td>
-                        <td className="py-2.5 px-3 text-slate-300">{log.temperature ? `${log.temperature}°C` : '--'}</td>
-                        <td className="py-2.5 px-3 text-slate-400">{new Date(log.sent_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
-                        <td className="py-2.5 px-3 text-slate-500 truncate max-w-[120px]">{log.provider_message_id || 'N/A'}</td>
-                      </tr>
-                    ))}
+                    {filteredLogs.map((log) => {
+                      const isSms = log.alert_type.includes('SMS');
+                      const isOtp = log.alert_type.includes('OTP');
+                      return (
+                        <tr key={log.id} className="hover:bg-slate-800/40 transition">
+                          <td className="py-2.5 px-3">
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                              log.status === 'SENT' || log.status === 'DELIVERED'
+                                ? 'bg-emerald-950 text-emerald-400 border border-emerald-800'
+                                : 'bg-rose-950 text-rose-400 border border-rose-800'
+                            }`}>
+                              {log.status}
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-3">
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                              isOtp ? 'bg-purple-950 text-purple-300 border border-purple-800' :
+                              isSms ? 'bg-sky-950 text-sky-300 border border-sky-800' :
+                              'bg-amber-950 text-amber-300 border border-amber-800'
+                            }`}>
+                              {log.alert_type}
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-3 text-white font-semibold">{log.recipient_email}</td>
+                          <td className="py-2.5 px-3 text-slate-300">{log.location_name}</td>
+                          <td className="py-2.5 px-3 text-slate-300">{log.temperature ? `${log.temperature}°C` : '--'}</td>
+                          <td className="py-2.5 px-3 text-slate-400">{new Date(log.sent_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</td>
+                          <td className="py-2.5 px-3 text-slate-500 truncate max-w-[120px]">{log.provider_message_id || 'N/A'}</td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

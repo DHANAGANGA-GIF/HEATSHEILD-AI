@@ -63,7 +63,7 @@ export const LocationSelector: React.FC<LocationSelectorProps> = ({
       () => {
         setGpsStatus('denied');
       },
-      { timeout: 8000, enableHighAccuracy: false }
+      { timeout: 8000, enableHighAccuracy: true, maximumAge: 0 }
     );
   };
 

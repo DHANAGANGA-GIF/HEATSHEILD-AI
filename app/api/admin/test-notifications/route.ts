@@ -5,19 +5,14 @@ import { fetchWeatherData, reverseGeocode, getWeatherConditionText } from '@/lib
 import { calculateRiskAssessment } from '@/lib/risk-engine';
 import { generatePersonalizedGuidance, MEDICAL_SAFETY_DISCLAIMER } from '@/lib/guidance-engine';
 import { SmartAlert, NotificationLog, RecipientNotificationProfile } from '@/lib/types';
-
+import { verifyFirebaseToken, extractBearerToken } from '@/lib/firebase/admin';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    // weatherSnapshot from client is intentionally NOT destructured here.
-    // The server is the sole authority for weather data, risk calculation,
-    // and data quality labels. See fetch below (skipCache=true).
-    const { targetEmail, targetPhone, sendToAll, clientLocation } = body as {
-      targetEmail?: string;
-      targetPhone?: string;
+    const { sendToAll, clientLocation } = body as {
       sendToAll?: boolean;
       clientLocation?: {
         latitude: number;
@@ -28,31 +23,83 @@ export async function POST(request: Request) {
       };
     };
 
+    // ── Step 1: Verify Firebase Authentication Token ──────────────────────────
+    // The authenticated Firebase user is the SOLE authority for email identity.
+    // The client MUST NOT supply targetEmail — we derive it from the verified token.
+    const authHeader = request.headers.get('authorization');
+    const idToken = extractBearerToken(authHeader);
+    let verifiedUid: string | null = null;
+    let verifiedEmail: string | null = null;
 
-    const allRecipients = getRecipientProfiles();
-    let targetRecipients: RecipientNotificationProfile[] = allRecipients;
-
-    if (!sendToAll && targetEmail) {
-      targetRecipients = allRecipients.filter(r => r.email.toLowerCase() === targetEmail.toLowerCase());
-      if (targetRecipients.length === 0) {
-        targetRecipients = [{
-          id: `rec_${Date.now()}`,
-          email: targetEmail.toLowerCase(),
-          display_name: targetEmail.split('@')[0],
-          location_name: clientLocation?.location_name || 'Location Unavailable',
-          latitude: clientLocation?.latitude ?? 13.0827,
-          longitude: clientLocation?.longitude ?? 80.2707,
-          location_source: clientLocation?.location_source || 'MANUAL_LOCATION',
-          email_alerts_enabled: true,
-          hourly_summary_enabled: true,
-          critical_alerts_enabled: true,
-          forecast_alerts_enabled: true,
-          created_at: new Date().toISOString(),
-        }];
+    if (idToken && idToken.length > 20) {
+      const decoded = await verifyFirebaseToken(idToken);
+      if (decoded) {
+        verifiedUid = decoded.uid;
+        verifiedEmail = decoded.email || null;
+      } else {
+        // Token was supplied but invalid — reject immediately
+        return NextResponse.json(
+          { success: false, error: 'Invalid or expired authentication token. Please sign in again.' },
+          { status: 401 }
+        );
       }
     }
 
-    const results: Array<{ recipient: string; channel: 'EMAIL' | 'SMS'; success: boolean; id?: string; error?: string }> = [];
+    // ── Step 2: Determine recipients ─────────────────────────────────────────
+    const allRecipients = getRecipientProfiles();
+    let targetRecipients: RecipientNotificationProfile[] = [];
+
+    if (sendToAll) {
+      // Admin batch: use the server's registered recipient list — never a client email
+      targetRecipients = allRecipients;
+    } else {
+      // Single dispatch: MUST be authenticated; recipient = verified Firebase email
+      if (!verifiedEmail) {
+        return NextResponse.json(
+          {
+            success: false,
+            error:
+              'Authentication required. A valid Firebase ID token is required to dispatch a personal heat alert. The client cannot specify the email recipient.',
+          },
+          { status: 401 }
+        );
+      }
+
+      // Build a recipient profile from the verified Firebase identity.
+      // Check if this user already exists in the recipient pool; if not, create an on-the-fly entry.
+      const existing = allRecipients.find(
+        (r) => r.email.toLowerCase() === verifiedEmail!.toLowerCase()
+      );
+      if (existing) {
+        targetRecipients = [existing];
+      } else {
+        // New authenticated user — create an ephemeral recipient profile from verified identity
+        targetRecipients = [
+          {
+            id: `rec_firebase_${verifiedUid || Date.now()}`,
+            email: verifiedEmail.toLowerCase(),
+            display_name: verifiedEmail.split('@')[0],
+            location_name: clientLocation?.location_name || 'Location Unavailable',
+            latitude: clientLocation?.latitude ?? 13.0827,
+            longitude: clientLocation?.longitude ?? 80.2707,
+            location_source: clientLocation?.location_source || 'SAVED_LOCATION',
+            email_alerts_enabled: true,
+            hourly_summary_enabled: true,
+            critical_alerts_enabled: true,
+            forecast_alerts_enabled: true,
+            created_at: new Date().toISOString(),
+          },
+        ];
+      }
+    }
+
+    const results: Array<{
+      recipient: string;
+      channel: 'EMAIL' | 'SMS';
+      success: boolean;
+      id?: string;
+      error?: string;
+    }> = [];
 
     for (const recipient of targetRecipients) {
       try {
@@ -61,7 +108,7 @@ export async function POST(request: Request) {
         let locName = recipient.location_name || 'Location Unavailable';
         let locSource = recipient.location_source || 'SAVED_LOCATION';
 
-        // Override with fresh active client location if provided by client session
+        // Override with fresh active client location if provided
         if (clientLocation?.latitude && clientLocation?.longitude) {
           lat = clientLocation.latitude;
           lon = clientLocation.longitude;
@@ -74,35 +121,31 @@ export async function POST(request: Request) {
           }
         }
 
-        // SERVER IS THE SOLE WEATHER AUTHORITY.
-        // Always fetch a fresh Open-Meteo observation with skipCache=true.
-        // The client weatherSnapshot is NEVER used as email data — it is only
-        // accepted for display reference (so the UI can confirm what was sent).
-        // This guarantees: data quality label, risk score, and email content
-        // all originate from a single server-controlled immutable snapshot.
+        // SERVER IS THE SOLE WEATHER AUTHORITY — always fetch a fresh observation.
+        // The client weatherSnapshot is NEVER used as email data.
         const weather = await fetchWeatherData(lat, lon, locName, true);
-
 
         if (weather.is_fallback) {
           results.push({
             recipient: recipient.email,
             channel: 'EMAIL',
             success: false,
-            error: `Fresh live weather observations currently unavailable from Open-Meteo for ${locName}. Email was not sent with fallback data.`,
+            error: `Live weather observations unavailable for ${locName}. Email not sent with fallback data.`,
           });
           continue;
         }
 
-        // Data quality: LIVE = successful fresh provider response.
-        // CACHED = server-side stale fallback (still never labelled LIVE).
         const weatherStatus = weather.is_cached ? 'CACHED' : 'LIVE';
         const weatherConditionText = getWeatherConditionText(weather.weather_code);
 
-
-
-        const ageGroup = recipient.age !== undefined
-          ? (recipient.age < 18 ? 'child' : recipient.age >= 60 ? 'older_adult' : 'adult')
-          : 'adult';
+        const ageGroup =
+          recipient.age !== undefined
+            ? recipient.age < 18
+              ? 'child'
+              : recipient.age >= 60
+              ? 'older_adult'
+              : 'adult'
+            : 'adult';
 
         const riskAssessment = calculateRiskAssessment({
           weather,
@@ -127,24 +170,27 @@ export async function POST(request: Request) {
           { activity: 'moderate', duration: 'moderate', cooling: 'good', age_group: ageGroup },
           weather
         );
-        const precautionsList = precautionsObj.map(p => p.simple_text);
+        const precautionsList = precautionsObj.map((p) => p.simple_text);
 
         const isCritical = riskAssessment.risk_level === 'EXTREME';
-        const alertPriority = isCritical ? 'CRITICAL' : riskAssessment.risk_level === 'HIGH' ? 'HIGH PRIORITY' : 'CAUTION';
+        const alertPriority = isCritical
+          ? 'CRITICAL'
+          : riskAssessment.risk_level === 'HIGH'
+          ? 'HIGH PRIORITY'
+          : 'CAUTION';
 
-        const uniqueNotificationId = `alert_test_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+        const uniqueNotificationId = `alert_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
 
-        const triggerReason = weather.is_fallback
-          ? 'Environmental observations currently unavailable.'
-          : `Temperature ${weather.temperature}°C (Feels like ${weather.apparent_temperature}°C), ${weather.relative_humidity}% humidity in ${locName}. Calculated heat risk score: ${riskAssessment.risk_score}/100 (${riskAssessment.risk_level}).`;
+        const triggerReason = `Temperature ${weather.temperature}°C (Feels like ${weather.apparent_temperature}°C), ${weather.relative_humidity}% humidity in ${locName}. Calculated heat risk score: ${riskAssessment.risk_score}/100 (${riskAssessment.risk_level}).`;
 
-        const locationStatusLabel = locSource === 'LIVE_GPS'
-          ? 'Live GPS (browser permission granted)'
-          : locSource === 'SAVED_LOCATION'
-          ? 'Saved Location'
-          : locSource === 'MANUAL_LOCATION'
-          ? 'Manual Location'
-          : 'Location Unavailable';
+        const locationStatusLabel =
+          locSource === 'LIVE_GPS'
+            ? 'Live GPS (browser permission granted)'
+            : locSource === 'SAVED_LOCATION'
+            ? 'Saved Location'
+            : locSource === 'MANUAL_LOCATION'
+            ? 'Manual Location'
+            : 'Location Unavailable';
 
         const alertPayload: SmartAlert = {
           id: uniqueNotificationId,
@@ -168,14 +214,14 @@ export async function POST(request: Request) {
           timestamp: new Date().toISOString(),
           dismissed: false,
           read: false,
-          dedup_key: `test_${recipient.email}_${Date.now()}`,
+          dedup_key: `dispatch_${recipient.email}_${Date.now()}`,
           location_name: locName,
           precautions: precautionsList,
           medical_disclaimer: MEDICAL_SAFETY_DISCLAIMER,
           why_generated: triggerReason,
         };
 
-        // Dispatch Email via Resend
+        // Dispatch email — recipient.email is always derived from verified Firebase identity
         const emailResult = await sendAlertEmail({
           to: recipient.email,
           alert: alertPayload,
@@ -192,10 +238,10 @@ export async function POST(request: Request) {
 
         // Log record
         const logRecord: NotificationLog = {
-          id: `log_test_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+          id: `log_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
           recipient_id: recipient.id,
           recipient_email: recipient.email,
-          alert_type: 'TEST_DISPATCH',
+          alert_type: 'LIVE_HEAT_ALERT',
           risk_level: riskAssessment.risk_level,
           location_name: locName,
           latitude: lat,
@@ -212,7 +258,7 @@ export async function POST(request: Request) {
           provider_message_id: emailResult.id || undefined,
           status: emailResult.success ? 'SENT' : 'FAILED',
           failure_reason: emailResult.error || undefined,
-          idempotency_key: `test_${recipient.email}_${Date.now()}`,
+          idempotency_key: `dispatch_${recipient.email}_${Date.now()}`,
           scheduled_for: new Date().toISOString(),
           sent_at: new Date().toISOString(),
           created_at: new Date().toISOString(),
@@ -228,13 +274,11 @@ export async function POST(request: Request) {
           error: emailResult.error,
         });
       } catch (err: any) {
-
-
         results.push({
           recipient: recipient.email,
           channel: 'EMAIL',
           success: false,
-          error: err?.message || 'Unexpected test dispatch error',
+          error: err?.message || 'Unexpected dispatch error',
         });
       }
     }
@@ -242,7 +286,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true, count: results.length, results }, { status: 200 });
   } catch (err: any) {
     return NextResponse.json(
-      { success: false, error: err?.message || 'Internal server error during test notification dispatch.' },
+      { success: false, error: err?.message || 'Internal server error during notification dispatch.' },
       { status: 500 }
     );
   }

@@ -18,7 +18,13 @@ import {
   BarChart2,
   Globe,
   Database,
-  Lock
+  Lock,
+  Radio,
+  Mail,
+  Send,
+  Navigation,
+  CheckCheck,
+  Thermometer
 } from 'lucide-react';
 
 export default function LandingPage() {
@@ -201,6 +207,66 @@ export default function LandingPage() {
               <div className="flex justify-between text-slate-400">
                 <span>Moderate Outdoor Activity</span>
                 <span className="text-emerald-400 font-bold">18% impact</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Section: Real-Time Live Location & Multi-User Email Broadcast Engine */}
+      <section className="py-20 bg-slate-900/60 border-t border-slate-800">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center max-w-3xl mx-auto mb-16">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-950/80 border border-emerald-800/80 text-emerald-400 text-xs font-mono mb-4">
+              <Radio className="w-3.5 h-3.5 animate-pulse" />
+              <span>Continuous Live Telemetry & Multi-User Broadcast</span>
+            </div>
+            <h2 className="text-3xl font-bold text-white tracking-tight">
+              Real-Time Live Location + Instant Precaution Emails <br />
+              <span className="text-emerald-400">Delivered to All Registered Subscribers</span>
+            </h2>
+            <p className="mt-3 text-slate-400 text-sm leading-relaxed">
+              Every registered user receives up-to-the-minute environmental thermal telemetry, exact GPS coordinates, and 7 personalized preventive instructions directly to their email inbox.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-left">
+            <div className="p-6 rounded-2xl bg-slate-950 border border-slate-800 space-y-4 hover:border-emerald-500/50 transition shadow-lg">
+              <div className="w-10 h-10 rounded-xl bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center">
+                <Navigation className="w-5 h-5" />
+              </div>
+              <h3 className="text-base font-bold text-white">Live High-Precision GPS Lock</h3>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                Continuous background browser geolocation with real-time speed, altitude, and reverse geocoded locality resolution.
+              </p>
+              <div className="text-[11px] font-mono text-emerald-400 bg-emerald-950/50 p-2.5 rounded-lg border border-emerald-900">
+                ✓ Auto-geocoding to active microclimate
+              </div>
+            </div>
+
+            <div className="p-6 rounded-2xl bg-slate-950 border border-slate-800 space-y-4 hover:border-sky-500/50 transition shadow-lg">
+              <div className="w-10 h-10 rounded-xl bg-sky-600/20 text-sky-400 border border-sky-500/30 flex items-center justify-center">
+                <Radio className="w-5 h-5" />
+              </div>
+              <h3 className="text-base font-bold text-white">Automated Multi-User Broadcast</h3>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                One-click and threshold-triggered email broadcast that independently queries live Open-Meteo weather for each subscriber&apos;s region.
+              </p>
+              <div className="text-[11px] font-mono text-sky-400 bg-sky-950/50 p-2.5 rounded-lg border border-sky-900">
+                ✓ Batch delivery to all registered accounts
+              </div>
+            </div>
+
+            <div className="p-6 rounded-2xl bg-slate-950 border border-slate-800 space-y-4 hover:border-amber-500/50 transition shadow-lg">
+              <div className="w-10 h-10 rounded-xl bg-amber-600/20 text-amber-400 border border-amber-500/30 flex items-center justify-center">
+                <Mail className="w-5 h-5" />
+              </div>
+              <h3 className="text-base font-bold text-white">Dynamic 7-Step Precautions</h3>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                Contextually tailored hydration volumes, shade recovery rules, work-rest cycles, and medical safety notices.
+              </p>
+              <div className="text-[11px] font-mono text-amber-400 bg-amber-950/50 p-2.5 rounded-lg border border-amber-900">
+                ✓ Delivered directly to subscriber inboxes
               </div>
             </div>
           </div>

@@ -17,17 +17,31 @@ import {
 import {
   deleteCommunityReport,
   fetchCommunityReportsFromSupabase,
-  getCommunityReports,
   getUserProfile,
   VERIFIED_COOLING_LOCATIONS,
 } from '@/lib/store';
-import { AuditLogItem, CommunityReport, Organization, OrganizationMember, OrganizationRole, OrganizationType, VerifiedCoolingLocation } from '@/lib/types';
-import { ShieldCheck, Activity, Users, Database, Server, BarChart3, AlertCircle, Plus, Trash2, CheckCircle, ShieldAlert, Lock } from 'lucide-react';
+import { useAuth } from '@/lib/firebase/auth-context';
+import {
+  AuditLogItem,
+  CommunityReport,
+  Organization,
+  OrganizationMember,
+  OrganizationRole,
+  OrganizationType,
+  VerifiedCoolingLocation,
+} from '@/lib/types';
+import {
+  ShieldCheck, Activity, Users, Database, Server, BarChart3,
+  AlertCircle, Plus, Trash2, CheckCircle, ShieldAlert, Lock, Loader2
+} from 'lucide-react';
 
 export default function AdminPage() {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
-  const [profile] = useState(getUserProfile());
+  const { appProfile, getIdToken, loading: authLoading, isAuthenticated } = useAuth();
+  const profile = appProfile || getUserProfile();
   const [isAdmin, setIsAdmin] = useState(false);
+  const [adminCheckLoading, setAdminCheckLoading] = useState(true);
+  const [adminCheckError, setAdminCheckError] = useState<string | null>(null);
 
   const [activeTab, setActiveTab] = useState<'orgs' | 'reports' | 'cooling' | 'audit' | 'ml'>('orgs');
 
@@ -62,21 +76,64 @@ export default function AdminPage() {
   };
 
   useEffect(() => {
-    // Admin access is restricted to platform admins and organization admins only.
-    // school/worksite/ngo roles have dedicated portals and must NOT access platform admin.
-    const authorized = isAdminAuthorized(profile.role);
-    setIsAdmin(authorized);
+    async function verifyAdminAccess() {
+      setAdminCheckLoading(true);
+      setAdminCheckError(null);
 
-    if (authorized) {
-      setOrganizations(getOrganizations());
-      setMembers(getOrganizationMembers());
-      setAuditLogs(getAuditLogs());
+      try {
+        // Step 1: Try server-side verification with Firebase ID token
+        const idToken = await getIdToken();
+        if (idToken) {
+          const res = await fetch('/api/admin/verify-admin', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${idToken}`,
+            },
+            body: JSON.stringify({}),
+          });
+          const data = await res.json();
+          if (res.ok) {
+            // Server says admin — trust it
+            setIsAdmin(data.isAdmin === true);
+            if (!data.isAdmin) {
+              setAdminCheckError(`Access denied. Server-verified role: ${data.role || 'user'}`);
+            }
+            setAdminCheckLoading(false);
+            if (data.isAdmin) {
+              setOrganizations(getOrganizations());
+              setMembers(getOrganizationMembers());
+              setAuditLogs(getAuditLogs());
+              fetchCommunityReportsFromSupabase().then(setReports);
+            }
+            return;
+          }
+        }
 
-      fetchCommunityReportsFromSupabase().then((reps) => {
-        setReports(reps);
-      });
+        // Step 2: Fallback — local role check (less secure, warns user)
+        const authorized = isAdminAuthorized(profile.role);
+        if (!authorized) {
+          setAdminCheckError(
+            `Access denied. Current role: "${profile.role}". Admin or Super Admin role is required.`
+          );
+        }
+        setIsAdmin(authorized);
+        if (authorized) {
+          setOrganizations(getOrganizations());
+          setMembers(getOrganizationMembers());
+          setAuditLogs(getAuditLogs());
+          fetchCommunityReportsFromSupabase().then(setReports);
+        }
+      } catch (err: any) {
+        setAdminCheckError(err?.message || 'Admin verification error.');
+        setIsAdmin(false);
+      } finally {
+        setAdminCheckLoading(false);
+      }
     }
-  }, [profile]);
+
+    if (!authLoading) verifyAdminAccess();
+  }, [authLoading, profile.role, getIdToken]);
 
   const handleCreateOrg = (e: React.FormEvent) => {
     e.preventDefault();
@@ -108,6 +165,20 @@ export default function AdminPage() {
     }
   };
 
+  if (adminCheckLoading || authLoading) {
+    return (
+      <div className="min-h-screen bg-slate-100 text-slate-900 font-sans flex flex-col">
+        <Navbar onToggleMobileSidebar={() => setMobileSidebarOpen(!mobileSidebarOpen)} />
+        <div className="flex-1 flex items-center justify-center">
+          <div className="flex flex-col items-center gap-3 text-slate-500">
+            <Loader2 className="w-8 h-8 animate-spin text-emerald-500" />
+            <span className="text-sm font-mono">Verifying admin credentials...</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (!isAdmin) {
     return (
       <div className="min-h-screen bg-slate-100 text-slate-900 font-sans flex flex-col">
@@ -120,7 +191,10 @@ export default function AdminPage() {
             </div>
             <h1 className="text-xl font-bold text-slate-900">ACCESS RESTRICTED</h1>
             <p className="text-xs text-slate-600 font-mono max-w-md">
-              Administrative Console access requires Super Admin or Organization Administrator privileges. Current Role: <span className="font-bold uppercase text-rose-700">{profile.role}</span>.
+              {adminCheckError || `Administrative Console access requires Admin or Super Admin privileges. Current Role: ${profile.role?.toUpperCase() || 'USER'}.`}
+            </p>
+            <p className="text-xs text-slate-500 max-w-md">
+              Admin roles are assigned server-side and cannot be self-promoted. Contact a system administrator.
             </p>
           </main>
         </div>

@@ -120,22 +120,75 @@ export function getUserProfile(): UserProfile {
   }
 }
 
+export function setSessionCookie(tokenOrUid: string): void {
+  if (typeof document !== 'undefined') {
+    document.cookie = `hs_session=${encodeURIComponent(tokenOrUid)}; path=/; max-age=86400; SameSite=Lax`;
+  }
+}
+
+export function clearSessionCookie(): void {
+  if (typeof document !== 'undefined') {
+    document.cookie = 'hs_session=; path=/; max-age=0; SameSite=Lax';
+  }
+}
+
 export function saveUserProfile(profile: Partial<UserProfile>): UserProfile {
   const current = getUserProfile();
-  const updated = { ...current, authenticated: true, ...profile };
+  const updated = { ...current, authenticated: true, updated_at: new Date().toISOString(), ...profile };
   if (typeof window !== 'undefined') {
     localStorage.setItem(PROFILE_KEY, JSON.stringify(updated));
+    if (updated.id || updated.firebase_uid) {
+      setSessionCookie(updated.firebase_uid || updated.id);
+    }
   }
+
+  // Automatically synchronize into recipient notification subscriber pool
+  if (updated.email && updated.email.includes('@')) {
+    try {
+      saveRecipientProfile({
+        user_id: updated.id,
+        email: updated.email,
+        display_name: updated.name || updated.email.split('@')[0],
+        location_name: updated.location?.name || 'Chennai',
+        latitude: updated.location?.latitude ?? 13.0827,
+        longitude: updated.location?.longitude ?? 80.2707,
+        location_source: updated.location?.gps_accuracy ? 'LIVE_GPS' : 'SAVED_LOCATION',
+        email_alerts_enabled: true,
+        hourly_summary_enabled: true,
+        critical_alerts_enabled: true,
+        forecast_alerts_enabled: true,
+        sms_phone: updated.sms_phone,
+      });
+    } catch {
+      // Gracefully continue
+    }
+  }
+
   return updated;
+}
+
+/**
+ * Link a Firebase UID to the current user profile.
+ * Called after successful Firebase sign-in to establish identity mapping:
+ *   Firebase UID → HeatShield User Profile → Supabase profile
+ */
+export function linkFirebaseUID(uid: string): UserProfile {
+  setSessionCookie(uid);
+  return saveUserProfile({ firebase_uid: uid, id: uid });
 }
 
 export function clearUserProfile(): void {
   if (typeof window !== 'undefined') {
     localStorage.removeItem(PROFILE_KEY);
+    clearSessionCookie();
   }
 }
 
 export async function logoutUser(): Promise<void> {
+  // 1. Clear session cookie immediately
+  clearSessionCookie();
+
+  // 2. Sign out from Supabase Auth
   if (isSupabaseConfigured && supabase) {
     try {
       await supabase.auth.signOut();
@@ -143,6 +196,19 @@ export async function logoutUser(): Promise<void> {
       // Ignore network errors on logout
     }
   }
+  // 3. Sign out from Firebase Auth (dynamic import to avoid SSR issues)
+  try {
+    if (typeof window !== 'undefined') {
+      const { firebaseAuth, isFirebaseConfigured } = await import('./firebase/client');
+      if (isFirebaseConfigured && firebaseAuth) {
+        const { signOut } = await import('firebase/auth');
+        await signOut(firebaseAuth);
+      }
+    }
+  } catch {
+    // Ignore Firebase sign-out errors
+  }
+  // 4. Clear local profile
   clearUserProfile();
 }
 

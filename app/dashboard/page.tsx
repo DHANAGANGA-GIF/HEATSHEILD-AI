@@ -19,7 +19,10 @@ import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { LocationSource } from '@/lib/constants';
 import { LocationData, RiskAssessment, TechMode, WeatherData } from '@/lib/types';
 import Link from 'next/link';
-import { Clock, Sliders, MessageSquare, ArrowRight, ChevronDown, ChevronUp } from 'lucide-react';
+import { Clock, Sliders, MessageSquare, ArrowRight, ChevronDown, ChevronUp, Radio } from 'lucide-react';
+import { RealtimeLiveLocationTracker } from '@/components/RealtimeLiveLocationTracker';
+import { RealtimeBroadcastCommandCenter } from '@/components/RealtimeBroadcastCommandCenter';
+import { useAuth } from '@/lib/firebase/auth-context';
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -68,32 +71,14 @@ export default function DashboardPage() {
     await loadData(loc);
   }, [loadData]);
 
+  const { isAuthenticated, loading: authLoading } = useAuth();
+
   useEffect(() => {
-    // Supabase Auth state listener & route guard
-    if (isSupabaseConfigured && supabase) {
-      supabase.auth.getSession().then(({ data }) => {
-        if (!data.session) {
-          setAuthStatus('SIGNED OUT');
-          router.replace('/login');
-        } else {
-          setAuthStatus('AUTHENTICATED');
-        }
-      });
-
-      const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-        if (event === 'SIGNED_OUT' || !session) {
-          setAuthStatus('SIGNED OUT');
-          router.replace('/login');
-        } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
-          setAuthStatus('AUTHENTICATED');
-        }
-      });
-
-      return () => {
-        subscription.unsubscribe();
-      };
+    if (!authLoading) {
+      const isAuthed = isAuthenticated || profile.authenticated;
+      setAuthStatus(isAuthed ? 'AUTHENTICATED' : 'SIGNED OUT');
     }
-  }, [router]);
+  }, [authLoading, isAuthenticated, profile.authenticated]);
 
   useEffect(() => {
     loadDashboardData();
@@ -253,6 +238,13 @@ export default function DashboardPage() {
             </div>
           ) : (
             <>
+              {/* REAL-TIME LIVE GPS & TELEMETRY STREAM */}
+              <RealtimeLiveLocationTracker
+                onLocationUpdate={(loc) => {
+                  handleLocationChange(loc, 'GPS');
+                }}
+              />
+
               {/* Heat Risk Score Gauge */}
               <HeatGauge
                 score={risk.risk_score}
@@ -280,6 +272,9 @@ export default function DashboardPage() {
                 guidance={risk.recommendations}
                 mode={techMode}
               />
+
+              {/* REAL-TIME MULTI-USER BROADCAST COMMAND CENTER */}
+              <RealtimeBroadcastCommandCenter />
 
               {/* Quick Actions */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

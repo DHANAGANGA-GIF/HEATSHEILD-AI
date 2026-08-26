@@ -55,7 +55,7 @@ export default function OnboardingPage() {
   };
 
   const handleComplete = () => {
-    saveUserProfile({
+    const updated = saveUserProfile({
       age_group: ageGroup,
       exposure,
       activity_level: activityLevel,
@@ -65,6 +65,26 @@ export default function OnboardingPage() {
       location,
       onboarded: true,
     });
+
+    if (updated.email) {
+      fetch('/api/broadcast/live-alerts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          targetEmail: updated.email,
+          sendToAll: false,
+          clientLocation: {
+            latitude: location.latitude,
+            longitude: location.longitude,
+            location_name: location.name,
+            location_source: location.gps_accuracy ? 'LIVE_GPS' : 'SAVED_LOCATION',
+            gps_accuracy: location.gps_accuracy,
+          },
+          customSubject: `HeatShield AI | Active Heat Protection & Guidance for ${location.name}`,
+        }),
+      }).catch(() => {});
+    }
+
     router.push('/dashboard');
   };
 

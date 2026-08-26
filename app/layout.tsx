@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import './globals.css';
+import { FirebaseAuthProvider } from '@/lib/firebase/auth-context';
 
 // Force all pages to be rendered dynamically at request time.
 // Prevents static-prerendering failures caused by browser-only APIs
@@ -19,7 +20,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="min-h-screen bg-slate-100 text-slate-900 font-sans">
-        {children}
+        <FirebaseAuthProvider>
+          {children}
+        </FirebaseAuthProvider>
       </body>
     </html>
   );

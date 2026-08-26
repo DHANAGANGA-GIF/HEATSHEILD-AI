@@ -8,6 +8,8 @@ export type TechMode = 'technical' | 'simple';
 
 export interface UserProfile {
   id: string;
+  /** Firebase UID — the stable authentication identity. Never use email as primary identity. */
+  firebase_uid?: string;
   email?: string;
   name?: string;
   age_group: AgeGroup;
@@ -17,11 +19,15 @@ export interface UserProfile {
   cooling_access: CoolingAccess;
   language: Language;
   location?: LocationData;
-  role: 'user' | 'school' | 'worksite' | 'ngo' | 'admin';
+  role: 'user' | 'school' | 'worksite' | 'ngo' | 'admin' | 'super_admin';
   organization_id?: string;
   created_at: string;
+  updated_at?: string;
+  last_login_at?: string;
   onboarded?: boolean;
   authenticated?: boolean;
+  /** User has explicitly given consent for location/notification use */
+  consent_given?: boolean;
   sms_phone?: string;
 }
 
@@ -397,9 +403,9 @@ export interface NotificationLog {
   weather_status: WeatherSourceStatus;
   risk_score?: number;
   precautions?: string[];
-  provider: 'Resend' | 'Twilio';
+  provider: 'Resend' | 'Twilio' | 'HeatShield Sandbox Engine' | string;
   provider_message_id?: string;
-  status: 'SENT' | 'FAILED' | 'SKIPPED';
+  status: 'SENT' | 'DELIVERED' | 'FAILED' | 'SKIPPED' | 'SIMULATED_SANDBOX';
   failure_reason?: string;
   /** Unique idempotency key: recipient_email + scheduled_hour + alert_type */
   idempotency_key: string;

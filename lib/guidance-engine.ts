@@ -79,7 +79,39 @@ export function generatePersonalizedGuidance(
     priority: riskLevel === 'EXTREME' ? 'urgent' : 'medium',
   });
 
-  // 4. Driver-specific Precautions
+  // 4. Clothing, Sun Protection & Ventilation
+  let protectionSimple = 'Wear lightweight, light-colored, loose-fitting cotton clothing and a wide-brimmed hat outdoors.';
+  if (temp > 35 || apparentTemp > 40) {
+    protectionSimple = 'Wear loose, light-colored breathable clothing, UV sunglasses, and broad-spectrum sunscreen when outdoors.';
+  } else if (riskLevel === 'HIGH' || riskLevel === 'EXTREME') {
+    protectionSimple = 'Use sun protection (hat, umbrella, sunscreen) and keep living spaces ventilated with fans or open windows.';
+  }
+
+  guidance.push({
+    id: 'g_protection',
+    category: 'exposure',
+    title: 'Sun Protection & Breathable Attire',
+    technical_text: `Utilize high-albedo, breathable fabrics and UV protective barriers for ${temp}°C solar thermal exposure.`,
+    simple_text: protectionSimple,
+    priority: 'medium',
+  });
+
+  // 5. Symptom Recognition & Emergency Vigilance
+  let symptomSimple = 'Monitor for heat strain warning signs: heavy sweating, headache, dizziness, nausea, or muscle cramps.';
+  if (riskLevel === 'HIGH' || riskLevel === 'EXTREME') {
+    symptomSimple = 'Watch for heat illness warning signs: dizziness, nausea, rapid pulse, or extreme weakness. Rest in a cool place immediately if felt.';
+  }
+
+  guidance.push({
+    id: 'g_symptoms',
+    category: 'rest',
+    title: 'Heat Strain Symptom Recognition',
+    technical_text: 'Active physiological surveillance for heat cramps, heat exhaustion, and elevated heart rate.',
+    simple_text: symptomSimple,
+    priority: riskLevel === 'EXTREME' ? 'urgent' : 'high',
+  });
+
+  // 6. Driver-specific Precautions
   if (apparentTemp - temp >= 3 || apparentTemp > 36) {
     guidance.push({
       id: 'g_apparent_driver',
@@ -113,19 +145,26 @@ export function generatePersonalizedGuidance(
     });
   }
 
-  // 5. Vulnerable Group & Monitoring Precautions
-  if (context.age_group === 'older_adult' || context.age_group === 'child' || riskLevel === 'HIGH' || riskLevel === 'EXTREME') {
+  // 7. Vulnerable Group & Community Check-in Precautions
+  if (
+    context.age_group === 'older_adult' ||
+    context.age_group === 'child' ||
+    riskLevel === 'HIGH' ||
+    riskLevel === 'EXTREME' ||
+    guidance.length < 5
+  ) {
     guidance.push({
       id: 'g_vulnerable',
       category: 'community',
       title: 'Vulnerable Person Safety & Monitoring',
       technical_text: 'Monitor vulnerable individuals for heat exhaustion symptoms (dizziness, rapid pulse, weakness).',
-      simple_text: 'Check in on children, elderly relatives, and neighbours to ensure they have access to cool water and shade.',
+      simple_text: 'Check in on children, elderly relatives, and neighbours to ensure they have access to cool water and shaded spaces.',
       priority: 'medium',
     });
   }
 
-  return guidance;
+  // Cap at 7 precautions max per Phase 10
+  return guidance.slice(0, 7);
 }
 
 export const MEDICAL_SAFETY_DISCLAIMER =

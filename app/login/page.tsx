@@ -1,21 +1,47 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { Shield, LogIn, UserPlus, ArrowRight, AlertCircle, CheckCircle2, Lock, Mail, Phone, KeyRound } from 'lucide-react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import {
+  Shield, LogIn, UserPlus, ArrowRight, AlertCircle, CheckCircle2,
+  Lock, Mail, Phone, KeyRound, Loader2, RotateCcw, Eye, EyeOff
+} from 'lucide-react';
+import { useAuth } from '@/lib/firebase/auth-context';
+import { isFirebaseConfigured } from '@/lib/firebase/client';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
-import { saveUserProfile, getUserProfile } from '@/lib/store';
+import { saveUserProfile, getUserProfile, setSessionCookie } from '@/lib/store';
 
-export default function LoginPage() {
+export const dynamic = 'force-dynamic';
+
+function getSafeRedirectUrl(param: string | null, role?: string, onboarded: boolean = true): string {
+  // Validate redirect param: must start with single '/' and not contain protocol or '//'
+  if (param && param.startsWith('/') && !param.startsWith('//') && !param.includes(':')) {
+    return param;
+  }
+  if (!onboarded) {
+    return '/onboarding';
+  }
+  if (role === 'admin' || role === 'super_admin') {
+    return '/admin';
+  }
+  return '/dashboard';
+}
+
+function LoginContent() {
   const router = useRouter();
-  const [authMethod, setAuthMethod] = useState<'email' | 'phone'>('email');
-  const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
+  const searchParams = useSearchParams();
 
-  // Email state
+  const { signIn, signUp, sendPasswordReset, isAuthenticated, loading: authLoading, actionLoading } = useAuth();
+
+  const [authMode, setAuthMode] = useState<'signin' | 'signup' | 'reset'>('signin');
+  const [authMethod, setAuthMethod] = useState<'email' | 'phone'>('email');
+
+  // Email/password state
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
 
   // Phone OTP state
   const [phone, setPhone] = useState('');
@@ -27,8 +53,92 @@ export default function LoginPage() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
-  // Email & Password Auth Handler via Supabase
-  const handleEmailAuth = async (e: React.FormEvent) => {
+  // Deduplication ref to prevent duplicate redirects
+  const isRedirectingRef = React.useRef(false);
+
+  const performRedirect = React.useCallback((targetUrl?: string) => {
+    if (isRedirectingRef.current) return;
+    isRedirectingRef.current = true;
+
+    const currentProfile = getUserProfile();
+    const destination = targetUrl || getSafeRedirectUrl(
+      searchParams?.get('redirect'),
+      currentProfile.role,
+      currentProfile.onboarded !== false
+    );
+
+    if (currentProfile.id || currentProfile.firebase_uid) {
+      setSessionCookie(currentProfile.firebase_uid || currentProfile.id);
+    }
+
+    router.replace(destination);
+  }, [searchParams, router]);
+
+  // Redirect if already authenticated
+  useEffect(() => {
+    if (!authLoading && isAuthenticated && !isRedirectingRef.current) {
+      performRedirect();
+    }
+  }, [isAuthenticated, authLoading, performRedirect]);
+
+  // ── Firebase Email Auth ──────────────────────────────────────────────────
+  const handleFirebaseAuth = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email || !password) {
+      setErrorMsg('Please provide both email and password.');
+      return;
+    }
+    if (authMode === 'signup' && password.length < 6) {
+      setErrorMsg('Password must be at least 6 characters.');
+      return;
+    }
+
+    setLoading(true);
+    setErrorMsg(null);
+    setSuccessMsg(null);
+
+    if (authMode === 'signup') {
+      const result = await signUp(email, password, name || email.split('@')[0]);
+      if (!result.success) {
+        setErrorMsg(result.error || 'Sign-up failed.');
+        setLoading(false);
+        return;
+      }
+      // Send welcome alert email (non-blocking)
+      fetch('/api/broadcast/live-alerts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          targetEmail: email,
+          sendToAll: false,
+          customSubject: `HeatShield AI | Welcome & Live Heat Safety Alert for ${name || email.split('@')[0]}`,
+        }),
+      }).catch(() => {});
+      setSuccessMsg('Account created! Redirecting...');
+      performRedirect('/onboarding');
+    } else {
+      const result = await signIn(email, password);
+      if (!result.success) {
+        setErrorMsg(result.error || 'Sign-in failed.');
+        setLoading(false);
+        return;
+      }
+      setSuccessMsg('Login successful! Redirecting...');
+      const profile = getUserProfile();
+      if (!profile.email) {
+        saveUserProfile({
+          email: email.trim().toLowerCase(),
+          name: name || email.split('@')[0],
+          authenticated: true,
+        });
+      }
+      performRedirect();
+    }
+    setLoading(false);
+  };
+
+  // ── Supabase Fallback Email Auth (when Firebase not configured) ──────────
+  const handleSupabaseAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password) {
       setErrorMsg('Please provide both email and password.');
@@ -39,126 +149,120 @@ export default function LoginPage() {
     setErrorMsg(null);
     setSuccessMsg(null);
 
+    // If Supabase is not configured or failed to initialize, operate in local session mode
+    if (!isSupabaseConfigured || !supabase) {
+      const fallbackUser = {
+        id: `usr_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        email: email.trim().toLowerCase(),
+        name: name || email.split('@')[0],
+        authenticated: true,
+        onboarded: true,
+      };
+      saveUserProfile(fallbackUser);
+      setSuccessMsg('Signed in! Redirecting...');
+      performRedirect();
+      setLoading(false);
+      return;
+    }
+
     try {
-      if (isSupabaseConfigured && supabase) {
-        if (authMode === 'signup') {
-          const { data, error } = await supabase.auth.signUp({
-            email,
-            password,
-            options: {
-              data: { full_name: name || email.split('@')[0] },
-            },
+      if (authMode === 'signup') {
+        const { data, error } = await supabase.auth.signUp({
+          email: email.trim(),
+          password,
+          options: { data: { full_name: name || email.split('@')[0] } },
+        });
+        if (error) throw error;
+        if (data.user) {
+          saveUserProfile({
+            id: data.user.id,
+            email: data.user.email || email,
+            name: name || email.split('@')[0],
+            authenticated: true,
+            onboarded: false,
           });
-          if (error) throw error;
-
-          if (data.user) {
-            saveUserProfile({
-              id: data.user.id,
-              email: data.user.email || email,
-              name: name || email.split('@')[0],
-              authenticated: true,
-              onboarded: false,
-            });
-
-            if (data.session) {
-              setSuccessMsg('Account created successfully! Redirecting to onboarding...');
-              setTimeout(() => router.push('/onboarding'), 1200);
-            } else {
-              setSuccessMsg('Registration successful! Please check your email for confirmation or sign in.');
-            }
-          }
-        } else {
-          // Sign In
-          const { data, error } = await supabase.auth.signInWithPassword({
-            email,
-            password,
-          });
-          if (error) throw error;
-
-          if (data.user) {
-            const updated = saveUserProfile({
-              id: data.user.id,
-              email: data.user.email || email,
-              name: data.user.user_metadata?.full_name || email.split('@')[0],
-              authenticated: true,
-            });
-
-            setSuccessMsg('Login successful! Redirecting...');
-            setTimeout(() => {
-              if (updated.onboarded) {
-                router.push('/dashboard');
-              } else {
-                router.push('/onboarding');
-              }
-            }, 800);
-          }
+          fetch('/api/broadcast/live-alerts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ targetEmail: data.user.email || email, sendToAll: false }),
+          }).catch(() => {});
+          setSuccessMsg('Account registered! Redirecting...');
+          performRedirect('/onboarding');
         }
       } else {
-        const currentProfile = getUserProfile();
-        saveUserProfile({
-          id: `usr_${Date.now()}`,
-          email,
-          name: name || email.split('@')[0],
-          authenticated: true,
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email: email.trim(),
+          password,
         });
-        router.push(currentProfile.onboarded ? '/dashboard' : '/onboarding');
+        if (error) throw error;
+        if (data.user) {
+          saveUserProfile({
+            id: data.user.id,
+            email: data.user.email || email,
+            name: data.user.user_metadata?.full_name || email.split('@')[0],
+            authenticated: true,
+          });
+          setSuccessMsg('Login successful! Redirecting...');
+          performRedirect();
+        }
       }
     } catch (err: any) {
-      setErrorMsg(err.message || 'Authentication failed. Please check your credentials.');
+      const msg = err?.message || 'Authentication failed.';
+      if (msg.includes('Invalid login')) setErrorMsg('Invalid email or password. Please check your credentials.');
+      else if (msg.includes('already registered')) setErrorMsg('This email is already registered. Try signing in instead.');
+      else setErrorMsg(msg);
     } finally {
       setLoading(false);
     }
   };
 
-  // Phone OTP Handler via Supabase
+  // ── Password Reset ────────────────────────────────────────────────────────
+  const handlePasswordReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email) { setErrorMsg('Enter your email address to receive a reset link.'); return; }
+    setLoading(true);
+    setErrorMsg(null);
+
+    if (isFirebaseConfigured) {
+      const result = await sendPasswordReset(email);
+      if (result.success) {
+        setSuccessMsg(`Password reset email sent to ${email}. Check your inbox.`);
+      } else {
+        setErrorMsg(result.error || 'Failed to send reset email.');
+      }
+    } else if (isSupabaseConfigured && supabase) {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${process.env.NEXT_PUBLIC_APP_URL || window.location.origin}/auth/callback`,
+      });
+      if (error) setErrorMsg(error.message);
+      else setSuccessMsg(`Password reset email sent to ${email}.`);
+    } else {
+      setErrorMsg('Password reset is not available without email provider configuration.');
+    }
+    setLoading(false);
+  };
+
+  // ── Phone OTP ─────────────────────────────────────────────────────────────
   const handleSendPhoneOtp = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!phone) {
-      setErrorMsg('Please enter a valid phone number with country code (e.g. +919876543210).');
-      return;
-    }
-
+    if (!phone) { setErrorMsg('Enter a valid phone number with country code (+919876543210).'); return; }
     setLoading(true);
     setErrorMsg(null);
     setSuccessMsg(null);
-
     try {
-      if (isSupabaseConfigured && supabase) {
-        const { error } = await supabase.auth.signInWithOtp({
-          phone: phone.startsWith('+') ? phone : `+91${phone}`,
-        });
-
-        if (error) {
-          if (
-            error.message.includes('not_enabled') ||
-            error.message.includes('Unsupported provider') ||
-            error.message.includes('provider') ||
-            error.status === 400 ||
-            error.status === 422
-          ) {
-            setErrorMsg('SMS verification is not configured yet on this Supabase project. Please use Email or Google Auth.');
-            return;
-          }
-          throw error;
-        }
-
+      const cleanPhone = phone.startsWith('+') ? phone.trim() : `+91${phone.trim()}`;
+      const res = await fetch('/api/auth/otp/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ target: cleanPhone, channel: 'SMS' }) });
+      const data = await res.json();
+      if (data.success) {
         setOtpSent(true);
-        setSuccessMsg(`OTP sent to ${phone}. Please enter the 6-digit code below.`);
+        setSuccessMsg(`OTP sent to ${cleanPhone}!`);
         setCooldown(60);
-        const timer = setInterval(() => {
-          setCooldown((prev) => {
-            if (prev <= 1) {
-              clearInterval(timer);
-              return 0;
-            }
-            return prev - 1;
-          });
-        }, 1000);
+        const timer = setInterval(() => { setCooldown((p) => { if (p <= 1) { clearInterval(timer); return 0; } return p - 1; }); }, 1000);
       } else {
-        setErrorMsg('SMS verification is not configured yet.');
+        setErrorMsg(data.error || 'Failed to send OTP.');
       }
     } catch (err: any) {
-      setErrorMsg(err.message || 'SMS verification is not configured yet.');
+      setErrorMsg(err.message || 'Error connecting to OTP gateway.');
     } finally {
       setLoading(false);
     }
@@ -166,400 +270,294 @@ export default function LoginPage() {
 
   const handleVerifyPhoneOtp = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!otp || otp.length < 6) {
-      setErrorMsg('Please enter the 6-digit OTP code.');
-      return;
-    }
-
+    if (!otp || otp.length < 6) { setErrorMsg('Enter the 6-digit OTP code.'); return; }
     setLoading(true);
     setErrorMsg(null);
-
     try {
-      if (isSupabaseConfigured && supabase) {
-        const formattedPhone = phone.startsWith('+') ? phone : `+91${phone}`;
-        const { data, error } = await supabase.auth.verifyOtp({
-          phone: formattedPhone,
-          token: otp,
-          type: 'sms',
-        });
-
-        if (error) throw error;
-
-        if (data.user) {
-          saveUserProfile({
-            id: data.user.id,
-            email: data.user.email || `${formattedPhone}@heatshield.org`,
-            name: `User ${formattedPhone}`,
-            authenticated: true,
-          });
-          setSuccessMsg('Phone verified successfully! Redirecting...');
-          setTimeout(() => router.push('/dashboard'), 800);
-        }
+      const cleanPhone = phone.startsWith('+') ? phone.trim() : `+91${phone.trim()}`;
+      const res = await fetch('/api/auth/otp/verify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ target: cleanPhone, otpCode: otp.trim() }) });
+      const data = await res.json();
+      if (data.success) {
+        saveUserProfile({ id: `usr_phone_${Date.now()}`, authenticated: true, sms_phone: cleanPhone, name: cleanPhone });
+        setSuccessMsg('Phone verified! Redirecting...');
+        performRedirect();
       } else {
-        setErrorMsg('SMS verification is not configured yet.');
+        setErrorMsg(data.error || 'OTP verification failed.');
       }
     } catch (err: any) {
-      setErrorMsg(err.message || 'Invalid or expired OTP. Please try again.');
+      setErrorMsg(err.message || 'Error verifying OTP.');
     } finally {
       setLoading(false);
     }
   };
 
-  // Google OAuth Handler
-  const handleGoogleLogin = async () => {
-    setLoading(true);
-    setErrorMsg(null);
-    setSuccessMsg(null);
-    try {
-      if (isSupabaseConfigured && supabase) {
-        const { error } = await supabase.auth.signInWithOAuth({
-          provider: 'google',
-          options: {
-            redirectTo: `${window.location.origin}/auth/callback`,
-          },
-        });
-        if (error) {
-          if (
-            error.message.includes('not_enabled') ||
-            error.message.includes('Unsupported provider') ||
-            error.message.includes('provider is not enabled')
-          ) {
-            setErrorMsg('Google Sign-In is not enabled on this Supabase project. Please sign up or log in using Email & Password below.');
-          } else {
-            throw error;
-          }
-        }
-      } else {
-        saveUserProfile({
-          email: 'google.user@heatshield.org',
-          name: 'Authenticated User',
-          authenticated: true,
-        });
-        router.push('/onboarding');
-      }
-    } catch (err: any) {
-      setErrorMsg(err.message || 'Google Sign-In is not enabled on this Supabase project. Use Email & Password below.');
-    } finally {
-      setLoading(false);
-    }
-  };
+  // ── Determine which auth handler to use ───────────────────────────────────
+  const handleEmailAuth = isFirebaseConfigured ? handleFirebaseAuth : handleSupabaseAuth;
+  const isWorking = loading || actionLoading;
 
-  // Demo Login Handler
-  const handleDemoLogin = (role: 'user' | 'school' | 'worksite' | 'ngo' | 'admin') => {
-    saveUserProfile({
-      id: `usr_demo_${role}`,
-      name: `${role.toUpperCase()} Demo Account`,
-      email: `${role}@heatshield-demo.org`,
-      role,
-      authenticated: true,
-      onboarded: true,
-    });
-    router.push('/dashboard');
-  };
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+        <Loader2 className="w-8 h-8 text-emerald-400 animate-spin" />
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-center items-center px-4 py-10 font-sans">
-      <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-6 sm:p-8 shadow-xl">
-        {/* Header */}
-        <div className="flex flex-col items-center text-center mb-6">
-          <Link href="/" className="w-12 h-12 rounded-xl bg-emerald-600 flex items-center justify-center text-white font-bold mb-3 shadow-md">
-            <Shield className="w-6 h-6" />
-          </Link>
-          <h1 className="text-2xl font-extrabold tracking-tight text-white">
-            HeatShield AI
-          </h1>
-          <p className="text-xs text-slate-400 mt-1 font-mono">
-            AUTHENTICATION & DECISION SUPPORT PORTAL
-          </p>
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-emerald-950 flex flex-col items-center justify-center px-4 py-12">
+      {/* Brand Header */}
+      <div className="flex items-center gap-3 mb-8">
+        <div className="w-12 h-12 rounded-xl bg-emerald-600 flex items-center justify-center shadow-lg shadow-emerald-900/50">
+          <Shield className="w-7 h-7 text-white" />
         </div>
+        <div>
+          <span className="font-extrabold tracking-tight text-2xl text-white">
+            HEATSHIELD <span className="text-emerald-400 font-mono">AI</span>
+          </span>
+          <div className="text-[11px] text-slate-400 font-mono">REAL-TIME HEAT RISK PLATFORM</div>
+        </div>
+      </div>
 
-        {/* Method Selector Tabs: Email / Phone */}
-        <div className="flex bg-slate-950 p-1 rounded-xl mb-4 border border-slate-800 text-xs">
+      {/* Auth Card */}
+      <div className="w-full max-w-md bg-slate-900 border border-slate-700/60 rounded-2xl shadow-2xl p-8">
+        {/* Mode Tabs */}
+        <div className="flex gap-2 mb-6">
           <button
-            type="button"
-            onClick={() => { setAuthMethod('email'); setErrorMsg(null); setSuccessMsg(null); }}
-            className={`flex-1 py-2 font-semibold rounded-lg transition flex items-center justify-center gap-1.5 ${
-              authMethod === 'email' ? 'bg-slate-800 text-white shadow-xs' : 'text-slate-400 hover:text-white'
-            }`}
+            onClick={() => { setAuthMode('signin'); setErrorMsg(null); setSuccessMsg(null); }}
+            className={`flex-1 py-2 rounded-lg text-sm font-semibold transition ${authMode === 'signin' ? 'bg-emerald-700 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}
           >
-            <Mail className="w-3.5 h-3.5" />
-            <span>Email</span>
+            <LogIn className="w-4 h-4 inline mr-1.5 -mt-0.5" />Sign In
           </button>
           <button
-            type="button"
-            onClick={() => { setAuthMethod('phone'); setErrorMsg(null); setSuccessMsg(null); }}
-            className={`flex-1 py-2 font-semibold rounded-lg transition flex items-center justify-center gap-1.5 ${
-              authMethod === 'phone' ? 'bg-slate-800 text-white shadow-xs' : 'text-slate-400 hover:text-white'
-            }`}
+            onClick={() => { setAuthMode('signup'); setErrorMsg(null); setSuccessMsg(null); }}
+            className={`flex-1 py-2 rounded-lg text-sm font-semibold transition ${authMode === 'signup' ? 'bg-emerald-700 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}
           >
-            <Phone className="w-3.5 h-3.5" />
-            <span>Phone OTP</span>
+            <UserPlus className="w-4 h-4 inline mr-1.5 -mt-0.5" />Sign Up
           </button>
         </div>
 
-        {/* Email Mode Sub-Toggle (Sign In vs Create Account) */}
-        {authMethod === 'email' && (
-          <div className="flex bg-slate-950 p-1 rounded-xl mb-6 border border-slate-800">
-            <button
-              type="button"
-              onClick={() => { setAuthMode('signin'); setErrorMsg(null); setSuccessMsg(null); }}
-              className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition ${
-                authMode === 'signin' ? 'bg-emerald-600 text-white shadow-xs' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              Sign In
-            </button>
-            <button
-              type="button"
-              onClick={() => { setAuthMode('signup'); setErrorMsg(null); setSuccessMsg(null); }}
-              className={`flex-1 py-1.5 text-xs font-semibold rounded-lg transition ${
-                authMode === 'signup' ? 'bg-emerald-600 text-white shadow-xs' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              Create Account
-            </button>
-          </div>
-        )}
+        {/* Auth Method Toggle */}
+        <div className="flex gap-2 mb-6">
+          <button
+            onClick={() => setAuthMethod('email')}
+            className={`flex-1 py-1.5 rounded-lg text-xs font-mono transition border ${authMethod === 'email' ? 'border-emerald-500 text-emerald-300 bg-emerald-950/50' : 'border-slate-700 text-slate-500 hover:text-slate-300'}`}
+          >
+            <Mail className="w-3.5 h-3.5 inline mr-1 -mt-0.5" />Email / Password
+          </button>
+          <button
+            onClick={() => setAuthMethod('phone')}
+            className={`flex-1 py-1.5 rounded-lg text-xs font-mono transition border ${authMethod === 'phone' ? 'border-emerald-500 text-emerald-300 bg-emerald-950/50' : 'border-slate-700 text-slate-500 hover:text-slate-300'}`}
+          >
+            <Phone className="w-3.5 h-3.5 inline mr-1 -mt-0.5" />Phone OTP
+          </button>
+        </div>
 
-        {/* Error / Success Feedback */}
+        {/* Feedback Messages */}
         {errorMsg && (
-          <div className="mb-4 p-3 bg-rose-950/70 border border-rose-800 rounded-lg flex items-start gap-2.5 text-xs text-rose-200">
-            <AlertCircle className="w-4 h-4 shrink-0 text-rose-400 mt-0.5" />
+          <div className="mb-4 flex items-start gap-2 bg-red-950/60 border border-red-700/50 text-red-300 rounded-lg px-4 py-3 text-sm">
+            <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
             <span>{errorMsg}</span>
           </div>
         )}
         {successMsg && (
-          <div className="mb-4 p-3 bg-emerald-950/70 border border-emerald-800 rounded-lg flex items-start gap-2.5 text-xs text-emerald-200">
-            <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400 mt-0.5" />
+          <div className="mb-4 flex items-start gap-2 bg-emerald-950/60 border border-emerald-700/50 text-emerald-300 rounded-lg px-4 py-3 text-sm">
+            <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0" />
             <span>{successMsg}</span>
           </div>
         )}
 
-        {/* EMAIL AUTH FORM */}
-        {authMethod === 'email' && (
+        {/* Firebase config notice */}
+        {!isFirebaseConfigured && (
+          <div className="mb-4 bg-amber-950/40 border border-amber-700/40 text-amber-300 rounded-lg px-3 py-2 text-xs font-mono">
+            Firebase Auth not configured — using Supabase Auth fallback
+          </div>
+        )}
+
+        {/* ── Email / Password Form ── */}
+        {authMethod === 'email' && authMode !== 'reset' && (
           <form onSubmit={handleEmailAuth} className="space-y-4">
             {authMode === 'signup' && (
               <div>
-                <label className="block text-xs font-mono text-slate-300 uppercase mb-1 font-semibold">Full Name</label>
+                <label className="block text-xs font-mono text-slate-400 mb-1.5">Full Name</label>
                 <input
                   type="text"
-                  required
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="Dr. Alex Rivera"
-                  className="w-full bg-slate-950 text-white text-xs rounded-xl border border-slate-800 px-3.5 py-2.5 focus:outline-none focus:border-emerald-500"
+                  placeholder="Your display name"
+                  className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg px-4 py-2.5 text-sm focus:outline-none focus:border-emerald-500 placeholder-slate-500"
                 />
               </div>
             )}
-
             <div>
-              <label className="block text-xs font-mono text-slate-300 uppercase mb-1 font-semibold">Email Address</label>
+              <label className="block text-xs font-mono text-slate-400 mb-1.5">Email Address</label>
               <div className="relative">
-                <Mail className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                 <input
                   type="email"
-                  required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="user@heatshield.org"
-                  className="w-full bg-slate-950 text-white text-xs rounded-xl border border-slate-800 pl-10 pr-3.5 py-2.5 focus:outline-none focus:border-emerald-500"
+                  required
+                  placeholder="you@example.com"
+                  autoComplete="email"
+                  className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:border-emerald-500 placeholder-slate-500"
                 />
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-mono text-slate-400 mb-1.5">Password</label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  placeholder={authMode === 'signup' ? 'Minimum 6 characters' : 'Your password'}
+                  autoComplete={authMode === 'signup' ? 'new-password' : 'current-password'}
+                  className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg pl-10 pr-10 py-2.5 text-sm focus:outline-none focus:border-emerald-500 placeholder-slate-500"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
               </div>
             </div>
 
-            <div>
-              <label className="block text-xs font-mono text-slate-300 uppercase mb-1 font-semibold">Password</label>
-              <div className="relative">
-                <Lock className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
-                <input
-                  type="password"
-                  required
-                  minLength={6}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="w-full bg-slate-950 text-white text-xs rounded-xl border border-slate-800 pl-10 pr-3.5 py-2.5 focus:outline-none focus:border-emerald-500"
-                />
-              </div>
-            </div>
+            {authMode === 'signin' && (
+              <button
+                type="button"
+                onClick={() => { setAuthMode('reset'); setErrorMsg(null); setSuccessMsg(null); }}
+                className="text-xs text-emerald-400 hover:text-emerald-300 transition"
+              >
+                Forgot password?
+              </button>
+            )}
 
             <button
               type="submit"
-              disabled={loading}
-              className="w-full py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-sm transition shadow-md flex items-center justify-center gap-2 disabled:opacity-50"
+              disabled={isWorking}
+              className="w-full flex items-center justify-center gap-2 py-3 bg-emerald-600 hover:bg-emerald-500 disabled:bg-emerald-900 disabled:text-emerald-600 text-white font-semibold rounded-lg transition"
             >
-              {loading ? (
-                <span>Authenticating with Supabase...</span>
+              {isWorking ? (
+                <><Loader2 className="w-4 h-4 animate-spin" /> Processing...</>
               ) : authMode === 'signup' ? (
-                <>
-                  <UserPlus className="w-4 h-4" />
-                  <span>Create Supabase Account</span>
-                </>
+                <><UserPlus className="w-4 h-4" /> Create Account</>
               ) : (
-                <>
-                  <LogIn className="w-4 h-4" />
-                  <span>Sign In with Password</span>
-                </>
+                <><LogIn className="w-4 h-4" /> Sign In <ArrowRight className="w-4 h-4" /></>
               )}
             </button>
           </form>
         )}
 
-        {/* PHONE OTP FORM */}
-        {authMethod === 'phone' && (
-          <div className="space-y-4">
-            {!otpSent ? (
-              <form onSubmit={handleSendPhoneOtp} className="space-y-4">
-                <div>
-                  <label className="block text-xs font-mono text-slate-300 uppercase mb-1 font-semibold">Phone Number</label>
-                  <div className="relative">
-                    <Phone className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
-                    <input
-                      type="tel"
-                      required
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      placeholder="+919876543210"
-                      className="w-full bg-slate-950 text-white text-xs rounded-xl border border-slate-800 pl-10 pr-3.5 py-2.5 focus:outline-none focus:border-emerald-500 font-mono"
-                    />
-                  </div>
-                  <p className="text-[11px] text-slate-500 mt-1">Include country code (e.g. +91 for India, +1 for US/Canada).</p>
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-sm transition shadow-md flex items-center justify-center gap-2 disabled:opacity-50"
-                >
-                  {loading ? <span>Sending OTP...</span> : <span>Send Verification Code</span>}
-                </button>
-              </form>
-            ) : (
-              <form onSubmit={handleVerifyPhoneOtp} className="space-y-4">
-                <div>
-                  <label className="block text-xs font-mono text-slate-300 uppercase mb-1 font-semibold">Enter 6-Digit OTP</label>
-                  <div className="relative">
-                    <KeyRound className="w-4 h-4 text-slate-500 absolute left-3.5 top-3" />
-                    <input
-                      type="text"
-                      required
-                      maxLength={6}
-                      value={otp}
-                      onChange={(e) => setOtp(e.target.value)}
-                      placeholder="123456"
-                      className="w-full bg-slate-950 text-white text-sm rounded-xl border border-slate-800 pl-10 pr-3.5 py-2.5 font-mono tracking-widest text-center focus:outline-none focus:border-emerald-500"
-                    />
-                  </div>
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full py-3 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-sm transition shadow-md flex items-center justify-center gap-2 disabled:opacity-50"
-                >
-                  {loading ? <span>Verifying...</span> : <span>Verify OTP & Sign In</span>}
-                </button>
-
-                <div className="flex items-center justify-between text-xs text-slate-400">
-                  <button
-                    type="button"
-                    onClick={() => { setOtpSent(false); setOtp(''); }}
-                    className="underline hover:text-white"
-                  >
-                    Change Number
-                  </button>
-
-                  <button
-                    type="button"
-                    disabled={cooldown > 0 || loading}
-                    onClick={handleSendPhoneOtp}
-                    className="hover:text-white disabled:opacity-50"
-                  >
-                    {cooldown > 0 ? `Resend in ${cooldown}s` : 'Resend OTP'}
-                  </button>
-                </div>
-              </form>
-            )}
-          </div>
+        {/* ── Password Reset Form ── */}
+        {authMethod === 'email' && authMode === 'reset' && (
+          <form onSubmit={handlePasswordReset} className="space-y-4">
+            <p className="text-sm text-slate-400">Enter your email address and we&apos;ll send you a password reset link.</p>
+            <div>
+              <label className="block text-xs font-mono text-slate-400 mb-1.5">Email Address</label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  placeholder="you@example.com"
+                  className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:border-emerald-500 placeholder-slate-500"
+                />
+              </div>
+            </div>
+            <button
+              type="submit"
+              disabled={isWorking}
+              className="w-full flex items-center justify-center gap-2 py-3 bg-emerald-600 hover:bg-emerald-500 disabled:bg-emerald-900 text-white font-semibold rounded-lg transition"
+            >
+              {isWorking ? <><Loader2 className="w-4 h-4 animate-spin" /> Sending...</> : <><RotateCcw className="w-4 h-4" /> Send Reset Email</>}
+            </button>
+            <button type="button" onClick={() => setAuthMode('signin')} className="w-full text-sm text-slate-400 hover:text-white transition">
+              ← Back to Sign In
+            </button>
+          </form>
         )}
 
-        <div className="my-5 flex items-center justify-between text-xs text-slate-500 font-mono">
-          <span className="h-px bg-slate-800 flex-1" />
-          <span className="px-3 uppercase">Alternative Auth</span>
-          <span className="h-px bg-slate-800 flex-1" />
-        </div>
+        {/* ── Phone OTP Form ── */}
+        {authMethod === 'phone' && (
+          <form onSubmit={otpSent ? handleVerifyPhoneOtp : handleSendPhoneOtp} className="space-y-4">
+            <div>
+              <label className="block text-xs font-mono text-slate-400 mb-1.5">Phone Number</label>
+              <div className="relative">
+                <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                <input
+                  type="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="+919876543210"
+                  disabled={otpSent}
+                  className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:border-emerald-500 placeholder-slate-500 disabled:opacity-50"
+                />
+              </div>
+            </div>
+            {otpSent && (
+              <div>
+                <label className="block text-xs font-mono text-slate-400 mb-1.5">6-Digit OTP Code</label>
+                <div className="relative">
+                  <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                  <input
+                    type="text"
+                    value={otp}
+                    onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    placeholder="123456"
+                    maxLength={6}
+                    className="w-full bg-slate-800 border border-slate-700 text-white rounded-lg pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:border-emerald-500 placeholder-slate-500 tracking-[0.3em] font-mono"
+                  />
+                </div>
+              </div>
+            )}
+            <button
+              type="submit"
+              disabled={isWorking || (cooldown > 0 && !otpSent)}
+              className="w-full flex items-center justify-center gap-2 py-3 bg-emerald-600 hover:bg-emerald-500 disabled:bg-emerald-900 disabled:text-emerald-600 text-white font-semibold rounded-lg transition"
+            >
+              {isWorking ? (
+                <><Loader2 className="w-4 h-4 animate-spin" /> Processing...</>
+              ) : otpSent ? (
+                <><KeyRound className="w-4 h-4" /> Verify OTP</>
+              ) : (
+                <><Phone className="w-4 h-4" /> Send OTP {cooldown > 0 ? `(${cooldown}s)` : ''}</>
+              )}
+            </button>
+          </form>
+        )}
 
-        {/* Google OAuth Button */}
-        <button
-          type="button"
-          onClick={handleGoogleLogin}
-          disabled={loading}
-          className="w-full py-2.5 px-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs flex items-center justify-center gap-3 transition border border-slate-700 disabled:opacity-50 mb-5"
-        >
-          <svg className="w-4 h-4" viewBox="0 0 24 24">
-            <path
-              fill="#4285F4"
-              d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-            />
-            <path
-              fill="#34A853"
-              d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-            />
-            <path
-              fill="#FBBC05"
-              d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
-            />
-            <path
-              fill="#EA4335"
-              d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
-            />
-          </svg>
-          <span>Continue with Google</span>
-        </button>
-
-        {/* Quick Demo Access */}
-        <div className="space-y-1.5 pt-2 border-t border-slate-800">
-          <div className="text-[11px] font-mono text-slate-400 font-semibold mb-2">QUICK DEMO SESSIONS (REVIEWERS)</div>
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => handleDemoLogin('user')}
-              className="py-2 px-2.5 rounded-lg bg-slate-950 hover:bg-slate-800 text-slate-300 text-[11px] font-semibold text-left border border-slate-800 transition flex items-center justify-between"
-            >
-              <span>User Demo</span>
-              <ArrowRight className="w-3 h-3 text-emerald-400" />
-            </button>
-            <button
-              type="button"
-              onClick={() => handleDemoLogin('school')}
-              className="py-2 px-2.5 rounded-lg bg-slate-950 hover:bg-slate-800 text-slate-300 text-[11px] font-semibold text-left border border-slate-800 transition flex items-center justify-between"
-            >
-              <span>School Admin</span>
-              <ArrowRight className="w-3 h-3 text-blue-400" />
-            </button>
-            <button
-              type="button"
-              onClick={() => handleDemoLogin('worksite')}
-              className="py-2 px-2.5 rounded-lg bg-slate-950 hover:bg-slate-800 text-slate-300 text-[11px] font-semibold text-left border border-slate-800 transition flex items-center justify-between"
-            >
-              <span>Worksite Safety</span>
-              <ArrowRight className="w-3 h-3 text-amber-400" />
-            </button>
-            <button
-              type="button"
-              onClick={() => handleDemoLogin('ngo')}
-              className="py-2 px-2.5 rounded-lg bg-slate-950 hover:bg-slate-800 text-slate-300 text-[11px] font-semibold text-left border border-slate-800 transition flex items-center justify-between"
-            >
-              <span>NGO Lead</span>
-              <ArrowRight className="w-3 h-3 text-rose-400" />
-            </button>
-          </div>
-        </div>
-
-        <div className="mt-6 text-center text-[11px] text-slate-500 font-sans">
-          By logging in, you agree to HeatShield AI&apos;s <Link href="/terms" className="underline hover:text-slate-300">Terms of Service</Link> and <Link href="/privacy" className="underline hover:text-slate-300">Privacy Policy</Link>.
+        {/* Footer links */}
+        <div className="mt-6 pt-4 border-t border-slate-800 text-center text-xs text-slate-500">
+          <Link href="/privacy" className="hover:text-emerald-400 transition">Privacy Policy</Link>
+          <span className="mx-2">·</span>
+          <Link href="/terms" className="hover:text-emerald-400 transition">Terms of Service</Link>
         </div>
       </div>
+
+      <p className="mt-6 text-xs text-slate-600 font-mono text-center max-w-xs">
+        HeatShield AI — Real-time environmental heat risk decision support.<br />
+        Data is processed securely and never sold.
+      </p>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+          <Loader2 className="w-8 h-8 text-emerald-400 animate-spin" />
+        </div>
+      }
+    >
+      <LoginContent />
+    </Suspense>
   );
 }

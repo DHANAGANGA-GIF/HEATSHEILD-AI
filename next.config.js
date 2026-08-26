@@ -6,12 +6,15 @@ const nextConfig = {
     unoptimized: true,
   },
 
-  webpack: (config, { dev }) => {
-    if (!dev) {
-      config.cache = false;
-    }
-    return config;
+  // On local machines where workspace directory contains special chars ('#'), disable NFT tracing.
+  // On Vercel CI/CD (process.env.VERCEL), standard tracing is active.
+  outputFileTracing: Boolean(process.env.VERCEL),
+
+  experimental: {
+    serverComponentsExternalPackages: ['firebase-admin', 'firebase-admin/auth'],
   },
 }
 
 module.exports = nextConfig
+
+
