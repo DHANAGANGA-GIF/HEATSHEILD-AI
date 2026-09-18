@@ -4,7 +4,7 @@ import { fetchWeatherData, reverseGeocode, getWeatherConditionText } from '@/lib
 import { calculateRiskAssessment } from '@/lib/risk-engine';
 import { generatePersonalizedGuidance, MEDICAL_SAFETY_DISCLAIMER } from '@/lib/guidance-engine';
 import { validateCoordinates } from '@/lib/snapshot';
-import { verifyFirebaseToken, extractBearerToken } from '@/lib/firebase/admin';
+import { verifyFirebaseToken, extractBearerToken, resolveAuthSession } from '@/lib/firebase/admin';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import { getRecipientProfiles, saveHeatRiskDispatchLog } from '@/lib/store';
 import { HeatRiskDispatchLog, RiskLevel, SmartAlert } from '@/lib/types';
@@ -52,24 +52,15 @@ async function checkIsAdmin(uid: string, email?: string): Promise<boolean> {
  */
 export async function POST(request: Request) {
   try {
-    // ── 1. Mandatory Firebase authentication ───────────────────────────────────
-    const authHeader = request.headers.get('authorization');
-    const idToken = extractBearerToken(authHeader);
+    // ── 1. Mandatory authentication ───────────────────────────────────────────
+    const decoded = await resolveAuthSession(request);
 
-    if (!idToken || idToken.length <= 20) {
+    if (!decoded) {
       return NextResponse.json(
         {
           success: false,
-          error: 'Authentication required. A valid authorization token is required to dispatch alerts.',
+          error: 'Authentication required. A valid authorization session is required to dispatch alerts.',
         },
-        { status: 401 }
-      );
-    }
-
-    const decoded = await verifyFirebaseToken(idToken);
-    if (!decoded) {
-      return NextResponse.json(
-        { success: false, error: 'Invalid or expired authentication session. Please sign in again.' },
         { status: 401 }
       );
     }

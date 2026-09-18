@@ -49,6 +49,11 @@ const PUBLIC_PATHS = [
   '/api/messages',
   '/api/analytics',
   '/api/admin',
+  '/api/email/google/connect',    // Gmail OAuth initiation — no auth needed
+  '/api/email/google/callback',   // Gmail OAuth callback — receives Google redirect
+  '/api/email/status',            // Public status check
+  '/api/email/test',              // Test send endpoint
+  '/api/cron',                    // Vercel cron — authenticated via CRON_SECRET
 ];
 
 function isProtectedPath(pathname: string): boolean {

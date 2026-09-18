@@ -35,6 +35,7 @@ import {
 import { firebaseAuth, isFirebaseConfigured } from './client';
 import { getUserProfile, saveUserProfile, clearUserProfile, setSessionCookie, clearSessionCookie, DEFAULT_USER_PROFILE } from '@/lib/store';
 import { writeUserProfile } from './firestore';
+import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import { UserProfile } from '@/lib/types';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -343,13 +344,44 @@ export function FirebaseAuthProvider({ children }: { children: ReactNode }) {
   const clearError = useCallback(() => setError(null), []);
 
   const getIdToken = useCallback(async (): Promise<string | null> => {
-    if (!firebaseUser) return null;
-    try {
-      return await firebaseUser.getIdToken();
-    } catch {
-      return null;
+    // 1. If Firebase user is active, retrieve Firebase ID token
+    if (firebaseUser) {
+      try {
+        const token = await firebaseUser.getIdToken();
+        if (token) return token;
+      } catch {
+        // Fall back to alternative session tokens
+      }
     }
-  }, [firebaseUser]);
+
+    // 2. If Supabase is active, retrieve active Supabase JWT access token
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { data } = await supabase.auth.getSession();
+        if (data?.session?.access_token) {
+          return data.session.access_token;
+        }
+      } catch {
+        // Fall back to cookie / profile
+      }
+    }
+
+    // 3. Check hs_session cookie
+    if (typeof document !== 'undefined') {
+      const match = document.cookie.match(/(?:^|;\s*)hs_session=([^;]+)/);
+      if (match && match[1]) {
+        const val = decodeURIComponent(match[1]);
+        if (val && val.length > 5) return val;
+      }
+    }
+
+    // 4. Return profile ID / UID if authenticated
+    if (appProfile?.authenticated && (appProfile.firebase_uid || appProfile.id)) {
+      return appProfile.firebase_uid || appProfile.id || null;
+    }
+
+    return null;
+  }, [firebaseUser, appProfile]);
 
   // ── Derived state ─────────────────────────────────────────────────────────
   const role = appProfile?.role;

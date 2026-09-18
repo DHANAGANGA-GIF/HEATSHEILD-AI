@@ -98,12 +98,16 @@ export const RealtimeBroadcastCommandCenter: React.FC = () => {
       const idToken = await getIdToken();
       setProgress(50);
 
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      if (idToken) {
+        headers['Authorization'] = `Bearer ${idToken}`;
+      }
+
       const res = await fetch('/api/broadcast/live-alerts', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${idToken}`,
-        },
+        headers,
         body: JSON.stringify({
           mode: 'TEST',
           customSubject: customSubject.trim() || undefined,
@@ -123,7 +127,8 @@ export const RealtimeBroadcastCommandCenter: React.FC = () => {
         setProgress(100);
         setResults(data.results);
         setStatusType('success');
-        setStatusMessage(`Test advisory successfully accepted by provider for ${data.verifiedRecipient || firebaseUser.email}!`);
+        const confirmedRecipient = data.verifiedRecipient || firebaseUser?.email;
+        setStatusMessage(`Test advisory successfully accepted by provider for ${confirmedRecipient}!`);
         loadData();
       } else {
         setStatusType('error');
@@ -161,12 +166,16 @@ export const RealtimeBroadcastCommandCenter: React.FC = () => {
       const idToken = await getIdToken();
       setProgress(50);
 
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      if (idToken) {
+        headers['Authorization'] = `Bearer ${idToken}`;
+      }
+
       const res = await fetch('/api/broadcast/live-alerts', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${idToken}`,
-        },
+        headers,
         body: JSON.stringify({
           mode: 'MANUAL',
           targetEmail: selectedRecipientEmail,

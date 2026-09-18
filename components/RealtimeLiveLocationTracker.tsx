@@ -225,20 +225,24 @@ export const RealtimeLiveLocationTracker: React.FC<RealtimeLiveLocationTrackerPr
     setDispatchMessage(null);
 
     try {
-      // Get a fresh Firebase ID token — the server uses this to derive the recipient.
+      // Get a fresh authentication token — the server uses this to derive the recipient.
       const idToken = await getIdToken();
-      if (!idToken) {
+      if (!idToken && !authorizedEmail) {
         setDispatchStatus('error');
         setDispatchMessage('Authentication required. Please sign in again.');
         return;
       }
 
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      if (idToken) {
+        headers['Authorization'] = `Bearer ${idToken}`;
+      }
+
       const res = await fetch('/api/broadcast/live-alerts', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${idToken}`,
-        },
+        headers,
         body: JSON.stringify({
           // NOTE: Do NOT include targetEmail — the server derives it from the JWT.
           clientLocation: {

@@ -3,7 +3,7 @@ import { sendAlertEmail } from '@/lib/email-service';
 import { fetchWeatherData, reverseGeocode, getWeatherConditionText } from '@/lib/weather-api';
 import { generatePersonalizedGuidance, MEDICAL_SAFETY_DISCLAIMER } from '@/lib/guidance-engine';
 import { createEnvironmentalSnapshot, validateCoordinates, formatDataAge } from '@/lib/snapshot';
-import { verifyFirebaseToken, extractBearerToken } from '@/lib/firebase/admin';
+import { verifyFirebaseToken, extractBearerToken, resolveAuthSession } from '@/lib/firebase/admin';
 import { SmartAlert, UserProfile } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
@@ -33,28 +33,19 @@ export async function POST(request: Request) {
       userProfile?: Partial<UserProfile>;
     };
 
-    // ── Step 1: MANDATORY Firebase token verification ─────────────────────────
-    // The authenticated Firebase user is the ONLY authority for email ownership.
-    // Flow: Firebase Auth → Firebase UID → verified email → recipient.
+    // ── Step 1: MANDATORY session verification ─────────────────────────
+    // The authenticated user is the ONLY authority for email ownership.
+    // Flow: Auth Session → UID → verified email → recipient.
     // The client CANNOT choose, override, or supply the email recipient.
-    const authHeader = request.headers.get('authorization');
-    const idToken = extractBearerToken(authHeader);
+    const decoded = await resolveAuthSession(request);
 
-    if (!idToken || idToken.length <= 20) {
+    if (!decoded) {
       return NextResponse.json(
         {
           success: false,
           error:
-            'Authentication required. A valid Firebase ID token must be provided in the Authorization header. The recipient email is determined server-side from your verified identity.',
+            'Authentication required. A valid authorization session must be provided to send live reports. The recipient email is determined server-side from your verified identity.',
         },
-        { status: 401 }
-      );
-    }
-
-    const decoded = await verifyFirebaseToken(idToken);
-    if (!decoded) {
-      return NextResponse.json(
-        { success: false, error: 'Invalid or expired authentication token. Please sign in again.' },
         { status: 401 }
       );
     }
@@ -67,7 +58,7 @@ export async function POST(request: Request) {
         {
           success: false,
           error:
-            'Your Firebase account does not have a verified email address. Cannot dispatch an alert without a verified recipient.',
+            'Your account does not have a verified email address. Cannot dispatch an alert without a verified recipient.',
         },
         { status: 400 }
       );

@@ -11,7 +11,7 @@ const nextConfig = {
   outputFileTracing: Boolean(process.env.VERCEL),
 
   experimental: {
-    serverComponentsExternalPackages: ['firebase-admin', 'firebase-admin/auth'],
+    serverComponentsExternalPackages: ['firebase-admin', 'firebase-admin/auth', 'googleapis', 'google-auth-library'],
   },
 
   async headers() {
