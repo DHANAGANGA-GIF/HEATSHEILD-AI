@@ -7,7 +7,7 @@ import { useRouter } from 'next/navigation';
 import { Navbar } from '@/components/Navbar';
 import { Sidebar } from '@/components/Sidebar';
 import { getUserProfile, saveUserProfile, logoutUser, DEFAULT_USER_PROFILE } from '@/lib/store';
-import { UserProfile } from '@/lib/types';
+import { UserProfile, EmailFrequency } from '@/lib/types';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import {
   User, Save, CheckCircle, ShieldCheck, Key, Lock, Bell, MapPin,
@@ -379,28 +379,75 @@ export default function ProfilePage() {
                 </div>
               </div>
 
-              <div className="flex items-center gap-3">
-                <span className="text-xs font-mono text-slate-400">Hourly Alerts:</span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const nextVal = !profile.hourly_heat_alerts_enabled;
-                    const updated = { ...profile, hourly_heat_alerts_enabled: nextVal };
-                    setProfile(updated);
-                    saveUserProfile(updated);
-                    if (isSupabaseConfigured && supabase && (profile.id || profile.firebase_uid)) {
-                      void supabase.from('profiles').update({ hourly_heat_alerts_enabled: nextVal }).eq('id', profile.id || profile.firebase_uid);
-                    }
-                  }}
-                  className={`px-4 py-1.5 rounded-full text-xs font-mono font-bold transition flex items-center gap-2 border shadow-md ${
-                    profile.hourly_heat_alerts_enabled
-                      ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40 shadow-emerald-950/40'
-                      : 'bg-slate-800 text-slate-400 border-slate-700'
-                  }`}
-                >
-                  <span className={`w-2 h-2 rounded-full ${profile.hourly_heat_alerts_enabled ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'}`} />
-                  <span>{profile.hourly_heat_alerts_enabled ? 'ON' : 'OFF'}</span>
-                </button>
+              <div className="flex flex-wrap items-center gap-4">
+                <div className="flex items-center gap-3">
+                  <span className="text-xs font-mono text-slate-400">Hourly Heat Risk Emails:</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const nextVal = !profile.hourly_heat_alerts_enabled;
+                      const updated = { ...profile, hourly_heat_alerts_enabled: nextVal };
+                      setProfile(updated);
+                      saveUserProfile(updated);
+                      if (isSupabaseConfigured && supabase && (profile.id || profile.firebase_uid)) {
+                        void supabase.from('profiles').update({ hourly_heat_alerts_enabled: nextVal }).eq('id', profile.id || profile.firebase_uid);
+                      }
+                    }}
+                    className={`px-4 py-1.5 rounded-full text-xs font-mono font-bold transition flex items-center gap-2 border shadow-md ${
+                      profile.hourly_heat_alerts_enabled
+                        ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40 shadow-emerald-950/40'
+                        : 'bg-slate-800 text-slate-400 border-slate-700'
+                    }`}
+                  >
+                    <span className={`w-2 h-2 rounded-full ${profile.hourly_heat_alerts_enabled ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'}`} />
+                    <span>{profile.hourly_heat_alerts_enabled ? 'ON' : 'OFF'}</span>
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-mono text-slate-400">Send only when risk changes:</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const nextFreq: EmailFrequency = profile.email_frequency === 'risk_change_only' ? 'hourly' : 'risk_change_only';
+                      const updated = { ...profile, email_frequency: nextFreq };
+                      setProfile(updated);
+                      saveUserProfile(updated);
+                      if (isSupabaseConfigured && supabase && (profile.id || profile.firebase_uid)) {
+                        void supabase.from('profiles').update({ email_frequency: nextFreq }).eq('id', profile.id || profile.firebase_uid);
+                      }
+                    }}
+                    className={`px-3 py-1 rounded-full text-xs font-mono font-bold transition flex items-center gap-1.5 border shadow-sm ${
+                      profile.email_frequency === 'risk_change_only'
+                        ? 'bg-sky-500/20 text-sky-400 border-sky-500/40 shadow-sky-950/40'
+                        : 'bg-slate-800 text-slate-400 border-slate-700'
+                    }`}
+                  >
+                    <span>{profile.email_frequency === 'risk_change_only' ? 'ON' : 'OFF'}</span>
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-mono text-slate-400">Min Risk Level:</span>
+                  <select
+                    value={profile.minimum_risk_level || 'high'}
+                    onChange={(e) => {
+                      const nextLevel = e.target.value as any;
+                      const updated = { ...profile, minimum_risk_level: nextLevel };
+                      setProfile(updated);
+                      saveUserProfile(updated);
+                      if (isSupabaseConfigured && supabase && (profile.id || profile.firebase_uid)) {
+                        void supabase.from('profiles').update({ minimum_risk_level: nextLevel }).eq('id', profile.id || profile.firebase_uid);
+                      }
+                    }}
+                    className="bg-slate-950 border border-slate-800 text-xs font-mono text-slate-200 rounded-lg px-2.5 py-1 focus:outline-none focus:border-sky-500"
+                  >
+                    <option value="all">ALL</option>
+                    <option value="moderate">MODERATE+</option>
+                    <option value="high">HIGH+ (Default)</option>
+                    <option value="extreme">EXTREME</option>
+                  </select>
+                </div>
               </div>
             </div>
 
@@ -421,17 +468,19 @@ export default function ProfilePage() {
 
               <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl space-y-1">
                 <span className="text-[10px] text-slate-500 uppercase block">FREQUENCY</span>
-                <span className="text-slate-200 font-bold block">Every hour</span>
+                <span className="text-slate-200 font-bold block">
+                  {profile.email_frequency === 'risk_change_only' ? 'Risk Change' : profile.email_frequency === 'every_3_hours' ? 'Every 3h' : 'Every hour'}
+                </span>
               </div>
 
               <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl space-y-1">
-                <span className="text-[10px] text-slate-500 uppercase block">STATUS</span>
+                <span className="text-[10px] text-slate-500 uppercase block">MIN RISK</span>
                 <span
                   className={`font-bold block ${
                     profile.hourly_heat_alerts_enabled ? 'text-emerald-400' : 'text-slate-500'
                   }`}
                 >
-                  {profile.hourly_heat_alerts_enabled ? 'ACTIVE' : 'PAUSED'}
+                  {(profile.minimum_risk_level || 'high').toUpperCase()}
                 </span>
               </div>
             </div>

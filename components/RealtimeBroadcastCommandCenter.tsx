@@ -29,6 +29,8 @@ export const RealtimeBroadcastCommandCenter: React.FC = () => {
   const [recipients, setRecipients] = useState<RecipientNotificationProfile[]>([]);
   const [dispatchLogs, setDispatchLogs] = useState<HeatRiskDispatchLog[]>([]);
   const [activeTab, setActiveTab] = useState<'TEST' | 'MANUAL' | 'CRON'>('TEST');
+  const [emailServiceStatus, setEmailServiceStatus] = useState<any>(null);
+  const [lastDispatchDuration, setLastDispatchDuration] = useState<number | null>(null);
 
   // Execution states
   const [isProcessing, setIsProcessing] = useState(false);
@@ -50,6 +52,10 @@ export const RealtimeBroadcastCommandCenter: React.FC = () => {
     if (!selectedRecipientEmail && recs.length > 0) {
       setSelectedRecipientEmail(recs[0].email);
     }
+    fetch('/api/email/status')
+      .then((res) => res.json())
+      .then((data) => setEmailServiceStatus(data))
+      .catch(() => {});
   };
 
   useEffect(() => {
@@ -300,25 +306,18 @@ export const RealtimeBroadcastCommandCenter: React.FC = () => {
 
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 font-mono text-xs">
           <div className="bg-slate-900/90 p-2.5 rounded-xl border border-slate-800">
-            <span className="text-[10px] text-slate-500 block">LAST RUN</span>
-            <span className="text-slate-200 font-bold truncate block mt-0.5">
-              {latestLog ? new Date(latestLog.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Never'}
-            </span>
+            <span className="text-[10px] text-slate-500 block">TOTAL SUBSCRIBERS</span>
+            <span className="text-slate-200 font-bold block mt-0.5">{recipients.length} ({recipients.filter(r => r.hourly_heat_alerts_enabled).length} eligible)</span>
           </div>
 
           <div className="bg-slate-900/90 p-2.5 rounded-xl border border-slate-800">
-            <span className="text-[10px] text-slate-500 block">PROCESSED</span>
+            <span className="text-[10px] text-slate-500 block">ATTEMPTED</span>
             <span className="text-slate-200 font-bold block mt-0.5">{totalDispatches}</span>
           </div>
 
           <div className="bg-slate-900/90 p-2.5 rounded-xl border border-slate-800">
-            <span className="text-[10px] text-slate-500 block">ACCEPTED</span>
+            <span className="text-[10px] text-slate-500 block">SENT / ACCEPTED</span>
             <span className="text-emerald-400 font-bold block mt-0.5">{acceptedDispatches}</span>
-          </div>
-
-          <div className="bg-slate-900/90 p-2.5 rounded-xl border border-slate-800">
-            <span className="text-[10px] text-slate-500 block">SKIPPED</span>
-            <span className="text-amber-400 font-bold block mt-0.5">{skippedDispatches}</span>
           </div>
 
           <div className="bg-slate-900/90 p-2.5 rounded-xl border border-slate-800">
@@ -327,10 +326,31 @@ export const RealtimeBroadcastCommandCenter: React.FC = () => {
           </div>
 
           <div className="bg-slate-900/90 p-2.5 rounded-xl border border-slate-800">
+            <span className="text-[10px] text-slate-500 block">PROVIDER</span>
+            <span className="text-sky-400 font-bold block mt-0.5 uppercase">
+              {emailServiceStatus?.provider || 'EMAIL'} ({emailServiceStatus?.mode || 'ACTIVE'})
+            </span>
+          </div>
+
+          <div className="bg-slate-900/90 p-2.5 rounded-xl border border-slate-800">
             <span className="text-[10px] text-slate-500 block">NEXT SCHEDULED</span>
             <span className="text-sky-400 font-bold block mt-0.5">{calculateNextHourlyRun()}</span>
           </div>
         </div>
+
+        {emailServiceStatus?.message && (
+          <div className="p-2 bg-slate-900/80 rounded-xl border border-slate-800 text-[11px] font-mono text-slate-400 flex items-center justify-between">
+            <span>Provider Status: {emailServiceStatus.message}</span>
+            {emailServiceStatus.provider === 'gmail' && !emailServiceStatus.oauthConnected && (
+              <a
+                href="/api/email/google/connect"
+                className="text-emerald-400 hover:underline font-bold"
+              >
+                Connect Gmail OAuth &rarr;
+              </a>
+            )}
+          </div>
+        )}
 
         {lastFailure && (
           <div className="p-2.5 bg-rose-950/40 rounded-xl border border-rose-900/60 text-xs font-mono text-rose-300 flex items-start gap-2">

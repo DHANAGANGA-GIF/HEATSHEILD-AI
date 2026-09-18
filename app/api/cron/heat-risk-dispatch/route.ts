@@ -111,7 +111,9 @@ async function fetchEligibleSubscribers(): Promise<RecipientNotificationProfile[
                 latitude: 13.0827,
                 longitude: 80.2707,
                 location_source: 'SAVED_LOCATION',
-                email_alerts_enabled: true,
+                email_alerts_enabled: p.email_alerts_enabled !== false,
+                email_frequency: p.email_frequency || 'hourly',
+                minimum_risk_level: p.minimum_risk_level || 'high',
                 hourly_summary_enabled: true,
                 hourly_heat_alerts_enabled: true,
                 email_verified: p.email_verified ?? true,
@@ -143,6 +145,22 @@ async function fetchEligibleSubscribers(): Promise<RecipientNotificationProfile[
   return subscribers;
 }
 
+function isRiskMeetingMinimum(currentLevel: RiskLevel, minSetting?: string): boolean {
+  const hierarchy: Record<string, number> = {
+    LOW: 1,
+    MODERATE: 2,
+    HIGH: 3,
+    EXTREME: 4,
+  };
+  const currentRank = hierarchy[currentLevel] || 1;
+  const minSettingClean = (minSetting || 'all').toLowerCase();
+  if (minSettingClean === 'all') return true;
+  if (minSettingClean === 'moderate') return currentRank >= 2;
+  if (minSettingClean === 'high') return currentRank >= 3;
+  if (minSettingClean === 'extreme') return currentRank >= 4;
+  return true;
+}
+
 /**
  * Core Hourly Personalized Dispatch Execution Handler
  */
@@ -165,6 +183,8 @@ async function executeHourlyDispatch(request: Request) {
   // Format: YYYY-MM-DDTHH (e.g., 2026-09-18T12)
   const now = new Date();
   const hourlyWindow = now.toISOString().slice(0, 13);
+  const dispatchMode = (process.env.DISPATCH_MODE || 'production').toLowerCase().trim();
+  const testRecipient = (process.env.TEST_RECIPIENT_EMAIL || '').toLowerCase().trim();
 
   // 3. Fetch Active Eligible Subscribers
   const subscribers = await fetchEligibleSubscribers();
@@ -191,7 +211,51 @@ async function executeHourlyDispatch(request: Request) {
     const subscriberId = subscriber.user_id || subscriber.id || subscriberEmail;
     const dispatchKey = `${hourlyWindow}_user_${subscriberId}`;
 
-    // 4. Idempotency Check: Verify if this subscriber was already processed this hour
+    // 4. Test Mode Safeguard: Restrict dispatches in test mode
+    if (dispatchMode === 'test' && testRecipient && subscriberEmail !== testRecipient) {
+      skippedCount++;
+      results.push({
+        subscriberId,
+        email: subscriberEmail,
+        location: subscriber.location_name || 'Location',
+        coordinates: { latitude: subscriber.latitude ?? 0, longitude: subscriber.longitude ?? 0 },
+        dispatchKey,
+        status: 'SKIPPED',
+        reason: 'Skipped: DISPATCH_MODE=test active; delivery restricted to configured test recipient.',
+      });
+      continue;
+    }
+
+    // 5. User Notification Preferences Check
+    if (subscriber.email_alerts_enabled === false) {
+      skippedCount++;
+      results.push({
+        subscriberId,
+        email: subscriberEmail,
+        location: subscriber.location_name || 'Location',
+        coordinates: { latitude: subscriber.latitude ?? 0, longitude: subscriber.longitude ?? 0 },
+        dispatchKey,
+        status: 'SKIPPED',
+        reason: 'Skipped: subscriber opted out of email alerts in notification preferences.',
+      });
+      continue;
+    }
+
+    if (subscriber.email_frequency === 'every_3_hours' && now.getUTCHours() % 3 !== 0) {
+      skippedCount++;
+      results.push({
+        subscriberId,
+        email: subscriberEmail,
+        location: subscriber.location_name || 'Location',
+        coordinates: { latitude: subscriber.latitude ?? 0, longitude: subscriber.longitude ?? 0 },
+        dispatchKey,
+        status: 'SKIPPED',
+        reason: 'Skipped: every_3_hours frequency active (current UTC hour is not at 3-hour interval).',
+      });
+      continue;
+    }
+
+    // 6. Idempotency Check: Verify if this subscriber was already processed this hour
     const alreadySent = await isDispatchKeySent(dispatchKey);
     if (alreadySent) {
       skippedCount++;
@@ -207,7 +271,7 @@ async function executeHourlyDispatch(request: Request) {
       continue;
     }
 
-    // 5. Verify Email Status
+    // 7. Verify Email Status
     if (subscriber.email_verified === false) {
       skippedCount++;
       results.push({
@@ -320,6 +384,46 @@ async function executeHourlyDispatch(request: Request) {
         },
       });
 
+      // Check subscriber minimum risk level threshold preference
+      if (!isRiskMeetingMinimum(riskAssessment.risk_level, subscriber.minimum_risk_level)) {
+        skippedCount++;
+        results.push({
+          subscriberId,
+          email: subscriberEmail,
+          location: locName,
+          coordinates: { latitude: lat, longitude: lon },
+          riskScore: riskAssessment.risk_score,
+          riskLevel: riskAssessment.risk_level,
+          dispatchKey,
+          status: 'SKIPPED',
+          reason: `Skipped: risk tier (${riskAssessment.risk_level}) is below subscriber's minimum threshold (${subscriber.minimum_risk_level || 'high'}).`,
+        });
+        continue;
+      }
+
+      // Check subscriber risk_change_only frequency preference
+      if (subscriber.email_frequency === 'risk_change_only') {
+        const priorLogs = getHeatRiskDispatchLogs();
+        const lastSubscriberLog = priorLogs.find(
+          (l) => l.recipient_email.toLowerCase() === subscriberEmail && (l.status === 'ACCEPTED' || l.status === 'SENT')
+        );
+        if (lastSubscriberLog && lastSubscriberLog.risk_level === riskAssessment.risk_level) {
+          skippedCount++;
+          results.push({
+            subscriberId,
+            email: subscriberEmail,
+            location: locName,
+            coordinates: { latitude: lat, longitude: lon },
+            riskScore: riskAssessment.risk_score,
+            riskLevel: riskAssessment.risk_level,
+            dispatchKey,
+            status: 'SKIPPED',
+            reason: `Skipped: risk tier (${riskAssessment.risk_level}) unchanged since last dispatch per risk_change_only preference.`,
+          });
+          continue;
+        }
+      }
+
       // 9. Generate Personalized Precautions & Contributing Factors
       const precautionsObj = generatePersonalizedGuidance(
         riskAssessment.risk_level,
@@ -409,6 +513,22 @@ async function executeHourlyDispatch(request: Request) {
         };
         await saveHeatRiskDispatchLog(logRecord);
 
+        // Structured audit logging without exposing sensitive tokens
+        console.log(
+          JSON.stringify({
+            event: 'cron_dispatch_record',
+            dispatch_id: logRecord.id,
+            subscriber_id: subscriberId,
+            provider: emailResult.provider || 'email_gateway',
+            location: locName,
+            risk_score: riskAssessment.risk_score,
+            status: 'ACCEPTED',
+            message_id: emailResult.messageId || emailResult.id,
+            duration_ms: Date.now() - startTime,
+            error_code: null,
+          })
+        );
+
         results.push({
           subscriberId,
           email: subscriberEmail,
@@ -435,10 +555,25 @@ async function executeHourlyDispatch(request: Request) {
           model_version: riskAssessment.model_version,
           dispatch_key: dispatchKey,
           status: 'FAILED',
-          error_message: emailResult.error || 'Resend provider delivery failed',
+          error_message: emailResult.error || 'Provider delivery failed',
           created_at: new Date().toISOString(),
         };
         await saveHeatRiskDispatchLog(failLog);
+
+        console.log(
+          JSON.stringify({
+            event: 'cron_dispatch_record',
+            dispatch_id: failLog.id,
+            subscriber_id: subscriberId,
+            provider: emailResult.provider || 'email_gateway',
+            location: locName,
+            risk_score: riskAssessment.risk_score,
+            status: 'FAILED',
+            message_id: null,
+            duration_ms: Date.now() - startTime,
+            error_code: emailResult.errorCode || 'PROVIDER_ERROR',
+          })
+        );
 
         results.push({
           subscriberId,

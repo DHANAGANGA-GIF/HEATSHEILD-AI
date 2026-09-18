@@ -30,9 +30,15 @@ export interface UserProfile {
   consent_given?: boolean;
   /** Explicit opt-in for automated hourly heat-risk email dispatch (default: false/safe) */
   hourly_heat_alerts_enabled?: boolean;
+  email_alerts_enabled?: boolean;
+  email_frequency?: EmailFrequency;
+  minimum_risk_level?: MinimumRiskLevel;
   email_verified?: boolean;
   sms_phone?: string;
 }
+
+export type EmailFrequency = 'hourly' | 'every_3_hours' | 'risk_change_only';
+export type MinimumRiskLevel = 'all' | 'moderate' | 'high' | 'extreme';
 
 export interface LocationData {
   name: string;
@@ -395,6 +401,9 @@ export interface RecipientNotificationProfile {
   hourly_summary_enabled: boolean;
   /** Explicit opt-in for automated hourly heat-risk email dispatch (default: false/safe) */
   hourly_heat_alerts_enabled?: boolean;
+  email_frequency?: EmailFrequency;
+  minimum_risk_level?: MinimumRiskLevel;
+  last_risk_level?: RiskLevel;
   email_verified?: boolean;
   critical_alerts_enabled: boolean;
   forecast_alerts_enabled?: boolean;

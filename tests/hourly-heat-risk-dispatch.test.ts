@@ -237,15 +237,15 @@ describe('Hourly Heat-Risk Dispatch System & Production Email Pipeline', () => {
     };
 
     const classified = classifyResendError(errorFromResend);
-    assert.strictEqual(classified.errorCode, 'EMAIL_DOMAIN_NOT_VERIFIED');
-    assert.match(classified.message, /EMAIL_DOMAIN_NOT_VERIFIED/);
-    assert.match(classified.message, /RESEND_FROM_EMAIL/);
+    assert.strictEqual(classified.errorCode, 'RESEND_DOMAIN_NOT_VERIFIED');
+    assert.match(classified.message, /RESEND_DOMAIN_NOT_VERIFIED/);
+    assert.match(classified.message, /EMAIL_PROVIDER=gmail/);
   });
 
   it('11. Resend Rate Limit: classifies 429 rate-limited responses accurately', () => {
     const rateLimitErr = { statusCode: 429, message: 'Too many requests' };
     const classified = classifyResendError(rateLimitErr);
-    assert.strictEqual(classified.errorCode, 'RATE_LIMITED');
+    assert.strictEqual(classified.errorCode, 'RESEND_RATE_LIMITED');
     assert.match(classified.message, /rate limit reached/i);
   });
 

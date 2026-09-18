@@ -729,6 +729,8 @@ export function saveRecipientProfile(profile: Partial<RecipientNotificationProfi
       email_alerts_enabled: profile.email_alerts_enabled ?? true,
       hourly_summary_enabled: profile.hourly_summary_enabled ?? true,
       hourly_heat_alerts_enabled: profile.hourly_heat_alerts_enabled ?? false,
+      email_frequency: profile.email_frequency || 'hourly',
+      minimum_risk_level: profile.minimum_risk_level || 'high',
       email_verified: profile.email_verified ?? false,
       critical_alerts_enabled: profile.critical_alerts_enabled ?? true,
       forecast_alerts_enabled: profile.forecast_alerts_enabled ?? true,
