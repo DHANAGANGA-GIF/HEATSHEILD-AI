@@ -175,13 +175,15 @@ export function FirebaseAuthProvider({ children }: { children: ReactNode }) {
         if (user) {
           try {
             const token = await user.getIdToken();
-            setIdToken(token);
-            setSessionCookie(token || user.uid);
+            // Only store a real JWT in the session cookie — never a bare UID
+            setIdToken(token || null);
+            if (token) setSessionCookie(token);
             // Update last_login_at
             saveUserProfile({ last_login_at: new Date().toISOString() } as any);
           } catch {
+            // Token fetch failed — clear stale session data
             setIdToken(null);
-            setSessionCookie(user.uid);
+            clearSessionCookie();
           }
         } else {
           setIdToken(null);
@@ -233,7 +235,8 @@ export function FirebaseAuthProvider({ children }: { children: ReactNode }) {
         token = null;
       }
       setIdToken(token);
-      setSessionCookie(token || user.uid);
+      // Only store a real JWT in the session cookie — never a bare UID
+      if (token) setSessionCookie(token);
       syncAppProfile(user);
       // Persist last login
       saveUserProfile({ last_login_at: new Date().toISOString() } as any);
@@ -271,7 +274,8 @@ export function FirebaseAuthProvider({ children }: { children: ReactNode }) {
         token = null;
       }
       setIdToken(token);
-      setSessionCookie(token || user.uid);
+      // Only store a real JWT in the session cookie — never a bare UID
+      if (token) setSessionCookie(token);
       syncAppProfile(user);
       return { success: true };
     } catch (err) {
@@ -344,13 +348,17 @@ export function FirebaseAuthProvider({ children }: { children: ReactNode }) {
   const clearError = useCallback(() => setError(null), []);
 
   const getIdToken = useCallback(async (): Promise<string | null> => {
-    // 1. If Firebase user is active, retrieve Firebase ID token
+    // 1. If Firebase user is active, force-refresh to ensure we get a valid (non-expired) JWT
     if (firebaseUser) {
       try {
-        const token = await firebaseUser.getIdToken();
-        if (token) return token;
+        const token = await firebaseUser.getIdToken(true /* force refresh if needed */);
+        if (token) {
+          // Keep the session cookie in sync with the fresh token
+          setSessionCookie(token);
+          return token;
+        }
       } catch {
-        // Fall back to alternative session tokens
+        // Firebase token refresh failed — continue to Supabase fallback
       }
     }
 
@@ -362,26 +370,25 @@ export function FirebaseAuthProvider({ children }: { children: ReactNode }) {
           return data.session.access_token;
         }
       } catch {
-        // Fall back to cookie / profile
+        // No active Supabase session
       }
     }
 
-    // 3. Check hs_session cookie
+    // 3. Check hs_session cookie — ONLY accept it if it looks like a real JWT (3 dot-separated parts)
     if (typeof document !== 'undefined') {
       const match = document.cookie.match(/(?:^|;\s*)hs_session=([^;]+)/);
       if (match && match[1]) {
         const val = decodeURIComponent(match[1]);
-        if (val && val.length > 5) return val;
+        // A Firebase JWT always has exactly 3 base64url parts separated by dots
+        if (val && val.split('.').length === 3) return val;
       }
     }
 
-    // 4. Return profile ID / UID if authenticated
-    if (appProfile?.authenticated && (appProfile.firebase_uid || appProfile.id)) {
-      return appProfile.firebase_uid || appProfile.id || null;
-    }
-
+    // NOTE: We intentionally do NOT fall back to returning a bare UID here.
+    // A UID is not a token — sending it as a Bearer token will always return 401.
+    // If no valid JWT is available, the user must re-authenticate.
     return null;
-  }, [firebaseUser, appProfile]);
+  }, [firebaseUser]);
 
   // ── Derived state ─────────────────────────────────────────────────────────
   const role = appProfile?.role;
