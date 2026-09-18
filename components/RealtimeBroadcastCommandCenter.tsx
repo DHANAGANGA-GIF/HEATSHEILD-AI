@@ -12,105 +12,245 @@ import {
   RefreshCw,
   Mail,
   MapPin,
-  Thermometer,
-  ShieldAlert,
-  Flame,
-  Filter,
+  Clock,
+  ShieldCheck,
   CheckCheck,
-  AlertCircle
+  AlertCircle,
+  Play,
+  Calendar,
+  Layers
 } from 'lucide-react';
-import { getRecipientProfiles, getNotificationLogs } from '@/lib/store';
-import { RecipientNotificationProfile, NotificationLog, RiskLevel } from '@/lib/types';
-import { BroadcastResultItem } from '@/lib/broadcast-service';
-
+import { getRecipientProfiles, getHeatRiskDispatchLogs } from '@/lib/store';
+import { RecipientNotificationProfile, HeatRiskDispatchLog, RiskLevel } from '@/lib/types';
 import { useAuth } from '@/lib/firebase/auth-context';
 
 export const RealtimeBroadcastCommandCenter: React.FC = () => {
   const { firebaseUser, getIdToken } = useAuth();
   const [recipients, setRecipients] = useState<RecipientNotificationProfile[]>([]);
-  const [logs, setLogs] = useState<NotificationLog[]>([]);
-  const [isBroadcasting, setIsBroadcasting] = useState(false);
-  const [broadcastProgress, setBroadcastProgress] = useState<number>(0);
-  const [broadcastResults, setBroadcastResults] = useState<BroadcastResultItem[]>([]);
-  const [lastBroadcastTime, setLastBroadcastTime] = useState<string | null>(null);
+  const [dispatchLogs, setDispatchLogs] = useState<HeatRiskDispatchLog[]>([]);
+  const [activeTab, setActiveTab] = useState<'TEST' | 'MANUAL' | 'CRON'>('TEST');
 
-  // Filters & Customizations
-  const [minRiskFilter, setMinRiskFilter] = useState<RiskLevel | 'ALL'>('ALL');
-  const [customSubject, setCustomSubject] = useState('');
-  const [selectedRecipient, setSelectedRecipient] = useState<string | 'ALL'>('ALL');
+  // Execution states
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [progress, setProgress] = useState<number>(0);
+  const [results, setResults] = useState<any[]>([]);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [statusType, setStatusType] = useState<'success' | 'error' | 'info'>('info');
+
+  // Manual & Test form controls
+  const [selectedRecipientEmail, setSelectedRecipientEmail] = useState<string>('');
+  const [customSubject, setCustomSubject] = useState('');
+  const [minRiskFilter, setMinRiskFilter] = useState<RiskLevel | 'ALL'>('ALL');
 
   const loadData = () => {
-    setRecipients(getRecipientProfiles());
-    setLogs(getNotificationLogs());
+    const recs = getRecipientProfiles();
+    setRecipients(recs);
+    const logs = getHeatRiskDispatchLogs();
+    setDispatchLogs(logs);
+    if (!selectedRecipientEmail && recs.length > 0) {
+      setSelectedRecipientEmail(recs[0].email);
+    }
   };
 
   useEffect(() => {
     loadData();
-    const interval = setInterval(loadData, 10000);
+    const interval = setInterval(loadData, 8000);
     return () => clearInterval(interval);
   }, []);
 
-  const handleExecuteBroadcast = async () => {
+  // Compute live dispatch telemetry from real logs
+  const totalDispatches = dispatchLogs.length;
+  const acceptedDispatches = dispatchLogs.filter((l) => l.status === 'ACCEPTED' || l.status === 'SENT').length;
+  const failedDispatches = dispatchLogs.filter((l) => l.status === 'FAILED').length;
+  const skippedDispatches = dispatchLogs.filter((l) => l.status === 'SKIPPED').length;
+  const latestLog = dispatchLogs[0];
+  const lastFailure = dispatchLogs.find((l) => l.status === 'FAILED');
+
+  // Calculate next scheduled hourly run
+  const calculateNextHourlyRun = (): string => {
+    const nextHour = new Date();
+    nextHour.setHours(nextHour.getHours() + 1);
+    nextHour.setMinutes(0);
+    nextHour.setSeconds(0);
+    return nextHour.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+
+  // 1. Send Test Report to current user
+  const handleSendTestReport = async () => {
     if (!firebaseUser) {
-      setStatusMessage('❌ Authentication required: Please sign in to trigger alert broadcasts.');
+      setStatusType('error');
+      setStatusMessage('Authentication required: Please sign in to receive a personal test report.');
       return;
     }
 
-    setIsBroadcasting(true);
-    setBroadcastProgress(10);
+    setIsProcessing(true);
+    setProgress(20);
     setStatusMessage(null);
-    setBroadcastResults([]);
+    setResults([]);
 
     try {
       const idToken = await getIdToken();
-      if (!idToken) {
-        setStatusMessage('❌ Authentication expired. Please sign in again.');
-        setIsBroadcasting(false);
-        return;
-      }
+      setProgress(50);
 
-      setBroadcastProgress(35);
       const res = await fetch('/api/broadcast/live-alerts', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${idToken}`,
+          Authorization: `Bearer ${idToken}`,
         },
         body: JSON.stringify({
+          mode: 'TEST',
+          customSubject: customSubject.trim() || undefined,
+          clientLocation: {
+            latitude: 13.0827,
+            longitude: 80.2707,
+            location_name: 'Current Monitored Region',
+            location_source: 'SAVED_LOCATION',
+          },
+        }),
+      });
+
+      setProgress(90);
+      const data = await res.json();
+
+      if (data.success && Array.isArray(data.results)) {
+        setProgress(100);
+        setResults(data.results);
+        setStatusType('success');
+        setStatusMessage(`Test advisory successfully accepted by provider for ${data.verifiedRecipient || firebaseUser.email}!`);
+        loadData();
+      } else {
+        setStatusType('error');
+        setStatusMessage(data.error || 'Test report dispatch failed.');
+      }
+    } catch (err: any) {
+      setStatusType('error');
+      setStatusMessage(`Network error triggering test dispatch: ${err?.message || 'Check connection'}`);
+    } finally {
+      setIsProcessing(false);
+      setTimeout(() => setProgress(0), 4000);
+    }
+  };
+
+  // 2. Send Manual Report to a selected subscriber (Admin Only)
+  const handleSendManualReport = async () => {
+    if (!firebaseUser) {
+      setStatusType('error');
+      setStatusMessage('Authentication required.');
+      return;
+    }
+
+    if (!selectedRecipientEmail) {
+      setStatusType('error');
+      setStatusMessage('Please select an active recipient from the subscriber list.');
+      return;
+    }
+
+    setIsProcessing(true);
+    setProgress(25);
+    setStatusMessage(null);
+    setResults([]);
+
+    try {
+      const idToken = await getIdToken();
+      setProgress(50);
+
+      const res = await fetch('/api/broadcast/live-alerts', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({
+          mode: 'MANUAL',
+          targetEmail: selectedRecipientEmail,
           minRiskLevel: minRiskFilter !== 'ALL' ? minRiskFilter : undefined,
           customSubject: customSubject.trim() || undefined,
         }),
       });
 
-      setBroadcastProgress(80);
+      setProgress(90);
       const data = await res.json();
 
       if (data.success && Array.isArray(data.results)) {
-        setBroadcastProgress(100);
-        setBroadcastResults(data.results);
-        setLastBroadcastTime(new Date().toLocaleTimeString());
-        const dest = data.verifiedRecipient || firebaseUser.email;
-        setStatusMessage(
-          `✓ Real-Time Broadcast Complete: Live weather & precautions dispatched to ${dest}!`
-        );
+        setProgress(100);
+        setResults(data.results);
+        setStatusType('success');
+        setStatusMessage(`Manual advisory successfully accepted by provider for ${selectedRecipientEmail}!`);
         loadData();
-      } else if (res.status === 401) {
-        setStatusMessage('❌ Authentication required. Please sign in again.');
+      } else if (res.status === 403) {
+        setStatusType('error');
+        setStatusMessage('Forbidden: Administrator role required to trigger manual dispatches to other subscribers.');
       } else {
-        setStatusMessage(`❌ Broadcast dispatch failed: ${data.error || 'Unknown error'}`);
+        setStatusType('error');
+        setStatusMessage(data.error || 'Manual dispatch failed.');
       }
     } catch (err: any) {
-      setStatusMessage(`❌ Error calling broadcast engine: ${err?.message || 'Network error'}`);
+      setStatusType('error');
+      setStatusMessage(`Network exception: ${err?.message}`);
     } finally {
-      setIsBroadcasting(false);
-      setTimeout(() => setBroadcastProgress(0), 4000);
+      setIsProcessing(false);
+      setTimeout(() => setProgress(0), 4000);
+    }
+  };
+
+  // 3. Trigger Hourly Automatic Dispatch via Cron route
+  const handleTriggerHourlyCron = async () => {
+    setIsProcessing(true);
+    setProgress(30);
+    setStatusMessage(null);
+    setResults([]);
+
+    try {
+      const idToken = await getIdToken();
+      setProgress(60);
+
+      const res = await fetch('/api/cron/heat-risk-dispatch', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}),
+        },
+      });
+
+      setProgress(90);
+      const data = await res.json();
+
+      if (data.success) {
+        setProgress(100);
+        setStatusType('success');
+        setStatusMessage(
+          `Hourly dispatch complete: ${data.processed} processed, ${data.sent} accepted, ${data.skipped} skipped, ${data.failed} failed.`
+        );
+        if (Array.isArray(data.results)) {
+          setResults(
+            data.results.map((r: any) => ({
+              recipient: r.email,
+              locationName: r.location,
+              success: r.status === 'ACCEPTED' || r.status === 'SENT',
+              riskScore: r.riskScore,
+              riskLevel: r.riskLevel,
+              error: r.reason,
+            }))
+          );
+        }
+        loadData();
+      } else {
+        setStatusType('error');
+        setStatusMessage(data.error || 'Hourly dispatch invocation failed.');
+      }
+    } catch (err: any) {
+      setStatusType('error');
+      setStatusMessage(`Error executing cron: ${err?.message}`);
+    } finally {
+      setIsProcessing(false);
+      setTimeout(() => setProgress(0), 4000);
     }
   };
 
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl space-y-6 text-slate-100 relative overflow-hidden">
-      {/* Background ambient glow */}
+      {/* Ambient background glow */}
       <div className="absolute -bottom-24 -left-24 w-80 h-80 bg-sky-500/10 rounded-full blur-3xl pointer-events-none" />
 
       {/* Header */}
@@ -122,14 +262,14 @@ export const RealtimeBroadcastCommandCenter: React.FC = () => {
           <div>
             <div className="flex items-center gap-2">
               <h2 className="text-base font-bold text-white font-mono tracking-tight uppercase">
-                REAL-TIME MULTI-USER BROADCAST COMMAND CENTER
+                DISPATCH CONTROL COMMAND CENTER
               </h2>
               <span className="text-[10px] font-mono px-2 py-0.5 rounded-full font-bold uppercase bg-emerald-950 text-emerald-400 border border-emerald-800">
-                ACTIVE GATEWAY
+                VERIFIED GATEWAY
               </span>
             </div>
             <p className="text-xs text-slate-400 mt-0.5">
-              Automated real-time dispatch of live weather, GPS telemetry & dynamic precautions to all registered users
+              Automated hourly personalized thermal risk notifications and controlled broadcast triggers
             </p>
           </div>
         </div>
@@ -137,160 +277,316 @@ export const RealtimeBroadcastCommandCenter: React.FC = () => {
         <div className="flex items-center gap-2">
           <button
             onClick={loadData}
-            className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs font-mono transition"
-            title="Refresh Subscriber List"
+            className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs font-mono transition flex items-center gap-1.5"
+            title="Refresh Live Data"
           >
-            <RefreshCw className="w-4 h-4" />
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span>Sync</span>
           </button>
         </div>
       </div>
 
-      {/* Stats Bar */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 font-mono relative z-10">
-        <div className="bg-slate-950/70 p-3.5 rounded-2xl border border-slate-800">
-          <span className="text-[10px] text-slate-500 uppercase block">Registered Users</span>
-          <div className="text-2xl font-bold text-emerald-400 flex items-center gap-1.5 mt-0.5">
-            <Users className="w-5 h-5" />
-            <span>{recipients.length}</span>
+      {/* Admin Notification Status Panel (Real Data) */}
+      <div className="bg-slate-950/90 rounded-2xl p-4 border border-slate-800 space-y-3 relative z-10">
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-bold font-mono text-sky-400 uppercase tracking-wider flex items-center gap-1.5">
+            <Clock className="w-3.5 h-3.5 text-sky-400" />
+            <span>Hourly Dispatch Status Panel</span>
+          </span>
+          <span className="text-[10px] font-mono text-slate-400">
+            Schedule: 0 * * * * (Hourly)
+          </span>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 font-mono text-xs">
+          <div className="bg-slate-900/90 p-2.5 rounded-xl border border-slate-800">
+            <span className="text-[10px] text-slate-500 block">LAST RUN</span>
+            <span className="text-slate-200 font-bold truncate block mt-0.5">
+              {latestLog ? new Date(latestLog.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Never'}
+            </span>
+          </div>
+
+          <div className="bg-slate-900/90 p-2.5 rounded-xl border border-slate-800">
+            <span className="text-[10px] text-slate-500 block">PROCESSED</span>
+            <span className="text-slate-200 font-bold block mt-0.5">{totalDispatches}</span>
+          </div>
+
+          <div className="bg-slate-900/90 p-2.5 rounded-xl border border-slate-800">
+            <span className="text-[10px] text-slate-500 block">ACCEPTED</span>
+            <span className="text-emerald-400 font-bold block mt-0.5">{acceptedDispatches}</span>
+          </div>
+
+          <div className="bg-slate-900/90 p-2.5 rounded-xl border border-slate-800">
+            <span className="text-[10px] text-slate-500 block">SKIPPED</span>
+            <span className="text-amber-400 font-bold block mt-0.5">{skippedDispatches}</span>
+          </div>
+
+          <div className="bg-slate-900/90 p-2.5 rounded-xl border border-slate-800">
+            <span className="text-[10px] text-slate-500 block">FAILED</span>
+            <span className="text-rose-400 font-bold block mt-0.5">{failedDispatches}</span>
+          </div>
+
+          <div className="bg-slate-900/90 p-2.5 rounded-xl border border-slate-800">
+            <span className="text-[10px] text-slate-500 block">NEXT SCHEDULED</span>
+            <span className="text-sky-400 font-bold block mt-0.5">{calculateNextHourlyRun()}</span>
           </div>
         </div>
 
-        <div className="bg-slate-950/70 p-3.5 rounded-2xl border border-slate-800">
-          <span className="text-[10px] text-slate-500 uppercase block">Monitored Zones</span>
-          <div className="text-2xl font-bold text-sky-400 flex items-center gap-1.5 mt-0.5">
-            <MapPin className="w-5 h-5" />
-            <span>{new Set(recipients.map(r => r.location_name)).size}</span>
-          </div>
-        </div>
-
-        <div className="bg-slate-950/70 p-3.5 rounded-2xl border border-slate-800">
-          <span className="text-[10px] text-slate-500 uppercase block">Total Dispatches</span>
-          <div className="text-2xl font-bold text-amber-400 flex items-center gap-1.5 mt-0.5">
-            <Send className="w-5 h-5" />
-            <span>{logs.length}</span>
-          </div>
-        </div>
-
-        <div className="bg-slate-950/70 p-3.5 rounded-2xl border border-slate-800">
-          <span className="text-[10px] text-slate-500 uppercase block">Delivery Status</span>
-          <div className="text-2xl font-bold text-emerald-400 flex items-center gap-1.5 mt-0.5">
-            <CheckCheck className="w-5 h-5" />
-            <span>100%</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Broadcast Control Matrix */}
-      <div className="bg-slate-950/80 p-5 rounded-2xl border border-slate-800 space-y-4 relative z-10">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div>
-            <h3 className="text-xs font-bold font-mono text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
-              <Sparkles className="w-4 h-4" />
-              <span>Broadcast Trigger Console</span>
-            </h3>
-            <p className="text-xs text-slate-400 mt-0.5">
-              Queries real-time live environmental observations for every subscriber&apos;s region and sends individualized precaution emails.
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <select
-              value={selectedRecipient}
-              onChange={(e) => setSelectedRecipient(e.target.value)}
-              className="bg-slate-900 border border-slate-700 text-xs rounded-xl px-3 py-2 text-white font-mono focus:outline-none focus:border-emerald-500"
-            >
-              <option value="ALL">All Registered Users ({recipients.length})</option>
-              {recipients.map((r) => (
-                <option key={r.email} value={r.email}>
-                  {r.display_name || r.email} ({r.location_name})
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
-        {/* Optional Custom Subject */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
-          <div>
-            <label className="block text-[11px] font-mono text-slate-400 mb-1">Custom Broadcast Subject (Optional)</label>
-            <input
-              type="text"
-              value={customSubject}
-              onChange={(e) => setCustomSubject(e.target.value)}
-              placeholder="e.g. HeatShield AI | High Heat Advisory Broadcast"
-              className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 font-mono focus:outline-none focus:border-emerald-500"
-            />
-          </div>
-
-          <div>
-            <label className="block text-[11px] font-mono text-slate-400 mb-1">Minimum Severity Filter</label>
-            <select
-              value={minRiskFilter}
-              onChange={(e) => setMinRiskFilter(e.target.value as any)}
-              className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-emerald-500"
-            >
-              <option value="ALL">Send to All Subscribers (All Risk Levels)</option>
-              <option value="MODERATE">Moderate Risk or Higher (&gt;= 30 Score)</option>
-              <option value="HIGH">High Risk or Higher (&gt;= 60 Score)</option>
-              <option value="EXTREME">Extreme Risk Only (&gt;= 80 Score)</option>
-            </select>
-          </div>
-        </div>
-
-        {/* Progress Bar (Visible during broadcast) */}
-        {broadcastProgress > 0 && (
-          <div className="space-y-1.5 pt-2">
-            <div className="flex justify-between text-[11px] font-mono text-slate-400">
-              <span>Broadcasting live weather & precautions to subscribers...</span>
-              <span>{broadcastProgress}%</span>
-            </div>
-            <div className="w-full bg-slate-900 rounded-full h-2 overflow-hidden border border-slate-800">
-              <div
-                className="bg-emerald-500 h-2 transition-all duration-300 rounded-full"
-                style={{ width: `${broadcastProgress}%` }}
-              />
+        {lastFailure && (
+          <div className="p-2.5 bg-rose-950/40 rounded-xl border border-rose-900/60 text-xs font-mono text-rose-300 flex items-start gap-2">
+            <AlertTriangle className="w-4 h-4 shrink-0 text-rose-400 mt-0.5" />
+            <div>
+              <span className="font-bold">Last Provider / Weather Failure:</span>{' '}
+              <span>{lastFailure.error_message || 'Delivery rejected'}</span>
             </div>
           </div>
         )}
 
-        {/* Execute Button */}
-        <div className="flex items-center justify-between pt-2">
-          <div className="text-[11px] font-mono text-slate-500">
-            {lastBroadcastTime && `Last dispatched at: ${lastBroadcastTime}`}
-          </div>
-
-          <button
-            onClick={handleExecuteBroadcast}
-            disabled={isBroadcasting || recipients.length === 0}
-            className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold font-mono rounded-xl transition flex items-center gap-2 shadow-lg shadow-emerald-950/60 disabled:opacity-50"
-          >
-            {isBroadcasting ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                <span>Broadcasting Live Telemetry...</span>
-              </>
-            ) : (
-              <>
-                <Send className="w-4 h-4" />
-                <span>
-                  {selectedRecipient === 'ALL'
-                    ? `Broadcast Real-Time Live Weather & Precautions (${recipients.length} Users)`
-                    : `Dispatch Real-Time Alert to ${selectedRecipient}`}
-                </span>
-              </>
-            )}
-          </button>
+        <div className="text-[11px] text-slate-500 italic">
+          * Scheduled hourly; execution timing depends on the deployed Vercel plan.
         </div>
       </div>
 
+      {/* Tabs Navigation */}
+      <div className="flex border-b border-slate-800 gap-2 relative z-10">
+        <button
+          onClick={() => { setActiveTab('TEST'); setStatusMessage(null); }}
+          className={`px-4 py-2 text-xs font-mono font-bold rounded-t-xl transition border-t border-x ${
+            activeTab === 'TEST'
+              ? 'bg-slate-950 text-emerald-400 border-slate-800 border-b-transparent'
+              : 'text-slate-400 hover:text-white border-transparent'
+          }`}
+        >
+          1. Send Test Report
+        </button>
+
+        <button
+          onClick={() => { setActiveTab('MANUAL'); setStatusMessage(null); }}
+          className={`px-4 py-2 text-xs font-mono font-bold rounded-t-xl transition border-t border-x ${
+            activeTab === 'MANUAL'
+              ? 'bg-slate-950 text-sky-400 border-slate-800 border-b-transparent'
+              : 'text-slate-400 hover:text-white border-transparent'
+          }`}
+        >
+          2. Send Manual Report (Admin)
+        </button>
+
+        <button
+          onClick={() => { setActiveTab('CRON'); setStatusMessage(null); }}
+          className={`px-4 py-2 text-xs font-mono font-bold rounded-t-xl transition border-t border-x ${
+            activeTab === 'CRON'
+              ? 'bg-slate-950 text-amber-400 border-slate-800 border-b-transparent'
+              : 'text-slate-400 hover:text-white border-transparent'
+          }`}
+        >
+          3. Hourly Automatic Dispatch
+        </button>
+      </div>
+
+      {/* Tab 1: SEND TEST REPORT */}
+      {activeTab === 'TEST' && (
+        <div className="bg-slate-950/80 p-5 rounded-2xl border border-slate-800 space-y-4 relative z-10">
+          <div>
+            <h3 className="text-xs font-bold font-mono text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
+              <Sparkles className="w-4 h-4" />
+              <span>Send Personal Test Heat-Risk Report</span>
+            </h3>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Dispatches a point-in-time environmental advisory directly to your authenticated email (
+              <span className="text-white font-mono">{firebaseUser?.email || 'Sign in required'}</span>).
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-mono text-slate-400 mb-1">Custom Subject (Optional)</label>
+            <input
+              type="text"
+              value={customSubject}
+              onChange={(e) => setCustomSubject(e.target.value)}
+              placeholder="e.g. HeatShield AI — Test Thermal Advisory"
+              className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 font-mono focus:outline-none focus:border-emerald-500"
+            />
+          </div>
+
+          <div className="flex items-center justify-between pt-2">
+            <span className="text-[11px] font-mono text-slate-500">
+              Uses live Open-Meteo observations & physics-context dual risk engine
+            </span>
+
+            <button
+              onClick={handleSendTestReport}
+              disabled={isProcessing || !firebaseUser}
+              className="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold font-mono rounded-xl transition flex items-center gap-2 shadow-lg shadow-emerald-950/60 disabled:opacity-50"
+            >
+              {isProcessing ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Processing Test Report...</span>
+                </>
+              ) : (
+                <>
+                  <Send className="w-4 h-4" />
+                  <span>Send Test Report To Me</span>
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Tab 2: SEND MANUAL REPORT (Admin) */}
+      {activeTab === 'MANUAL' && (
+        <div className="bg-slate-950/80 p-5 rounded-2xl border border-slate-800 space-y-4 relative z-10">
+          <div>
+            <h3 className="text-xs font-bold font-mono text-sky-400 uppercase tracking-wider flex items-center gap-1.5">
+              <ShieldCheck className="w-4 h-4" />
+              <span>Admin Manual Subscriber Dispatch</span>
+            </h3>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Dispatches an immediate advisory to a selected registered subscriber using{' '}
+              <strong className="text-slate-200">THEIR saved location and weather</strong>.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[11px] font-mono text-slate-400 mb-1">Target Subscriber</label>
+              <select
+                value={selectedRecipientEmail}
+                onChange={(e) => setSelectedRecipientEmail(e.target.value)}
+                className="w-full bg-slate-900 border border-slate-700 text-xs rounded-xl px-3 py-2 text-white font-mono focus:outline-none focus:border-sky-500"
+              >
+                {recipients.length === 0 ? (
+                  <option value="">No registered subscribers found</option>
+                ) : (
+                  recipients.map((r) => (
+                    <option key={r.email} value={r.email}>
+                      {r.display_name || r.email} ({r.location_name})
+                    </option>
+                  ))
+                )}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-mono text-slate-400 mb-1">Minimum Risk Filter</label>
+              <select
+                value={minRiskFilter}
+                onChange={(e) => setMinRiskFilter(e.target.value as any)}
+                className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-sky-500"
+              >
+                <option value="ALL">Send Regardless of Risk Level</option>
+                <option value="MODERATE">Moderate Risk or Higher (&gt;= 36 Score)</option>
+                <option value="HIGH">High Risk or Higher (&gt;= 61 Score)</option>
+                <option value="EXTREME">Extreme Risk Only (&gt;= 81 Score)</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between pt-2">
+            <span className="text-[11px] font-mono text-slate-500">
+              60s cooldown enforced to prevent accidental duplicate dispatches
+            </span>
+
+            <button
+              onClick={handleSendManualReport}
+              disabled={isProcessing || recipients.length === 0}
+              className="px-5 py-2 bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold font-mono rounded-xl transition flex items-center gap-2 shadow-lg shadow-sky-950/60 disabled:opacity-50"
+            >
+              {isProcessing ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Dispatching Report...</span>
+                </>
+              ) : (
+                <>
+                  <Send className="w-4 h-4" />
+                  <span>Dispatch Report to Subscriber</span>
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Tab 3: HOURLY AUTOMATIC DISPATCH */}
+      {activeTab === 'CRON' && (
+        <div className="bg-slate-950/80 p-5 rounded-2xl border border-slate-800 space-y-4 relative z-10">
+          <div>
+            <h3 className="text-xs font-bold font-mono text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+              <Calendar className="w-4 h-4" />
+              <span>Hourly Automated Dispatch Engine</span>
+            </h3>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Production Vercel Cron endpoint:{' '}
+              <code className="text-sky-400 bg-slate-900 px-1.5 py-0.5 rounded">
+                /api/cron/heat-risk-dispatch
+              </code>{' '}
+              with hourly schedule <code className="text-emerald-400">0 * * * *</code>.
+            </p>
+          </div>
+
+          <div className="p-3 bg-slate-900 rounded-xl border border-slate-800 text-xs font-mono space-y-1.5 text-slate-300">
+            <div className="flex items-center justify-between">
+              <span>Database Idempotency:</span>
+              <span className="text-emerald-400 font-bold">ACTIVE (dispatch_key UNIQUE)</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span>Duplicate Protection:</span>
+              <span className="text-emerald-400 font-bold">1 Email / Hour / User Window</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span>Weather Source:</span>
+              <span className="text-sky-400 font-bold">Live Open-Meteo per user location</span>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between pt-2">
+            <span className="text-[11px] font-mono text-slate-500">
+              Triggers the complete hourly batch pipeline on demand
+            </span>
+
+            <button
+              onClick={handleTriggerHourlyCron}
+              disabled={isProcessing}
+              className="px-5 py-2 bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold font-mono rounded-xl transition flex items-center gap-2 shadow-lg shadow-amber-950/60 disabled:opacity-50"
+            >
+              {isProcessing ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Executing Hourly Cycle...</span>
+                </>
+              ) : (
+                <>
+                  <Play className="w-4 h-4" />
+                  <span>Execute Hourly Dispatch Cycle Now</span>
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Progress Bar */}
+      {progress > 0 && (
+        <div className="w-full bg-slate-900 rounded-full h-2 overflow-hidden border border-slate-800">
+          <div
+            className="bg-emerald-500 h-2 transition-all duration-300 rounded-full"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+      )}
+
       {/* Status Feedback */}
       {statusMessage && (
-        <div className={`p-3.5 rounded-xl border text-xs flex items-center gap-2 font-mono ${
-          statusMessage.startsWith('✓')
-            ? 'bg-emerald-950/70 border-emerald-800 text-emerald-200'
-            : 'bg-rose-950/70 border-rose-800 text-rose-200'
-        }`}>
-          {statusMessage.startsWith('✓') ? (
+        <div
+          className={`p-3.5 rounded-xl border text-xs flex items-center gap-2 font-mono ${
+            statusType === 'success'
+              ? 'bg-emerald-950/70 border-emerald-800 text-emerald-200'
+              : 'bg-rose-950/70 border-rose-800 text-rose-200'
+          }`}
+        >
+          {statusType === 'success' ? (
             <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
           ) : (
             <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
@@ -299,14 +595,14 @@ export const RealtimeBroadcastCommandCenter: React.FC = () => {
         </div>
       )}
 
-      {/* Broadcast Results Matrix */}
-      {broadcastResults.length > 0 && (
-        <div className="space-y-2">
+      {/* Latest Dispatch Results Summary */}
+      {results.length > 0 && (
+        <div className="space-y-2 pt-2">
           <h4 className="text-xs font-bold font-mono text-slate-300 uppercase tracking-wider">
-            Latest Broadcast Transmission Summary
+            Latest Dispatch Telemetry
           </h4>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 max-h-60 overflow-y-auto">
-            {broadcastResults.map((res, i) => (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 max-h-56 overflow-y-auto">
+            {results.map((res, i) => (
               <div
                 key={i}
                 className="bg-slate-950 p-3 rounded-xl border border-slate-800 space-y-1.5 text-xs font-mono"
@@ -318,27 +614,30 @@ export const RealtimeBroadcastCommandCenter: React.FC = () => {
                       res.success ? 'bg-emerald-950 text-emerald-300' : 'bg-rose-950 text-rose-300'
                     }`}
                   >
-                    {res.success ? 'SENT' : 'FAILED'}
+                    {res.success ? 'ACCEPTED' : 'FAILED'}
                   </span>
                 </div>
 
                 <div className="text-[11px] text-slate-400 flex items-center justify-between">
                   <span>{res.locationName}</span>
-                  <span className="text-emerald-400 font-bold">{res.temperature}°C</span>
+                  {res.riskScore !== undefined && (
+                    <span className="text-emerald-400 font-bold">Score: {res.riskScore}/100</span>
+                  )}
                 </div>
 
-                <div className="text-[10px] text-slate-500 flex items-center justify-between border-t border-slate-900 pt-1">
-                  <span>Risk: {res.riskLevel || 'EVALUATED'} ({res.riskScore}/100)</span>
-                  <span>{res.precautionsCount || 7} Precautions</span>
-                </div>
+                {res.error && (
+                  <div className="text-[10px] text-rose-400 border-t border-slate-900 pt-1">
+                    {res.error}
+                  </div>
+                )}
               </div>
             ))}
           </div>
         </div>
       )}
 
-      {/* Registered Subscriber Directory */}
-      <div className="space-y-3">
+      {/* Active Subscriber Directory */}
+      <div className="space-y-3 pt-2">
         <div className="flex items-center justify-between">
           <h4 className="text-xs font-bold font-mono text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
             <Users className="w-3.5 h-3.5 text-sky-400" />
@@ -347,25 +646,31 @@ export const RealtimeBroadcastCommandCenter: React.FC = () => {
           <span className="text-[10px] font-mono text-slate-500">Live Auto-Sync</span>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2.5">
-          {recipients.map((rec) => (
-            <div
-              key={rec.id}
-              className="p-3 bg-slate-950/60 rounded-xl border border-slate-800 hover:border-slate-700 transition space-y-1 text-xs"
-            >
-              <div className="font-bold text-white font-mono text-[11px] truncate">
-                {rec.display_name || rec.email}
+        {recipients.length === 0 ? (
+          <div className="p-4 bg-slate-950/60 rounded-xl border border-slate-800 text-xs text-slate-500 font-mono text-center">
+            No active subscribers registered yet. Users can opt-in from their Profile page.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2.5">
+            {recipients.map((rec) => (
+              <div
+                key={rec.id}
+                className="p-3 bg-slate-950/60 rounded-xl border border-slate-800 hover:border-slate-700 transition space-y-1 text-xs"
+              >
+                <div className="font-bold text-white font-mono text-[11px] truncate">
+                  {rec.display_name || rec.email}
+                </div>
+                <div className="text-[10px] text-slate-400 font-mono truncate">{rec.email}</div>
+                <div className="flex items-center justify-between text-[10px] font-mono text-slate-500 pt-1 border-t border-slate-900">
+                  <span>{rec.location_name}</span>
+                  <span className={rec.hourly_heat_alerts_enabled ? 'text-emerald-400' : 'text-slate-500'}>
+                    {rec.hourly_heat_alerts_enabled ? 'HOURLY ON' : 'HOURLY OFF'}
+                  </span>
+                </div>
               </div>
-              <div className="text-[10px] text-slate-400 font-mono truncate">{rec.email}</div>
-              <div className="flex items-center justify-between text-[10px] font-mono text-slate-500 pt-1 border-t border-slate-900">
-                <span>{rec.location_name}</span>
-                <span className="text-emerald-400">
-                  {rec.location_source === 'LIVE_GPS' ? 'GPS' : 'SAVED'}
-                </span>
-              </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

@@ -1,0 +1,21 @@
+{
+  "model_name": "Gradient Boosting",
+  "model_version": "v1.3.0-prod",
+  "version": "v1.3.0-prod",
+  "trained_at": "2026-09-18T04:29:42.247691+00:00",
+  "algorithm": "sklearn.ensemble.GradientBoostingClassifier",
+  "hyperparameters": {
+    "n_estimators": 100,
+    "learning_rate": 0.1,
+    "max_depth": 5,
+    "random_state": 42
+  },
+  "test_metrics": {
+    "accuracy": 0.896,
+    "macro_f1": 0.8976,
+    "roc_auc": 0.9858
+  },
+  "class_imbalance_handling": "Stratified split with macro-averaged cost sensitivity",
+  "scientific_scope": "Occupational and environmental decision-support system. Non-clinical.",
+  "limitation_disclosure": "Trained exclusively on synthetic meteorological development data (N=5000). This model provides decision-support estimates only and must NOT be used for clinical diagnosis, medical prognosis, or safety-critical decisions without validation against real-world epidemiological heat stress data. All inference outputs carry inherent uncertainty. Validate predictions with domain experts before operational deployment."
+}

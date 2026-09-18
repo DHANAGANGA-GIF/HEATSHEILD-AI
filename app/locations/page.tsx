@@ -145,11 +145,11 @@ export default function LocationsPage() {
                       <div className="flex items-center justify-between pt-2 border-t border-slate-200/60 font-mono text-xs">
                         <div>
                           <span className="text-slate-500">Temp: </span>
-                          <span className="font-bold text-slate-900">{w.temperature}Â°C</span>
+                          <span className="font-bold text-slate-900">{w.temperature}°C</span>
                         </div>
                         <div>
                           <span className="text-slate-500">Feels: </span>
-                          <span className="font-bold text-amber-700">{w.apparent_temperature}Â°C</span>
+                          <span className="font-bold text-amber-700">{w.apparent_temperature}°C</span>
                         </div>
                         <div>
                           <span className="text-slate-500">Humidity: </span>

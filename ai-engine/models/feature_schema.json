@@ -1,0 +1,96 @@
+{
+  "features": [
+    {
+      "name": "temperature",
+      "type": "float",
+      "unit": "celsius",
+      "range": [
+        -20.0,
+        60.0
+      ]
+    },
+    {
+      "name": "relative_humidity",
+      "type": "float",
+      "unit": "percent",
+      "range": [
+        0.0,
+        100.0
+      ]
+    },
+    {
+      "name": "wind_speed",
+      "type": "float",
+      "unit": "km/h",
+      "range": [
+        0.0,
+        250.0
+      ]
+    },
+    {
+      "name": "apparent_temperature",
+      "type": "float",
+      "unit": "celsius",
+      "range": [
+        -25.0,
+        75.0
+      ]
+    },
+    {
+      "name": "activity_level",
+      "type": "int",
+      "encoding": {
+        "1": "low",
+        "2": "moderate",
+        "3": "high"
+      }
+    },
+    {
+      "name": "exposure_duration",
+      "type": "int",
+      "encoding": {
+        "1": "short",
+        "2": "moderate",
+        "3": "long"
+      }
+    },
+    {
+      "name": "cooling_access",
+      "type": "int",
+      "encoding": {
+        "1": "good",
+        "2": "limited",
+        "3": "none"
+      }
+    },
+    {
+      "name": "age_group",
+      "type": "int",
+      "encoding": {
+        "1": "adult",
+        "2": "child",
+        "3": "older_adult"
+      }
+    }
+  ],
+  "target": {
+    "name": "risk_class",
+    "type": "int",
+    "classes": {
+      "0": "LOW",
+      "1": "MODERATE",
+      "2": "HIGH",
+      "3": "EXTREME"
+    }
+  },
+  "global_feature_importances": {
+    "apparent_temperature": 0.6152,
+    "activity_level": 0.1212,
+    "cooling_access": 0.0992,
+    "exposure_duration": 0.0769,
+    "temperature": 0.0273,
+    "age_group": 0.0257,
+    "relative_humidity": 0.0189,
+    "wind_speed": 0.0156
+  }
+}

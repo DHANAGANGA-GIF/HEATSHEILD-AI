@@ -197,7 +197,7 @@ export default function LandingPage() {
 
             <div className="space-y-2 text-xs font-mono">
               <div className="flex justify-between text-slate-400">
-                <span>Apparent Temperature (38.5Â°C)</span>
+                <span>Apparent Temperature (38.5°C)</span>
                 <span className="text-emerald-400 font-bold">42% impact</span>
               </div>
               <div className="flex justify-between text-slate-400">

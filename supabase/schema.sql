@@ -14,6 +14,8 @@ CREATE TABLE IF NOT EXISTS public.profiles (
     preferred_language TEXT CHECK (preferred_language IN ('en', 'ta', 'hi')) DEFAULT 'en',
     role TEXT CHECK (role IN ('user', 'school', 'worksite', 'ngo', 'admin')) DEFAULT 'user',
     organization_id UUID,
+    hourly_heat_alerts_enabled BOOLEAN DEFAULT FALSE,
+    email_verified BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -108,6 +110,26 @@ CREATE TABLE IF NOT EXISTS public.audit_logs (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- 9. HEAT RISK DISPATCH LOG TABLE (Hourly Idempotent Notification Log)
+CREATE TABLE IF NOT EXISTS public.heat_risk_dispatch_log (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
+    recipient_email TEXT NOT NULL,
+    location TEXT NOT NULL,
+    latitude DOUBLE PRECISION,
+    longitude DOUBLE PRECISION,
+    weather_timestamp TIMESTAMP WITH TIME ZONE,
+    risk_score INT CHECK (risk_score BETWEEN 0 AND 100),
+    risk_level TEXT CHECK (risk_level IN ('LOW', 'MODERATE', 'HIGH', 'EXTREME')),
+    model_version TEXT DEFAULT 'HeatShield-ML v1.3.0 (Physics-Context Dual Engine)',
+    dispatch_key TEXT UNIQUE NOT NULL,
+    provider_message_id TEXT,
+    status TEXT CHECK (status IN ('SENT', 'ACCEPTED', 'DELIVERED', 'FAILED', 'SKIPPED')) NOT NULL,
+    error_message TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    sent_at TIMESTAMP WITH TIME ZONE
+);
+
 -- 2.1 ORGANIZATION MEMBERS TABLE
 CREATE TABLE IF NOT EXISTS public.organization_members (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -124,29 +146,92 @@ CREATE INDEX IF NOT EXISTS idx_risk_assessments_user ON public.risk_assessments 
 CREATE INDEX IF NOT EXISTS idx_saved_locations_user ON public.saved_locations (user_id);
 CREATE INDEX IF NOT EXISTS idx_org_members_user ON public.organization_members (user_id);
 CREATE INDEX IF NOT EXISTS idx_org_members_org ON public.organization_members (organization_id);
+CREATE INDEX IF NOT EXISTS idx_heat_risk_dispatch_key ON public.heat_risk_dispatch_log (dispatch_key);
+CREATE INDEX IF NOT EXISTS idx_heat_risk_dispatch_email ON public.heat_risk_dispatch_log (recipient_email);
 
--- ROW LEVEL SECURITY (RLS) POLICIES
+-- ROW LEVEL SECURITY (RLS) POLICIES — COMPREHENSIVE LEAST-PRIVILEGE COVERAGE
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.incidents ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.organizations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.organization_members ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.saved_locations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.weather_observations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.risk_assessments ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.incidents ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.audit_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.heat_risk_dispatch_log ENABLE ROW LEVEL SECURITY;
 
--- INTENTIONAL DESIGN: Community incident reports are publicly readable for situational awareness.
--- user_id is a UUID (not email/name). Email and profile data are never exposed through this table.
--- Modification (INSERT/UPDATE/DELETE) remains strictly restricted to the owning user.
-CREATE POLICY "Public read community incidents" ON public.incidents FOR SELECT USING (true);
-CREATE POLICY "Users insert own incidents" ON public.incidents FOR INSERT WITH CHECK (auth.uid() = user_id OR user_id IS NULL);
-CREATE POLICY "Users update own incidents" ON public.incidents FOR UPDATE USING (auth.uid() = user_id);
-CREATE POLICY "Users delete own incidents" ON public.incidents FOR DELETE USING (auth.uid() = user_id);
+-- 1. Profiles Table Policies (Private user data isolation)
+CREATE POLICY "Users read own profile" ON public.profiles
+    FOR SELECT USING (auth.uid() = id);
+CREATE POLICY "Users insert own profile" ON public.profiles
+    FOR INSERT WITH CHECK (auth.uid() = id);
+CREATE POLICY "Users update own profile" ON public.profiles
+    FOR UPDATE USING (auth.uid() = id);
 
--- Organization Isolation Policies
-CREATE POLICY "Members read own organization" ON public.organizations FOR SELECT
-    USING (EXISTS (SELECT 1 FROM public.organization_members WHERE organization_id = public.organizations.id AND user_id = auth.uid()));
+-- 2. Organization Isolation Policies
+CREATE POLICY "Members read own organization" ON public.organizations
+    FOR SELECT USING (EXISTS (SELECT 1 FROM public.organization_members WHERE organization_id = public.organizations.id AND user_id = auth.uid()));
+CREATE POLICY "Org Admins manage own organization" ON public.organizations
+    FOR ALL USING (EXISTS (SELECT 1 FROM public.organization_members WHERE organization_id = public.organizations.id AND user_id = auth.uid() AND role IN ('admin', 'organization_admin')));
+CREATE POLICY "Members read organization members" ON public.organization_members
+    FOR SELECT USING (organization_id IN (SELECT organization_id FROM public.organization_members WHERE user_id = auth.uid()));
 
-CREATE POLICY "Org Admins manage own organization" ON public.organizations FOR ALL
-    USING (EXISTS (SELECT 1 FROM public.organization_members WHERE organization_id = public.organizations.id AND user_id = auth.uid() AND role IN ('admin', 'organization_admin')));
+-- 3. Saved Locations Policies (User data isolation)
+CREATE POLICY "Users read own locations" ON public.saved_locations
+    FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users insert own locations" ON public.saved_locations
+    FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users update own locations" ON public.saved_locations
+    FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "Users delete own locations" ON public.saved_locations
+    FOR DELETE USING (auth.uid() = user_id);
 
-CREATE POLICY "Members read organization members" ON public.organization_members FOR SELECT
-    USING (organization_id IN (SELECT organization_id FROM public.organization_members WHERE user_id = auth.uid()));
+-- 4. Weather Observations Policies (Public read for meteorological data, authorized write)
+CREATE POLICY "Public read weather observations" ON public.weather_observations
+    FOR SELECT USING (true);
+CREATE POLICY "Authenticated insert weather observations" ON public.weather_observations
+    FOR INSERT WITH CHECK (auth.role() IN ('authenticated', 'service_role'));
+
+-- 5. Risk Assessments Policies (User data isolation)
+CREATE POLICY "Users read own assessments" ON public.risk_assessments
+    FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users insert own assessments" ON public.risk_assessments
+    FOR INSERT WITH CHECK (auth.uid() = user_id OR user_id IS NULL);
+
+-- 6. Incidents / Community Reports Policies
+-- Public read for collective situational awareness; modification strictly restricted to report owner
+CREATE POLICY "Public read community incidents" ON public.incidents
+    FOR SELECT USING (true);
+CREATE POLICY "Users insert own incidents" ON public.incidents
+    FOR INSERT WITH CHECK (auth.uid() = user_id OR user_id IS NULL);
+CREATE POLICY "Users update own incidents" ON public.incidents
+    FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "Users delete own incidents" ON public.incidents
+    FOR DELETE USING (auth.uid() = user_id);
+
+-- 7. Notifications Policies (Private alerts)
+CREATE POLICY "Users read own notifications" ON public.notifications
+    FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users update own notifications" ON public.notifications
+    FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "Users delete own notifications" ON public.notifications
+    FOR DELETE USING (auth.uid() = user_id);
+
+-- 8. Audit Logs Policies (User can read own, admins read org logs)
+CREATE POLICY "Users read own audit logs" ON public.audit_logs
+    FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Admins read organization audit logs" ON public.audit_logs
+    FOR SELECT USING (EXISTS (SELECT 1 FROM public.profiles WHERE profiles.id = auth.uid() AND profiles.role IN ('admin', 'super_admin')));
+CREATE POLICY "Service and auth insert audit logs" ON public.audit_logs
+    FOR INSERT WITH CHECK (auth.role() IN ('authenticated', 'service_role') OR user_id = auth.uid());
+
+-- 9. Heat Risk Dispatch Log Policies (Idempotent delivery audit log)
+CREATE POLICY "Users read own dispatch logs" ON public.heat_risk_dispatch_log
+    FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Admins read all dispatch logs" ON public.heat_risk_dispatch_log
+    FOR SELECT USING (EXISTS (SELECT 1 FROM public.profiles WHERE profiles.id = auth.uid() AND profiles.role IN ('admin', 'super_admin')));
+CREATE POLICY "Service and auth insert dispatch logs" ON public.heat_risk_dispatch_log
+    FOR INSERT WITH CHECK (auth.role() IN ('authenticated', 'service_role') OR auth.uid() = user_id);
+
+

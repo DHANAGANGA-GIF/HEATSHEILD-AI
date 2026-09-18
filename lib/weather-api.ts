@@ -1,4 +1,6 @@
 import { LocationData, WeatherData, HourlyForecast } from './types';
+import { validateCoordinates, validateWeatherMetrics } from './input-validator';
+import { logger } from './logger';
 
 const CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes cache
 const WEATHER_CACHE_KEY = 'heatshield_weather_cache_';
@@ -12,13 +14,41 @@ export const DEFAULT_LOCATIONS: LocationData[] = [
   { name: 'London', locality: 'England, UK', latitude: 51.5074, longitude: -0.1278, country: 'United Kingdom' },
 ];
 
+async function fetchWithRetry(url: string, timeoutMs: number = 6000, retries: number = 1): Promise<Response> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const response = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
+      if (response.ok) return response;
+      if (response.status >= 500 && attempt < retries) {
+        await new Promise((res) => setTimeout(res, 800 * Math.pow(2, attempt)));
+        continue;
+      }
+      return response;
+    } catch (err) {
+      lastError = err;
+      if (attempt < retries) {
+        await new Promise((res) => setTimeout(res, 800 * Math.pow(2, attempt)));
+      }
+    }
+  }
+  throw lastError || new Error(`Network fetch failed for ${url}`);
+}
+
 export async function fetchWeatherData(
   lat: number,
   lon: number,
   locationName: string = 'Current Location',
   skipCache: boolean = false
 ): Promise<WeatherData> {
-  const cacheKey = `${WEATHER_CACHE_KEY}${lat.toFixed(2)}_${lon.toFixed(2)}`;
+  const startTime = Date.now();
+
+  // Validate coordinates and guard against Null Island or invalid inputs
+  const coordCheck = validateCoordinates(lat, lon);
+  const safeLat = coordCheck.latitude;
+  const safeLon = coordCheck.longitude;
+
+  const cacheKey = `${WEATHER_CACHE_KEY}${safeLat.toFixed(2)}_${safeLon.toFixed(2)}`;
 
   // Try cache first (within 15-min TTL) unless skipCache is requested
   if (!skipCache && typeof window !== 'undefined') {
@@ -30,6 +60,7 @@ export async function fetchWeatherData(
         if (Date.now() - cachedObj.timestamp < CACHE_TTL_MS) {
           const ageMs = Date.now() - cachedObj.timestamp;
           const ageMins = Math.floor(ageMs / 60000);
+          logger.trackWeatherFetch('CACHED', Date.now() - startTime, true);
           return {
             ...cachedObj.data,
             is_cached: true,  // Served from localStorage cache (not live API)
@@ -43,9 +74,9 @@ export async function fetchWeatherData(
   }
 
   try {
-    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,surface_pressure,wind_speed_10m&hourly=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m&forecast_days=2&timezone=auto`;
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${safeLat}&longitude=${safeLon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,surface_pressure,wind_speed_10m&hourly=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m&forecast_days=2&timezone=auto`;
 
-    const response = await fetch(url, { signal: AbortSignal.timeout(6000) });
+    const response = await fetchWithRetry(url, 6000, 1);
     if (!response.ok) {
       throw new Error(`Open-Meteo API returned status ${response.status}`);
     }
@@ -72,22 +103,26 @@ export async function fetchWeatherData(
       });
     }
 
-    const weatherObj: WeatherData = {
-      temperature: Math.round((current.temperature_2m ?? 33) * 10) / 10,
-      relative_humidity: Math.round(current.relative_humidity_2m ?? 65),
-      apparent_temperature: Math.round((current.apparent_temperature ?? 37) * 10) / 10,
-      wind_speed: Math.round((current.wind_speed_10m ?? 14) * 10) / 10,
-      pressure: Math.round(current.surface_pressure ?? 1010),
-      weather_code: current.weather_code ?? 0,
+    const rawWeatherObj: Partial<WeatherData> = {
+      temperature: current.temperature_2m,
+      relative_humidity: current.relative_humidity_2m,
+      apparent_temperature: current.apparent_temperature,
+      wind_speed: current.wind_speed_10m,
+      pressure: current.surface_pressure,
+      weather_code: current.weather_code,
       timestamp: new Date().toISOString(),
       is_cached: false,
       location: {
         name: locationName,
-        latitude: lat,
-        longitude: lon,
+        latitude: safeLat,
+        longitude: safeLon,
       },
       hourly_forecast: hourlyForecasts,
     };
+
+    // Sanitize and validate metrics
+    const validated = validateWeatherMetrics(rawWeatherObj);
+    const weatherObj = validated.sanitized;
 
     if (typeof window !== 'undefined') {
       localStorage.setItem(
@@ -96,9 +131,11 @@ export async function fetchWeatherData(
       );
     }
 
+    logger.trackWeatherFetch('LIVE', Date.now() - startTime, true);
     return weatherObj;
   } catch (err) {
     console.warn('Weather API request failed, checking for stale cache or fallback', err);
+    logger.trackWeatherFetch('FALLBACK', Date.now() - startTime, false);
 
     // Check for stale cache if fetch fails
     if (typeof window !== 'undefined') {
@@ -131,8 +168,8 @@ export async function fetchWeatherData(
       cache_timestamp: 'Unavailable',
       location: {
         name: locationName,
-        latitude: lat,
-        longitude: lon,
+        latitude: safeLat,
+        longitude: safeLon,
       },
       hourly_forecast: generateFallbackHourly(34.5, 68),
     };

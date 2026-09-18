@@ -112,7 +112,7 @@ export default function ReportsPage() {
                 <tbody className="divide-y text-slate-800">
                   <tr>
                     <td className="p-2">Current Apparent Temperature</td>
-                    <td className="p-2">38.5Â°C</td>
+                    <td className="p-2">38.5°C</td>
                     <td className="p-2 text-emerald-700 font-bold">MONITORED</td>
                   </tr>
                   <tr>

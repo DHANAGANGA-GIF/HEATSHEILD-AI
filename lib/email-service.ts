@@ -1,6 +1,14 @@
 import { Resend } from 'resend';
 import { SmartAlert } from './types';
 
+export interface ContributingFactorItem {
+  name: string;
+  impact?: string;
+  description?: string;
+  direction?: 'escalating' | 'mitigating';
+  weight_percent?: number;
+}
+
 export interface SendEmailOptions {
   to: string;
   alert: SmartAlert;
@@ -15,12 +23,106 @@ export interface SendEmailOptions {
   dataQualityExplanation?: string;
   riskCalculatedAt?: string;
   trend?: 'increasing' | 'stable' | 'decreasing';
+  customSubject?: string;
+  contributingFactors?: ContributingFactorItem[];
+  modelVersion?: string;
+  replyTo?: string;
 }
+
+export type ResendErrorCode =
+  | 'EMAIL_DOMAIN_NOT_VERIFIED'
+  | 'INVALID_RECIPIENT'
+  | 'RATE_LIMITED'
+  | 'PROVIDER_ERROR'
+  | 'NETWORK_ERROR'
+  | 'INVALID_CONFIGURATION';
 
 export interface SendEmailResult {
   success: boolean;
   id?: string;
   error?: string;
+  errorCode?: ResendErrorCode;
+  rawError?: string;
+}
+
+/**
+ * Classifies Resend and network delivery errors into structured, actionable categories.
+ * Prevents opaque "Unknown error" strings in the UI and server logs.
+ */
+export function classifyResendError(error: any): { errorCode: ResendErrorCode; message: string } {
+  const errMsg = typeof error === 'string' ? error : error?.message || '';
+  const errCode = error?.code || error?.statusCode || error?.name || '';
+  const lower = `${errMsg} ${errCode}`.toLowerCase();
+
+  if (
+    lower.includes('only send testing emails to your own email address') ||
+    lower.includes('resend.dev') ||
+    lower.includes('not verified') ||
+    lower.includes('unverified') ||
+    lower.includes('domain_not_found') ||
+    lower.includes('validation_error')
+  ) {
+    return {
+      errorCode: 'EMAIL_DOMAIN_NOT_VERIFIED',
+      message:
+        'EMAIL_DOMAIN_NOT_VERIFIED: Resend domain restriction active. The sender domain is either unverified or in sandbox testing mode (onboarding@resend.dev). To deliver to arbitrary subscribers, configure and verify your custom domain in Resend and set RESEND_FROM_EMAIL.',
+    };
+  }
+
+  if (
+    lower.includes('invalid email') ||
+    lower.includes('invalid_parameter') ||
+    lower.includes('invalid to') ||
+    lower.includes('rejected') ||
+    lower.includes('recipient')
+  ) {
+    return {
+      errorCode: 'INVALID_RECIPIENT',
+      message: 'INVALID_RECIPIENT: The recipient email address is invalid or was rejected by the email provider.',
+    };
+  }
+
+  if (
+    lower.includes('rate_limit') ||
+    lower.includes('too many requests') ||
+    lower.includes('429')
+  ) {
+    return {
+      errorCode: 'RATE_LIMITED',
+      message: 'RATE_LIMITED: Resend rate limit reached. Please wait before triggering further email dispatches.',
+    };
+  }
+
+  if (
+    lower.includes('missing_api_key') ||
+    lower.includes('invalid_api_key') ||
+    lower.includes('api key') ||
+    lower.includes('unauthorized') ||
+    lower.includes('401')
+  ) {
+    return {
+      errorCode: 'INVALID_CONFIGURATION',
+      message: 'INVALID_CONFIGURATION: RESEND_API_KEY is missing or invalid in server environment configuration.',
+    };
+  }
+
+  if (
+    lower.includes('fetch failed') ||
+    lower.includes('network') ||
+    lower.includes('econnrefused') ||
+    lower.includes('etimedout') ||
+    lower.includes('socket')
+  ) {
+    return {
+      errorCode: 'NETWORK_ERROR',
+      message: 'NETWORK_ERROR: Network connectivity failed while contacting Resend API.',
+    };
+  }
+
+  return {
+    errorCode: 'PROVIDER_ERROR',
+    message: `PROVIDER_ERROR: ${errMsg || 'Resend provider rejected delivery.'}`,
+  };
 }
 
 export interface EmailServiceStatus {
@@ -49,7 +151,7 @@ const CACHE_TTL_MS = 60 * 1000; // 1 minute
  */
 export async function getEmailServiceStatus(): Promise<EmailServiceStatus> {
   const apiKey = process.env.RESEND_API_KEY;
-  const fromAddress = process.env.EMAIL_FROM;
+  const fromAddress = process.env.RESEND_FROM_EMAIL || process.env.EMAIL_FROM;
   const hasKey = Boolean(apiKey && apiKey.startsWith('re_') && !apiKey.includes('your_'));
 
   if (!hasKey) {
@@ -194,13 +296,15 @@ export async function getEmailServiceStatus(): Promise<EmailServiceStatus> {
  */
 export async function sendAlertEmail(options: SendEmailOptions): Promise<SendEmailResult> {
   const apiKey = process.env.RESEND_API_KEY;
-  const fromAddress = process.env.EMAIL_FROM || 'HeatShield AI Alerts <onboarding@resend.dev>';
+  const fromAddress = process.env.RESEND_FROM_EMAIL || process.env.EMAIL_FROM || 'HeatShield AI Alerts <onboarding@resend.dev>';
+  const replyToAddress = options.replyTo || process.env.RESEND_REPLY_TO;
   const isProduction = process.env.NODE_ENV === 'production' || process.env.VERCEL_ENV === 'production';
 
   if (!fromAddress || !fromAddress.includes('@')) {
     return {
       success: false,
-      error: 'Email service is misconfigured. EMAIL_FROM must be a valid email address.',
+      error: 'INVALID_CONFIGURATION: Email service is misconfigured. Set RESEND_FROM_EMAIL or EMAIL_FROM to a valid email address.',
+      errorCode: 'INVALID_CONFIGURATION',
     };
   }
 
@@ -218,30 +322,36 @@ export async function sendAlertEmail(options: SendEmailOptions): Promise<SendEma
     dataQualityExplanation,
     riskCalculatedAt,
     trend,
+    customSubject,
+    contributingFactors,
+    modelVersion,
   } = options;
 
-  const loc = locationName || alert.location_name || 'Location Unavailable';
+  const loc = locationName || alert.location_name || 'Current Monitored Location';
   const alertTime = alert.timestamp ? new Date(alert.timestamp).toUTCString() : new Date().toUTCString();
-  const isCritical = alert.priority === 'CRITICAL' || alert.trigger_data.risk_level === 'EXTREME';
-  const severityStr = alert.priority || alert.trigger_data.risk_level || 'ALERT';
-  const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const riskLevel = alert.trigger_data?.risk_level || 'EVALUATED';
+  const riskScore = alert.trigger_data?.risk_score ?? 0;
+  const isCritical = alert.priority === 'CRITICAL' || riskLevel === 'EXTREME';
+  const effectiveModelVersion = modelVersion || 'HeatShield-ML v1.3.0 (Physics-Context Dual Engine)';
 
-  // Subject format per specification: HeatShield AI | [SEVERITY] | [REAL LOCATION] | [EVENT TIME]
-  const subject = `HeatShield AI | [${severityStr}] | [${loc}] | [${timeStr}]`;
+  // Subject line matching specification:
+  // e.g., "HeatShield AI — High Heat Risk Advisory for Kakinada"
+  const subject =
+    customSubject ||
+    `HeatShield AI — ${riskLevel.charAt(0) + riskLevel.slice(1).toLowerCase()} Heat Risk Advisory for ${loc}`;
 
   const defaultPrecautions = [
-    'Drink 250-500ml of clean water every hour during outdoor exposure.',
-    'Move into shaded, air-conditioned, or fan-cooled environments immediately.',
-    'Reschedule strenuous outdoor physical labor to early morning or night.',
-    'Take 15-20 minute recovery rest breaks every hour in a cool area.',
-    'Monitor for dizziness, headache, rapid pulse, or unusual weakness.',
-    'Apply cool damp cloths to skin, forehead, and neck.',
-    'Seek immediate medical attention if confusion, fainting, or high fever occurs.'
+    'Take regular cooling/rest breaks in shaded or ventilated areas.',
+    'Increase hydration: drink 250-500ml of clean water every 30-45 minutes.',
+    'Reduce prolonged strenuous outdoor physical exertion during peak hours.',
+    'Move to shade, air-conditioned, or fan-cooled indoor spaces when possible.',
+    'Wear lightweight, loose-fitting, light-colored clothing.',
   ];
 
-  const precautionsList = (alert.precautions && alert.precautions.length >= 3)
-    ? alert.precautions
-    : defaultPrecautions;
+  const precautionsList =
+    alert.precautions && alert.precautions.length >= 3
+      ? alert.precautions
+      : defaultPrecautions;
 
   const greeting = recipientName ? `Hello ${recipientName},` : 'Hello,';
   const accuracyStr = gpsAccuracy !== undefined ? `±${gpsAccuracy} m` : 'N/A';
@@ -252,126 +362,160 @@ export async function sendAlertEmail(options: SendEmailOptions): Promise<SendEma
   const conditionStr = weatherCondition || 'Current Weather Observation';
   const observedTimeStr = weatherObservedAt || alertTime;
   const qualityStr = dataQualityStatus || alert.source_status || 'LIVE';
-  const qualityExplainStr = dataQualityExplanation || (qualityStr === 'LIVE' ? 'Freshly fetched live observation from Open-Meteo API for this dispatch.' : 'Cached observation from recent local observation.');
+  const qualityExplainStr =
+    dataQualityExplanation ||
+    (qualityStr === 'LIVE'
+      ? 'Fresh live observation from Open-Meteo API captured at dispatch.'
+      : 'Cached observation from recent regional reading.');
   const calcTimeStr = riskCalculatedAt || alertTime;
+
+  // Contributing factors (truthfully labeled as contributing factors, not exact causal weights)
+  const factors = contributingFactors && contributingFactors.length > 0
+    ? contributingFactors
+    : [
+        { name: 'Apparent Temperature', impact: 'high', description: `Thermal load feels like ${alert.trigger_data?.apparent_temperature ?? 'elevated'}°C` },
+        { name: 'Relative Humidity', impact: 'moderate', description: `Vapor pressure at ${alert.trigger_data?.humidity ?? 'normal'}% influences sweat evaporation` },
+        { name: 'Environmental Exposure', impact: 'moderate', description: 'Ambient thermal stress based on localized geographic coordinates' },
+      ];
+
+  // Risk badge color mapping
+  const badgeColors: Record<string, { bg: string; text: string; border: string }> = {
+    LOW: { bg: '#064e3b', text: '#6ee7b7', border: '#059669' },
+    MODERATE: { bg: '#78350f', text: '#fcd34d', border: '#d97706' },
+    HIGH: { bg: '#7c2d12', text: '#fdba74', border: '#ea580c' },
+    EXTREME: { bg: '#7f1d1d', text: '#fca5a5', border: '#dc2626' },
+  };
+  const badge = badgeColors[riskLevel] || badgeColors.HIGH;
+
+  // Plain-text alternative matching exact prompt format
+  const factorsText = factors.map((f) => `- ${f.name}${f.description ? `: ${f.description}` : ''}`).join('\n');
+  const precautionsText = precautionsList.map((p, idx) => `${idx + 1}. ${p}`).join('\n');
+
+  const textContent = `${subject}
+
+${greeting}
+
+Current location:
+${loc}
+
+Latest environmental conditions:
+Temperature: ${alert.trigger_data?.temperature ?? 'N/A'}°C
+Feels like: ${alert.trigger_data?.apparent_temperature ?? 'N/A'}°C
+Humidity: ${alert.trigger_data?.humidity ?? 'N/A'}%
+Wind: ${alert.trigger_data?.wind_speed ?? 'N/A'} km/h
+
+Current estimated heat-risk:
+${riskScore} / 100 — ${riskLevel}
+
+Main contributing factors:
+${factorsText}
+
+Recommended precautions:
+${precautionsText}
+
+Data timestamp:
+${observedTimeStr}
+
+Model:
+${effectiveModelVersion}
+
+Important:
+HeatShield AI provides environmental decision support and is not medical advice. Consult healthcare professionals for personal symptoms or emergencies.
+
+Manage preferences / unsubscribe: https://heatshield-ai-kare.vercel.app/profile`;
 
   const htmlContent = `
     <!DOCTYPE html>
-    <html>
+    <html lang="en">
       <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>${alert.title}</title>
+        <title>${subject}</title>
         <style>
-          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #090d16; color: #f8fafc; margin: 0; padding: 20px; }
-          .container { max-width: 640px; margin: 0 auto; background: #131c2e; border-radius: 14px; padding: 28px; border: 1px solid #1e293b; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
-          .header { font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.1em; color: #10b981; margin-bottom: 6px; }
-          .title { font-size: 22px; font-weight: 800; color: #ffffff; margin-bottom: 12px; line-height: 1.25; }
-          .badge { display: inline-block; padding: 5px 12px; border-radius: 6px; font-size: 11px; font-weight: 800; background: ${isCritical ? '#991b1b' : '#9a3412'}; color: #ffffff; text-transform: uppercase; letter-spacing: 0.05em; }
-          .meta-bar { font-size: 12px; color: #94a3b8; margin-top: 14px; margin-bottom: 20px; border-bottom: 1px solid #1e293b; padding-bottom: 12px; line-height: 1.6; }
-          .message { font-size: 14px; color: #e2e8f0; line-height: 1.6; margin: 18px 0; background: #0f172a; padding: 16px; border-radius: 8px; border-left: 4px solid #10b981; }
-          .section-title { font-size: 13px; font-weight: 800; color: #38bdf8; text-transform: uppercase; margin-top: 20px; margin-bottom: 8px; letter-spacing: 0.05em; }
-          .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 12px 0 20px 0; }
-          .card { background: #0b1324; border-radius: 8px; padding: 14px; border: 1px solid #1e293b; }
-          .card-title { font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; margin-bottom: 4px; }
-          .card-value { font-size: 15px; font-weight: 700; color: #f8fafc; font-family: monospace; }
-          .precautions-header { font-size: 14px; font-weight: 800; color: #38bdf8; text-transform: uppercase; margin-top: 24px; margin-bottom: 10px; }
-          .precautions-list { margin: 0; padding-left: 20px; color: #cbd5e1; font-size: 13px; line-height: 1.6; }
+          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #090d16; color: #f8fafc; margin: 0; padding: 20px; -webkit-font-smoothing: antialiased; }
+          .container { max-width: 600px; margin: 0 auto; background: #131c2e; border-radius: 14px; padding: 28px; border: 1px solid #1e293b; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
+          .header { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.12em; color: #10b981; margin-bottom: 8px; }
+          .title { font-size: 21px; font-weight: 800; color: #ffffff; margin: 0 0 14px 0; line-height: 1.3; }
+          .badge-row { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; }
+          .badge { display: inline-block; padding: 6px 14px; border-radius: 9999px; font-size: 11px; font-weight: 800; background: ${badge.bg}; color: ${badge.text}; border: 1px solid ${badge.border}; text-transform: uppercase; letter-spacing: 0.05em; }
+          .score-label { font-size: 14px; font-weight: 800; color: #f8fafc; }
+          .greeting { font-size: 14px; color: #cbd5e1; margin-bottom: 16px; }
+          .section-title { font-size: 11px; font-weight: 800; color: #38bdf8; text-transform: uppercase; letter-spacing: 0.08em; margin: 20px 0 10px 0; }
+          .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; }
+          .card { background: #0b1324; border-radius: 10px; padding: 12px 14px; border: 1px solid #1e293b; }
+          .card-title { font-size: 10px; font-weight: 700; color: #64748b; text-transform: uppercase; margin-bottom: 4px; }
+          .card-value { font-size: 16px; font-weight: 800; color: #f8fafc; font-family: monospace; }
+          .factors-box { background: #0b1324; border-radius: 10px; padding: 14px; border: 1px solid #1e293b; margin-bottom: 16px; }
+          .factors-list { margin: 0; padding-left: 18px; font-size: 13px; color: #cbd5e1; line-height: 1.6; }
+          .precautions-box { background: #0f172a; border-radius: 10px; padding: 16px; border: 1px solid #10b981; margin-bottom: 16px; }
+          .precautions-list { margin: 0; padding-left: 20px; font-size: 13px; color: #e2e8f0; line-height: 1.65; }
           .precautions-list li { margin-bottom: 6px; }
-          .action-box { background: #064e3b; border: 1px solid #059669; border-radius: 10px; padding: 18px; margin-top: 22px; color: #a7f3d0; font-size: 14px; line-height: 1.5; }
-          .quality-box { background: #0f172a; border-radius: 8px; padding: 12px 16px; margin: 16px 0; border: 1px solid #334155; font-size: 12px; color: #cbd5e1; line-height: 1.5; }
-          .disclaimer { background: #1e293b; border-radius: 8px; padding: 14px; margin-top: 24px; color: #94a3b8; font-size: 11px; line-height: 1.5; border: 1px solid #334155; }
-          .footer { font-size: 11px; color: #475569; margin-top: 28px; text-align: center; font-family: monospace; }
+          .meta-info { font-size: 11px; color: #64748b; line-height: 1.6; border-top: 1px solid #1e293b; padding-top: 14px; margin-top: 20px; }
+          .disclaimer { background: #0b1324; border-radius: 8px; padding: 12px; margin-top: 14px; color: #94a3b8; font-size: 11px; line-height: 1.5; border: 1px solid #1e293b; }
+          .footer { font-size: 11px; color: #475569; margin-top: 22px; text-align: center; font-family: monospace; }
+          .footer a { color: #38bdf8; text-decoration: none; }
         </style>
       </head>
       <body>
         <div class="container">
-          <div class="header">HEATSHIELD AI SAFETY SYSTEM | LIVE POINT-IN-TIME GPS REPORT</div>
-          <div class="title">${alert.title}</div>
-          <div>
-            <span class="badge">${alert.priority}</span>
-            <span style="font-size:12px; color:#94a3b8; margin-left:10px;">Risk Level: ${alert.trigger_data.risk_level} (${alert.trigger_data.risk_score}/100) ${trend ? `• Trend: ${trend.toUpperCase()}` : ''}</span>
+          <div class="header">HEATSHIELD AI ENVIRONMENTAL SAFETY SYSTEM</div>
+          <h1 class="title">${subject}</h1>
+          <div class="badge-row">
+            <span class="badge">${riskLevel} RISK</span>
+            <span class="score-label">${riskScore} / 100 Heat-Risk Index ${trend ? `(Trend: ${trend})` : ''}</span>
           </div>
 
-          <div class="meta-bar">
-            <strong>${greeting}</strong><br/>
-            <strong>Snapshot Notice:</strong> Point-in-Time Environmental Snapshot (Captured at dispatch)<br/>
-            <strong>Recipient:</strong> ${to}<br/>
-            <strong>Location:</strong> ${loc}<br/>
-            <strong>GPS Coordinates:</strong> ${coordsStr}<br/>
-            <strong>Location Source:</strong> ${locSourceStr}<br/>
-            <strong>GPS Accuracy:</strong> ${accuracyStr}<br/>
-            <strong>Generated At:</strong> ${alertTime}
+          <div class="greeting">
+            ${greeting}<br/>
+            Here is your personalized point-in-time environmental heat-risk advisory for <strong>${loc}</strong>.
           </div>
 
-          <div class="message">
-            <strong>Environmental Thermal Assessment:</strong><br/>
-            ${alert.message}
-            ${alert.why_generated ? `<br/><br/><strong>Why this risk:</strong> ${alert.why_generated}` : ''}
-          </div>
-
-          <div class="section-title">Live Weather Observation</div>
+          <div class="section-title">Latest Environmental Conditions</div>
           <div class="grid">
             <div class="card">
-              <div class="card-title">Temperature</div>
-              <div class="card-value">${alert.trigger_data.temperature !== undefined ? `${alert.trigger_data.temperature}°C` : 'Unavailable'}</div>
+              <div class="card-title">Air Temperature</div>
+              <div class="card-value">${alert.trigger_data?.temperature !== undefined ? `${alert.trigger_data.temperature}°C` : 'N/A'}</div>
             </div>
             <div class="card">
-              <div class="card-title">Feels-Like Temp</div>
-              <div class="card-value">${alert.trigger_data.apparent_temperature !== undefined ? `${alert.trigger_data.apparent_temperature}°C` : 'Unavailable'}</div>
+              <div class="card-title">Feels Like (Apparent)</div>
+              <div class="card-value">${alert.trigger_data?.apparent_temperature !== undefined ? `${alert.trigger_data.apparent_temperature}°C` : 'N/A'}</div>
             </div>
             <div class="card">
               <div class="card-title">Relative Humidity</div>
-              <div class="card-value">${alert.trigger_data.humidity !== undefined ? `${alert.trigger_data.humidity}%` : 'Unavailable'}</div>
+              <div class="card-value">${alert.trigger_data?.humidity !== undefined ? `${alert.trigger_data.humidity}%` : 'N/A'}</div>
             </div>
             <div class="card">
               <div class="card-title">Wind Speed</div>
-              <div class="card-value">${alert.trigger_data.wind_speed !== undefined ? `${alert.trigger_data.wind_speed} km/h` : 'Unavailable'}</div>
-            </div>
-            <div class="card">
-              <div class="card-title">Weather Condition</div>
-              <div class="card-value">${conditionStr}</div>
-            </div>
-            <div class="card">
-              <div class="card-title">Observation Time</div>
-              <div class="card-value" style="font-size:12px;">${observedTimeStr}</div>
+              <div class="card-value">${alert.trigger_data?.wind_speed !== undefined ? `${alert.trigger_data.wind_speed} km/h` : 'N/A'}</div>
             </div>
           </div>
 
-          <div class="section-title">Risk Assessment & Truthful Data Quality</div>
-          <div class="grid">
-            <div class="card">
-              <div class="card-title">Heat Index Score</div>
-              <div class="card-value">${alert.trigger_data.risk_score} / 100</div>
-            </div>
-            <div class="card">
-              <div class="card-title">Calculated At</div>
-              <div class="card-value" style="font-size:12px;">${calcTimeStr}</div>
-            </div>
+          <div class="section-title">Main Contributing Factors</div>
+          <div class="factors-box">
+            <ul class="factors-list">
+              ${factors.map((f) => `<li><strong>${f.name}:</strong> ${f.description || (f.direction === 'mitigating' ? 'Convective cooling relief' : 'Thermal stress escalator')}</li>`).join('')}
+            </ul>
           </div>
 
-          <div class="quality-box">
-            <strong>DATA QUALITY STATUS: <span style="color: ${qualityStr === 'LIVE' ? '#10b981' : '#f59e0b'};">${qualityStr}</span></strong><br/>
-            <span>Provider: Open-Meteo & Nominatim • ${qualityExplainStr}</span>
-          </div>
-
-          <div class="precautions-header">Recommended Dynamic Precautions</div>
-          <ol class="precautions-list">
-            ${precautionsList.map(p => `<li>${p}</li>`).join('')}
-          </ol>
-
-          <div class="action-box">
-            <strong>RECOMMENDED IMMEDIATE PREVENTIVE ACTION:</strong><br/>
-            ${alert.recommended_action}
+          <div class="section-title">Recommended Personalized Precautions</div>
+          <div class="precautions-box">
+            <ol class="precautions-list">
+              ${precautionsList.map((p) => `<li>${p}</li>`).join('')}
+            </ol>
           </div>
 
           <div class="disclaimer">
-            <strong>SAFETY & WELLNESS DISCLAIMER:</strong> This notification is generated from live environmental observations to assist with heat safety awareness. It is not a medical diagnosis or treatment evaluation. Consult healthcare professionals for personal medical concerns.
+            <strong>Important Safety Notice:</strong> HeatShield AI provides environmental decision support and is not medical advice. Consult healthcare professionals for personal health symptoms. In case of heat stroke, fainting, or severe dehydration, seek emergency medical care immediately.
+          </div>
+
+          <div class="meta-info">
+            <div><strong>Location:</strong> ${loc} (${coordsStr}) • <strong>Source:</strong> ${locSourceStr}</div>
+            <div><strong>Observation Time:</strong> ${observedTimeStr} • <strong>Data Status:</strong> ${qualityStr}</div>
+            <div><strong>Inference Model:</strong> ${effectiveModelVersion}</div>
           </div>
 
           <div class="footer">
-            HeatShield AI Real-Time Environmental Risk Pipeline<br/>
-            Notification ID: ${alert.id} | Dedup Key: ${alert.dedup_key} | Provider: Open-Meteo & OpenStreetMap
+            Dispatched via HeatShield AI Dispatch Gateway • <a href="https://heatshield-ai-kare.vercel.app/profile">Manage Preferences / Unsubscribe</a>
           </div>
         </div>
       </body>
@@ -382,7 +526,8 @@ export async function sendAlertEmail(options: SendEmailOptions): Promise<SendEma
     if (isProduction) {
       return {
         success: false,
-        error: 'Email service is not configured. RESEND_API_KEY is missing or invalid.',
+        error: 'INVALID_CONFIGURATION: RESEND_API_KEY is missing or invalid in production environment.',
+        errorCode: 'INVALID_CONFIGURATION',
       };
     }
     return {
@@ -397,15 +542,19 @@ export async function sendAlertEmail(options: SendEmailOptions): Promise<SendEma
       from: fromAddress,
       to: [to],
       subject: subject,
+      replyTo: replyToAddress || undefined,
       html: htmlContent,
-      text: `${alert.title}\nSnapshot Notice: Point-in-Time Environmental Snapshot (Captured at dispatch)\nNotification ID: ${alert.id}\nPriority: ${alert.priority}\nRisk Level: ${alert.trigger_data.risk_level} (${alert.trigger_data.risk_score}/100)\nLocation: ${loc}\nGPS Coordinates: ${coordsStr}\nLocation Source: ${locSourceStr}\nGPS Accuracy: ${accuracyStr}\nData Quality: ${qualityStr}\nObservation Time: ${observedTimeStr}\n\nTemperature: ${alert.trigger_data.temperature}°C\nFeels-Like: ${alert.trigger_data.apparent_temperature}°C\nHumidity: ${alert.trigger_data.humidity}%\nWind: ${alert.trigger_data.wind_speed} km/h\nCondition: ${conditionStr}\n\nWhy Generated:\n${alert.why_generated || 'Environmental evaluation'}\n\nRecommended Action:\n${alert.recommended_action}\n\nPrecautions:\n${precautionsList.join('\n')}\n\nDisclaimer: This is informational environmental safety guidance, not a medical diagnosis.`,
+      text: textContent,
     });
 
     if (response.error) {
-      console.warn('[HeatShield Email] Resend error:', response.error.message);
+      console.warn('[HeatShield Email] Resend provider returned error:', response.error.message);
+      const classified = classifyResendError(response.error);
       return {
         success: false,
-        error: response.error.message || 'Resend delivery failed.',
+        error: classified.message,
+        errorCode: classified.errorCode,
+        rawError: response.error.message,
       };
     }
 
@@ -414,12 +563,16 @@ export async function sendAlertEmail(options: SendEmailOptions): Promise<SendEma
       id: response.data?.id || `resend_${Date.now()}`,
     };
   } catch (err: any) {
-    console.error('[HeatShield Email] Resend exception:', err?.message);
+    console.error('[HeatShield Email] Resend network/execution exception:', err?.message);
+    const classified = classifyResendError(err);
     return {
       success: false,
-      error: err?.message || 'Email delivery exception.',
+      error: classified.message,
+      errorCode: classified.errorCode,
+      rawError: err?.message,
     };
   }
 }
+
 
 

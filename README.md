@@ -19,7 +19,7 @@
 
 ## Overview
 
-**HeatShield AI** is an open-source, context-aware heat-risk assessment platform. Unlike traditional weather platforms that report ambient temperature without context, HeatShield AI blends real-time atmospheric streams (Open-Meteo API) with personal physiological profiles (activity exertion, exposure duration, cooling access) using a **Gradient Boosting machine learning engine** (83.50% accuracy) and **Explainable AI (XAI)**.
+**HeatShield AI** is an open-source, context-aware heat-risk assessment platform. Unlike traditional weather platforms that report ambient temperature without context, HeatShield AI blends real-time atmospheric streams (Open-Meteo API) with personal physiological profiles (activity exertion, exposure duration, cooling access) using a **Gradient Boosting machine learning engine** (89.6% accuracy, ROC-AUC 0.9858) and **Explainable AI (XAI)**.
 
 The platform provides personalized heat-risk scoring, interactive scenario simulation, 24–48 hour forecast timeline projections, smart alert deduplication, interactive community hazard mapping, and dedicated multi-tenant operational portals for Schools, Worksites, and NGOs.
 
@@ -42,12 +42,12 @@ The platform provides personalized heat-risk scoring, interactive scenario simul
 
 Trained on benchmark meteorological profiles (ECMWF ERA5-Land reanalysis historical baseline context + 5,000 synthetic development samples):
 
-| Model | Accuracy | Precision | Recall | Macro F1 | Status |
-|---|---|---|---|---|---|
-| Logistic Regression | 78.20% | 0.7763 | 0.7772 | 0.7753 | Evaluated |
-| Decision Tree | 81.70% | 0.8085 | 0.8112 | 0.8083 | Evaluated |
-| Random Forest | 82.90% | 0.8195 | 0.8242 | 0.8203 | Evaluated |
-| **Gradient Boosting** | **83.50%** | **0.8235** | **0.8282** | **0.8243** | **Selected & Deployed** |
+| Model | Accuracy | Precision | Recall | Macro F1 | ROC-AUC | Status |
+|---|---|---|---|---|---|---|
+| Logistic Regression | 91.6% | 0.9184 | 0.9173 | 0.9178 | 0.9915 | Evaluated |
+| Decision Tree | 81.4% | 0.8180 | 0.8106 | 0.8134 | 0.9528 | Evaluated |
+| Random Forest | 84.7% | 0.8499 | 0.8426 | 0.8459 | 0.9732 | Evaluated |
+| **Gradient Boosting** | **89.6%** | **0.8966** | **0.8990** | **0.8976** | **0.9858** | **Selected & Deployed** |
 
 ---
 

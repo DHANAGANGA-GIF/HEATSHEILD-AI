@@ -1,4 +1,4 @@
-import { AlertItem, AlertPriority, AlertSettings, CommunityCategory, CommunityReport, LocationData, NotificationLog, RecipientNotificationProfile, ReportSeverity, ReportStatus, SmartAlert, UserProfile, VerifiedCoolingLocation } from './types';
+import { AlertItem, AlertPriority, AlertSettings, CommunityCategory, CommunityReport, HeatRiskDispatchLog, LocationData, NotificationLog, RecipientNotificationProfile, ReportSeverity, ReportStatus, SmartAlert, UserProfile, VerifiedCoolingLocation } from './types';
 import { isSupabaseConfigured, supabase } from './supabase';
 
 import { checkDuplicateSubmission, recordSubmissionTime, validateReportInput } from './community-moderation';
@@ -162,6 +162,8 @@ export function saveUserProfile(profile: Partial<UserProfile>): UserProfile {
         location_source: updated.location?.gps_accuracy ? 'LIVE_GPS' : 'SAVED_LOCATION',
         email_alerts_enabled: true,
         hourly_summary_enabled: true,
+        hourly_heat_alerts_enabled: updated.hourly_heat_alerts_enabled ?? false,
+        email_verified: updated.email_verified ?? false,
         critical_alerts_enabled: true,
         forecast_alerts_enabled: true,
         sms_phone: updated.sms_phone,
@@ -726,6 +728,8 @@ export function saveRecipientProfile(profile: Partial<RecipientNotificationProfi
       location_source: profile.location_source || 'MANUAL_LOCATION',
       email_alerts_enabled: profile.email_alerts_enabled ?? true,
       hourly_summary_enabled: profile.hourly_summary_enabled ?? true,
+      hourly_heat_alerts_enabled: profile.hourly_heat_alerts_enabled ?? false,
+      email_verified: profile.email_verified ?? false,
       critical_alerts_enabled: profile.critical_alerts_enabled ?? true,
       forecast_alerts_enabled: profile.forecast_alerts_enabled ?? true,
       created_at: new Date().toISOString(),
@@ -802,13 +806,105 @@ export function saveNotificationLog(log: NotificationLog): NotificationLog[] {
     );
   }
 
-
   return updated;
 }
 
 export function isIdempotentKeyProcessed(idempotencyKey: string): boolean {
   const logs = getNotificationLogs();
-  return logs.some(l => l.idempotency_key === idempotencyKey && l.status === 'SENT');
+  return logs.some(l => l.idempotency_key === idempotencyKey && (l.status === 'SENT' || l.status === 'DELIVERED'));
 }
+
+// ── Heat Risk Hourly Dispatch Logs & Database Idempotency ──────────────────────
+const HEAT_RISK_DISPATCH_LOGS_KEY = 'heatshield_heat_risk_dispatch_logs';
+let globalServerDispatchLogs: HeatRiskDispatchLog[] = [];
+
+export function getHeatRiskDispatchLogs(): HeatRiskDispatchLog[] {
+  if (typeof window === 'undefined') {
+    return globalServerDispatchLogs;
+  }
+  const stored = localStorage.getItem(HEAT_RISK_DISPATCH_LOGS_KEY);
+  if (!stored) return [];
+  try {
+    return JSON.parse(stored);
+  } catch {
+    return [];
+  }
+}
+
+export async function isDispatchKeySent(dispatchKey: string): Promise<boolean> {
+  // 1. Check in-memory / local storage first (instant check)
+  const localLogs = getHeatRiskDispatchLogs();
+  const foundLocal = localLogs.some(
+    l => l.dispatch_key === dispatchKey && (l.status === 'SENT' || l.status === 'ACCEPTED' || l.status === 'DELIVERED')
+  );
+  if (foundLocal) return true;
+
+  // 2. Authoritative check in Supabase database if configured
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('heat_risk_dispatch_log')
+        .select('id, status')
+        .eq('dispatch_key', dispatchKey)
+        .in('status', ['SENT', 'ACCEPTED', 'DELIVERED'])
+        .maybeSingle();
+
+      if (!error && data) {
+        return true;
+      }
+    } catch {
+      // Fallback to local verdict
+    }
+  }
+
+  return false;
+}
+
+export async function saveHeatRiskDispatchLog(log: HeatRiskDispatchLog): Promise<HeatRiskDispatchLog[]> {
+  const current = getHeatRiskDispatchLogs();
+  const filtered = current.filter(l => l.dispatch_key !== log.dispatch_key);
+  const updated = [log, ...filtered].slice(0, 200);
+
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(HEAT_RISK_DISPATCH_LOGS_KEY, JSON.stringify(updated));
+  } else {
+    globalServerDispatchLogs = updated;
+  }
+
+  // Authoritative write to Supabase if configured
+  if (isSupabaseConfigured && supabase) {
+    try {
+      await supabase.from('heat_risk_dispatch_log').upsert([{
+        id: log.id,
+        user_id: log.user_id || null,
+        recipient_email: log.recipient_email,
+        location: log.location,
+        latitude: log.latitude,
+        longitude: log.longitude,
+        weather_timestamp: log.weather_timestamp,
+        risk_score: log.risk_score,
+        risk_level: log.risk_level,
+        model_version: log.model_version || 'HeatShield-ML v1.3.0 (Physics-Context Dual Engine)',
+        dispatch_key: log.dispatch_key,
+        provider_message_id: log.provider_message_id || null,
+        status: log.status,
+        error_message: log.error_message || null,
+        sent_at: log.sent_at || (log.status === 'ACCEPTED' || log.status === 'SENT' ? new Date().toISOString() : null),
+      }], { onConflict: 'dispatch_key' });
+    } catch (err) {
+      console.warn('Supabase heat_risk_dispatch_log upsert notice:', err);
+    }
+  }
+
+  return updated;
+}
+
+export function clearDispatchLogsForTesting(): void {
+  globalServerDispatchLogs = [];
+  if (typeof window !== 'undefined') {
+    localStorage.removeItem(HEAT_RISK_DISPATCH_LOGS_KEY);
+  }
+}
+
 
 

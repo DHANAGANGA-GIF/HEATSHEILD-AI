@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 export const dynamic = 'force-dynamic';
 
@@ -61,9 +61,9 @@ export default function RiskPage() {
                     HI = -42.379 + 2.049*T + 10.143*RH - 0.224*T*RH - ...
                   </div>
                   <p>
-                    Current Observed Ambient Temp: <strong>{risk.weather_snapshot.temp}Â°C</strong><br />
+                    Current Observed Ambient Temp: <strong>{risk.weather_snapshot.temp}°C</strong><br />
                     Current Relative Humidity: <strong>{risk.weather_snapshot.humidity}%</strong><br />
-                    Resulting Apparent Temperature: <strong>{risk.weather_snapshot.apparent_temp}Â°C</strong>
+                    Resulting Apparent Temperature: <strong>{risk.weather_snapshot.apparent_temp}°C</strong>
                   </p>
                 </div>
               </div>
@@ -88,6 +88,60 @@ export default function RiskPage() {
             </div>
           )}
 
+          {/* Directional XAI Attribution Breakdown */}
+          {risk?.explanation && (
+            <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-xs space-y-4">
+              <div className="flex items-center gap-2 text-slate-900">
+                <BarChart className="w-5 h-5 text-emerald-600" />
+                <h2 className="text-sm font-bold">DIRECTIONAL EXPLAINABLE AI (XAI) ATTRIBUTION</h2>
+              </div>
+              <p className="text-xs text-slate-600 leading-relaxed font-mono">
+                {risk.explanation.human_readable_summary}
+              </p>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                <div className="p-4 bg-amber-50/60 border border-amber-200 rounded-lg space-y-2">
+                  <h4 className="text-xs font-bold text-amber-900 flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+                    <span>RISK ESCALATORS (+)</span>
+                  </h4>
+                  <div className="space-y-1.5">
+                    {risk.explanation.escalating_factors.map((f, i) => (
+                      <div key={i} className="text-xs flex justify-between items-center text-slate-700">
+                        <span>{f.name}</span>
+                        <span className="font-mono font-semibold text-amber-700">+{f.weight_percent}%</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="p-4 bg-emerald-50/60 border border-emerald-200 rounded-lg space-y-2">
+                  <h4 className="text-xs font-bold text-emerald-900 flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                    <span>RISK MITIGATORS (-)</span>
+                  </h4>
+                  <div className="space-y-1.5">
+                    {risk.explanation.mitigating_factors.length > 0 ? (
+                      risk.explanation.mitigating_factors.map((f, i) => (
+                        <div key={i} className="text-xs flex justify-between items-center text-slate-700">
+                          <span>{f.name}</span>
+                          <span className="font-mono font-semibold text-emerald-700">-{f.weight_percent}%</span>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-xs text-slate-500 italic">No significant mitigating factors detected.</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs space-y-1">
+                <div className="font-bold text-slate-800">Operational Decision Support Recommendation:</div>
+                <div className="text-slate-600">{risk.explanation.recommended_action}</div>
+              </div>
+            </div>
+          )}
+
           {/* Model Transparency & Disclaimer Card */}
           <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-xs space-y-3">
             <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
@@ -95,7 +149,7 @@ export default function RiskPage() {
               <span>MODEL TRANSPARENCY & DATA GOVERNANCE</span>
             </h3>
             <p className="text-xs text-slate-600 leading-relaxed">
-              Model Version: <strong>{risk?.model_version || 'HeatShield-XAI v1.2'}</strong> | Data Source: <strong>{risk?.data_source || 'Open-Meteo API'}</strong>
+              Model Version: <strong>{risk?.model_version || 'HeatShield-ML v1.3.0'}</strong> | Data Source: <strong>{risk?.data_source || 'Open-Meteo API'}</strong>
             </p>
             <p className="text-xs text-slate-500 font-mono">
               Limitation: Local microclimates (e.g., radiant heat from unshaded asphalt, direct sunlight exposure) may cause localized temperatures to exceed regional meteorological readings.

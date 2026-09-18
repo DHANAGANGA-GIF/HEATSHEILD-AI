@@ -28,6 +28,9 @@ export interface UserProfile {
   authenticated?: boolean;
   /** User has explicitly given consent for location/notification use */
   consent_given?: boolean;
+  /** Explicit opt-in for automated hourly heat-risk email dispatch (default: false/safe) */
+  hourly_heat_alerts_enabled?: boolean;
+  email_verified?: boolean;
   sms_phone?: string;
 }
 
@@ -89,6 +92,18 @@ export interface RiskFactor {
   weight_percent: number; // e.g. 35%
   description_technical: string;
   description_simple: string;
+  direction?: 'escalating' | 'mitigating';
+  attribution_type?: 'global_importance' | 'local_contribution' | 'physiological_rule';
+}
+
+export interface XAIExplanation {
+  risk_level: RiskLevel;
+  risk_score: number;
+  escalating_factors: RiskFactor[];
+  mitigating_factors: RiskFactor[];
+  global_importances: Record<string, number>;
+  human_readable_summary: string;
+  recommended_action: string;
 }
 
 export interface RiskAssessment {
@@ -97,6 +112,7 @@ export interface RiskAssessment {
   risk_score: number; // 0 - 100
   risk_level: RiskLevel;
   factors: RiskFactor[];
+  explanation?: XAIExplanation;
   weather_snapshot: {
     temp: number;
     humidity: number;
@@ -377,6 +393,9 @@ export interface RecipientNotificationProfile {
   location_source: LocationSourceStatus;
   email_alerts_enabled: boolean;
   hourly_summary_enabled: boolean;
+  /** Explicit opt-in for automated hourly heat-risk email dispatch (default: false/safe) */
+  hourly_heat_alerts_enabled?: boolean;
+  email_verified?: boolean;
   critical_alerts_enabled: boolean;
   forecast_alerts_enabled?: boolean;
   last_notification_at?: string;
@@ -413,4 +432,26 @@ export interface NotificationLog {
   sent_at: string;
   created_at: string;
 }
+
+/** Dedicated Hourly Heat Risk Dispatch Log with Database-Level Idempotency */
+export interface HeatRiskDispatchLog {
+  id: string;
+  user_id?: string;
+  recipient_email: string;
+  location: string;
+  latitude?: number;
+  longitude?: number;
+  weather_timestamp?: string;
+  risk_score?: number;
+  risk_level?: RiskLevel;
+  model_version?: string;
+  /** Unique dispatch key (e.g. YYYY-MM-DD-HH_user_<id>) preventing duplicate delivery */
+  dispatch_key: string;
+  provider_message_id?: string;
+  status: 'SENT' | 'ACCEPTED' | 'DELIVERED' | 'FAILED' | 'SKIPPED';
+  error_message?: string;
+  created_at: string;
+  sent_at?: string;
+}
+
 

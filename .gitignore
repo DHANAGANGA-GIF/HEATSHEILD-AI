@@ -21,8 +21,13 @@ tsconfig.tsbuildinfo
 
 # Python ML Virtualenv & Cache
 ai-engine/venv/
+ai-engine/.venv/
 ai-engine/__pycache__/
 *.pyc
+
+# Test & debug logs
+test_full.log
+*.log
 
 # Logs & Debug
 npm-debug.log*

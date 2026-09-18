@@ -11,7 +11,7 @@ import { UserProfile } from '@/lib/types';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import {
   User, Save, CheckCircle, ShieldCheck, Key, Lock, Bell, MapPin,
-  LogOut, ExternalLink, Smartphone, Mail, KeyRound, Loader2, CheckCircle2, AlertCircle
+  LogOut, ExternalLink, Smartphone, Mail, KeyRound, Loader2, CheckCircle2, AlertCircle, Flame
 } from 'lucide-react';
 import Link from 'next/link';
 import { useAuth } from '@/lib/firebase/auth-context';
@@ -115,9 +115,21 @@ export default function ProfilePage() {
       ...profile,
       email: firebaseUser?.email || profile.email,
       sms_phone: phoneInput.trim() || undefined,
+      hourly_heat_alerts_enabled: Boolean(profile.hourly_heat_alerts_enabled),
     };
     saveUserProfile(updated);
     setProfile(updated);
+
+    if (isSupabaseConfigured && supabase && (profile.id || profile.firebase_uid)) {
+      supabase
+        .from('profiles')
+        .update({
+          hourly_heat_alerts_enabled: Boolean(profile.hourly_heat_alerts_enabled),
+          full_name: profile.name,
+        })
+        .eq('id', profile.id || profile.firebase_uid);
+    }
+
     setSaved(true);
     setTimeout(() => setSaved(false), 3000);
   };
@@ -347,6 +359,85 @@ export default function ProfilePage() {
                 <KeyRound className="w-3.5 h-3.5 text-sky-400" />
                 <span>Direct OTP Verification Portal</span>
               </Link>
+            </div>
+          </div>
+
+          {/* Automated Hourly Heat Risk Alerts Subscription Card */}
+          <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-xl space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                  <Flame className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-sm font-bold text-white font-mono uppercase tracking-wider">
+                    HEAT RISK ALERTS
+                  </h2>
+                  <p className="text-xs text-slate-400">
+                    Automated hourly personalized environmental-risk notification pipeline
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <span className="text-xs font-mono text-slate-400">Hourly Alerts:</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const nextVal = !profile.hourly_heat_alerts_enabled;
+                    const updated = { ...profile, hourly_heat_alerts_enabled: nextVal };
+                    setProfile(updated);
+                    saveUserProfile(updated);
+                    if (isSupabaseConfigured && supabase && (profile.id || profile.firebase_uid)) {
+                      void supabase.from('profiles').update({ hourly_heat_alerts_enabled: nextVal }).eq('id', profile.id || profile.firebase_uid);
+                    }
+                  }}
+                  className={`px-4 py-1.5 rounded-full text-xs font-mono font-bold transition flex items-center gap-2 border shadow-md ${
+                    profile.hourly_heat_alerts_enabled
+                      ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/40 shadow-emerald-950/40'
+                      : 'bg-slate-800 text-slate-400 border-slate-700'
+                  }`}
+                >
+                  <span className={`w-2 h-2 rounded-full ${profile.hourly_heat_alerts_enabled ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'}`} />
+                  <span>{profile.hourly_heat_alerts_enabled ? 'ON' : 'OFF'}</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 font-mono text-xs">
+              <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl space-y-1">
+                <span className="text-[10px] text-slate-500 uppercase block">EMAIL</span>
+                <span className="text-slate-200 font-bold truncate block">
+                  {firebaseUser?.email || profile.email || 'Not verified'}
+                </span>
+              </div>
+
+              <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl space-y-1">
+                <span className="text-[10px] text-slate-500 uppercase block">LOCATION</span>
+                <span className="text-slate-200 font-bold truncate block">
+                  {profile.location?.name || 'Chennai'}
+                </span>
+              </div>
+
+              <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl space-y-1">
+                <span className="text-[10px] text-slate-500 uppercase block">FREQUENCY</span>
+                <span className="text-slate-200 font-bold block">Every hour</span>
+              </div>
+
+              <div className="p-3 bg-slate-950 border border-slate-800 rounded-xl space-y-1">
+                <span className="text-[10px] text-slate-500 uppercase block">STATUS</span>
+                <span
+                  className={`font-bold block ${
+                    profile.hourly_heat_alerts_enabled ? 'text-emerald-400' : 'text-slate-500'
+                  }`}
+                >
+                  {profile.hourly_heat_alerts_enabled ? 'ACTIVE' : 'PAUSED'}
+                </span>
+              </div>
+            </div>
+
+            <div className="text-[11px] text-slate-400 leading-relaxed font-sans bg-slate-950/60 p-3 rounded-xl border border-slate-800/80">
+              When enabled, HeatShield AI automatically evaluates live environmental telemetry for your location every hour and delivers personalized safety precautions and contributing factors to your verified email.
             </div>
           </div>
 

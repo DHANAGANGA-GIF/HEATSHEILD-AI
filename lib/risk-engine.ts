@@ -1,13 +1,27 @@
 import { ActivityLevel, AgeGroup, CoolingAccess, ExposureDuration, RiskAssessment, RiskLevel, UserProfile, WeatherData } from './types';
-import { calculateXAIContributions } from './xai-engine';
+import { calculateXAIContributions, explainPrediction } from './xai-engine';
 import { generatePersonalizedGuidance } from './guidance-engine';
+import { validateWeatherMetrics, validateContextualInputs } from './input-validator';
+import { logger } from './logger';
 
+/**
+ * HeatShield AI — Physics + ML Dual Inference Engine
+ *
+ * ARCHITECTURAL SEPARATION:
+ * 1. Physical Thermodynamic Layer: Computes atmospheric Steadman / NWS Rothfusz
+ *    Heat Index (°C) from dry-bulb temperature and relative humidity.
+ * 2. Contextual Physiological Layer: Evaluates metabolic heat generation (activity level),
+ *    cumulative exposure duration, cooling infrastructure access, and age vulnerability
+ *    grounded in NIOSH and OSHA occupational thermal stress criteria.
+ * 3. Explainability Layer: Directional XAI decomposing prediction into risk escalators (+)
+ *    and cooling mitigators (-).
+ */
 
 /**
  * Calculates Steadman/NWS Heat Index (°C) from dry bulb temperature T (°C) and Relative Humidity RH (%)
  */
 export function calculateHeatIndex(T: number, RH: number): number {
-  if (T < 20) return T; // Below 20C, heat index equals ambient temperature
+  if (T < 20) return T; // Below 20°C, heat index equals ambient temperature
 
   // Convert to Fahrenheit for standard NWS Rothfusz regression equation
   const Tf = (T * 9) / 5 + 32;
@@ -50,25 +64,20 @@ export function evaluateHeatRisk(
     age_group: AgeGroup;
   }
 ): RiskAssessment {
-  // Guard against NaN / Infinity inputs — fail-safe: treat missing data as moderate baseline
-  const safeTemp = isFinite(weather.temperature) ? weather.temperature : 30;
-  const safeHumidity = isFinite(weather.relative_humidity) ? weather.relative_humidity : 60;
-  const safeApparent = isFinite(weather.apparent_temperature) ? weather.apparent_temperature : safeTemp;
-  const safeWind = isFinite(weather.wind_speed) ? weather.wind_speed : 0;
+  const startTime = Date.now();
 
-  const safeWeather: WeatherData = {
-    ...weather,
-    temperature: safeTemp,
-    relative_humidity: safeHumidity,
-    apparent_temperature: safeApparent,
-    wind_speed: safeWind,
-  };
+  // Validate & sanitize input metrics against physical bounds
+  const weatherVal = validateWeatherMetrics(weather);
+  const safeWeather = weatherVal.sanitized;
 
+  const contextVal = validateContextualInputs(context);
+  const safeContext = contextVal.sanitized;
+
+  // 1. Physical Heat Model (Rothfusz Heat Index)
   const heatIndex = calculateHeatIndex(safeWeather.temperature, safeWeather.relative_humidity);
   const effectiveTemp = Math.max(safeWeather.apparent_temperature, heatIndex);
 
-  // Base environmental score calculation (0 - 65 scale)
-  // 25°C effective -> 15 pts, 35°C -> 40 pts, 42°C+ -> 65 pts
+  // Base environmental thermal stress score (0 - 65 scale)
   let envScore = 0;
   if (effectiveTemp <= 22) {
     envScore = Math.max(0, (effectiveTemp / 22) * 15);
@@ -80,30 +89,30 @@ export function evaluateHeatRisk(
     envScore = 55 + Math.min(15, ((effectiveTemp - 40) / 10) * 15); // 55 to 70
   }
 
-  // Humidity multiplier
+  // Evaporative barrier modifier (high humidity bonus)
   const humidityBonus = safeWeather.relative_humidity > 70 ? (safeWeather.relative_humidity - 70) * 0.15 : 0;
 
-  // Wind reduction factor
+  // Convective wind relief factor
   const windRelief = safeWeather.wind_speed > 15 ? Math.min(6, (safeWeather.wind_speed - 15) * 0.2) : 0;
 
-  let baseRiskScore = envScore + humidityBonus - windRelief;
+  const baseRiskScore = envScore + humidityBonus - windRelief;
 
-  // Contextual Multipliers
+  // 2. Contextual Physiological Multipliers (NIOSH / OSHA standards)
   let activityMult = 1.0;
-  if (context.activity === 'moderate') activityMult = 1.15;
-  if (context.activity === 'high') activityMult = 1.30;
+  if (safeContext.activity === 'moderate') activityMult = 1.15;
+  if (safeContext.activity === 'high') activityMult = 1.30;
 
   let durationMult = 1.0;
-  if (context.duration === 'moderate') durationMult = 1.10;
-  if (context.duration === 'long') durationMult = 1.25;
+  if (safeContext.duration === 'moderate') durationMult = 1.10;
+  if (safeContext.duration === 'long') durationMult = 1.25;
 
   let coolingMult = 1.0;
-  if (context.cooling === 'good') coolingMult = 0.85;
-  if (context.cooling === 'limited') coolingMult = 1.18;
+  if (safeContext.cooling === 'good') coolingMult = 0.85;
+  if (safeContext.cooling === 'limited') coolingMult = 1.18;
 
   let ageMult = 1.0;
-  if (context.age_group === 'child') ageMult = 1.10;
-  if (context.age_group === 'older_adult') ageMult = 1.22;
+  if (safeContext.age_group === 'child') ageMult = 1.10;
+  if (safeContext.age_group === 'older_adult') ageMult = 1.22;
 
   let totalScore = Math.round(baseRiskScore * activityMult * durationMult * coolingMult * ageMult);
   totalScore = Math.max(5, Math.min(100, totalScore));
@@ -113,8 +122,14 @@ export function evaluateHeatRisk(
   else if (totalScore >= 61) riskLevel = 'HIGH';
   else if (totalScore >= 36) riskLevel = 'MODERATE';
 
-  const factors = calculateXAIContributions(safeWeather, context, totalScore);
-  const recommendations = generatePersonalizedGuidance(riskLevel, context, safeWeather);
+  // 3. Directional XAI Breakdown & Guidance
+  const factors = calculateXAIContributions(safeWeather, safeContext, totalScore);
+  const explanation = explainPrediction(totalScore, riskLevel, safeWeather, safeContext);
+  const recommendations = generatePersonalizedGuidance(riskLevel, safeContext, safeWeather);
+
+  const modelVersion = 'HeatShield-ML v1.3.0 (Physics-Context Dual Engine)';
+  const durationMs = Date.now() - startTime;
+  logger.trackInference(durationMs, totalScore, riskLevel, modelVersion);
 
   return {
     id: `risk_${Date.now()}`,
@@ -122,18 +137,24 @@ export function evaluateHeatRisk(
     risk_score: totalScore,
     risk_level: riskLevel,
     factors,
+    explanation,
     weather_snapshot: {
       temp: safeWeather.temperature,
       humidity: safeWeather.relative_humidity,
       apparent_temp: safeWeather.apparent_temperature,
       wind: safeWeather.wind_speed,
     },
-    context_snapshot: context,
+    context_snapshot: safeContext,
     recommendations,
-    model_version: 'HeatShield-XAI v1.2 (Ensemble Decision Tree)',
-    data_source: safeWeather.is_cached ? 'Cached Open-Meteo Environmental Stream' : 'Live Open-Meteo Weather API',
-    data_quality: safeWeather.is_cached ? 'Stale' : 'Good',
-    limitations: 'Local microclimatic factors (direct sun exposure, radiant ground heat) may differ from regional environmental observations.',
+    model_version: modelVersion,
+    data_source: safeWeather.is_fallback
+      ? 'Emergency Baseline (Meteorological Stream Unavailable)'
+      : safeWeather.is_cached
+      ? 'Cached Open-Meteo Environmental Stream'
+      : 'Live Open-Meteo Weather API',
+    data_quality: safeWeather.is_fallback ? 'Estimated' : safeWeather.is_cached ? 'Stale' : 'Good',
+    limitations:
+      'Thermal model assesses regional ambient conditions. Microclimatic factors (direct sun exposure, radiant ground heat from asphalt) may intensify local heat stress.',
   };
 }
 
@@ -156,4 +177,3 @@ export function calculateRiskAssessment({
     age_group: ageGroup,
   });
 }
-
