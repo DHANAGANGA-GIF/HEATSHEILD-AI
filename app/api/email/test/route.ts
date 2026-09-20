@@ -1,14 +1,21 @@
 import { NextResponse } from 'next/server';
 import { sendAlertEmail, getEmailProvider } from '@/lib/email-service';
 import { SmartAlert } from '@/lib/types';
-import { extractBearerToken, verifyFirebaseToken } from '@/lib/firebase/admin';
+import { resolveAuthSession, extractBearerToken } from '@/lib/firebase/admin';
 
 export const dynamic = 'force-dynamic';
 
 /**
  * POST /api/email/test
  * Sends a test environmental advisory email using the currently configured provider (Gmail or Resend).
- * Requires authentication or CRON_SECRET for security.
+ *
+ * FINAL EMAIL CONTRACT:
+ *   FROM: GMAIL_SENDER_EMAIL (configured authorized sender)
+ *   TO:   resolveAuthSession(request).email — the authenticated user's verified identity.
+ *
+ * NEVER uses GMAIL_SENDER_EMAIL or any sender config as the recipient.
+ * Requires authentication: valid Firebase ID token OR CRON_SECRET.
+ * Unauthorized requests receive HTTP 401.
  */
 export async function POST(request: Request) {
   const startTime = Date.now();
@@ -18,35 +25,43 @@ export async function POST(request: Request) {
     const token = extractBearerToken(authHeader);
     const cronSecret = process.env.CRON_SECRET;
 
-    let callerEmail: string | undefined;
+    // Check if this is an authorized cron invocation
+    const isCronAuth = cronSecret && cronSecret.length > 5 && token === cronSecret;
 
-    // Check authorization: CRON_SECRET, or Firebase token, or dev mode
-    const isCronAuth = cronSecret && token === cronSecret;
-    if (!isCronAuth && token && token.length > 20) {
-      const decoded = await verifyFirebaseToken(token);
-      if (decoded?.email) {
-        callerEmail = decoded.email;
-      }
+    // Resolve Firebase authenticated session (supports both Bearer token and hs_session cookie)
+    const decoded = isCronAuth ? null : await resolveAuthSession(request);
+
+    // If not cron-authorized AND no valid session — reject.
+    if (!isCronAuth && !decoded) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: 'Authentication required. A valid Firebase session or CRON_SECRET must be provided. ' +
+                 'The recipient email is determined server-side from your verified identity — ' +
+                 'the sender configuration email is NEVER used as the recipient.',
+        },
+        { status: 401 }
+      );
     }
 
-    const body = await request.json().catch(() => ({}));
-    const targetEmail =
-      body.to ||
-      body.email ||
-      callerEmail ||
-      process.env.TEST_RECIPIENT_EMAIL ||
-      process.env.GMAIL_SENDER_EMAIL;
+    // FINAL EMAIL CONTRACT — recipient resolution:
+    //   1. Authenticated user session → decoded.email (authoritative)
+    //   2. Cron invocation → TEST_RECIPIENT_EMAIL (configured test target)
+    //   3. NEVER: GMAIL_SENDER_EMAIL or any sender configuration
+    const targetEmail = decoded?.email || (isCronAuth ? process.env.TEST_RECIPIENT_EMAIL : undefined);
 
     if (!targetEmail || !targetEmail.includes('@')) {
       return NextResponse.json(
         {
           success: false,
-          error:
-            'A valid recipient email address must be provided in the request body ({ "to": "user@example.com" }) or authenticated session.',
+          error: isCronAuth
+            ? 'CRON_SECRET authenticated but TEST_RECIPIENT_EMAIL is not configured. Set TEST_RECIPIENT_EMAIL to a valid address.'
+            : 'Your authenticated account does not have a verified email address. Cannot dispatch test email without a verified recipient.',
         },
         { status: 400 }
       );
     }
+
 
     const provider = getEmailProvider();
 

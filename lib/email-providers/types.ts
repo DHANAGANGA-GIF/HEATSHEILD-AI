@@ -70,12 +70,17 @@ export interface SendEmailResult {
 export interface EmailServiceStatus {
   provider: 'gmail' | 'resend';
   mode: 'SANDBOX' | 'PRODUCTION' | 'NOT_READY';
+  ready: boolean;
+  reason?: string;
   configured: boolean;
   domain?: string;
   domainVerified?: boolean;
   senderConfigured: boolean;
   senderEmail?: string;
   oauthConnected?: boolean;
+  oauthConnectedAccount?: string;
+  authorizedEmail?: string;
+  oauthAccountMismatch?: boolean;
   message: string;
 }
 

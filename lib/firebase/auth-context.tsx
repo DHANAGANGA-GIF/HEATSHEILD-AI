@@ -142,7 +142,6 @@ export function FirebaseAuthProvider({ children }: { children: ReactNode }) {
     };
     // Persist locally so rest of app sees consistent profile
     saveUserProfile(merged);
-    setSessionCookie(user.uid);
     setAppProfile(merged);
 
     // Write to Firestore users/{uid} — non-blocking, does NOT delay auth
@@ -174,7 +173,7 @@ export function FirebaseAuthProvider({ children }: { children: ReactNode }) {
 
         if (user) {
           try {
-            const token = await user.getIdToken();
+            const token = await user.getIdToken(true /* force fresh token */);
             // Only store a real JWT in the session cookie — never a bare UID
             setIdToken(token || null);
             if (token) setSessionCookie(token);
@@ -230,7 +229,7 @@ export function FirebaseAuthProvider({ children }: { children: ReactNode }) {
       const { user } = await signInWithEmailAndPassword(firebaseAuth, email, password);
       let token: string | null = null;
       try {
-        token = await user.getIdToken();
+        token = await user.getIdToken(true /* force fresh token */);
       } catch {
         token = null;
       }
@@ -269,7 +268,7 @@ export function FirebaseAuthProvider({ children }: { children: ReactNode }) {
       sendEmailVerification(user).catch(() => {});
       let token: string | null = null;
       try {
-        token = await user.getIdToken();
+        token = await user.getIdToken(true /* force fresh token */);
       } catch {
         token = null;
       }

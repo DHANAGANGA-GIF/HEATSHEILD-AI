@@ -122,10 +122,27 @@ export function getUserProfile(): UserProfile {
   }
 }
 
-export function setSessionCookie(tokenOrUid: string): void {
+export function setSessionCookie(token: string): void {
   if (typeof document !== 'undefined') {
-    document.cookie = `hs_session=${encodeURIComponent(tokenOrUid)}; path=/; max-age=86400; SameSite=Lax`;
+    if (!token || typeof token !== 'string') return;
+    const trimmed = token.trim();
+    // Strict requirement: ONLY store actual JWT tokens (3 dot-separated base64url segments)
+    // Never store a bare UID, user ID, email, or arbitrary string.
+    if (trimmed.split('.').length !== 3) {
+      return;
+    }
+    const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
+    document.cookie = `hs_session=${encodeURIComponent(trimmed)}; path=/; max-age=86400; SameSite=Lax${isHttps ? '; Secure' : ''}`;
   }
+}
+
+export function getSessionCookie(): string | null {
+  if (typeof document === 'undefined') return null;
+  const match = document.cookie.match(/(?:^|;\s*)hs_session=([^;]+)/);
+  if (!match || !match[1]) return null;
+  const val = decodeURIComponent(match[1]).trim();
+  if (val.split('.').length === 3) return val;
+  return null;
 }
 
 export function clearSessionCookie(): void {
@@ -144,9 +161,8 @@ export function saveUserProfile(profile: Partial<UserProfile>): UserProfile {
 
   if (typeof window !== 'undefined') {
     localStorage.setItem(PROFILE_KEY, JSON.stringify(updated));
-    if (updated.id || updated.firebase_uid) {
-      setSessionCookie(updated.firebase_uid || updated.id);
-    }
+    // Note: Do NOT write bare UIDs to session cookies.
+    // Cookies are strictly synchronized with authenticated JWTs only.
   }
 
   // Automatically synchronize into recipient notification subscriber pool
@@ -182,7 +198,6 @@ export function saveUserProfile(profile: Partial<UserProfile>): UserProfile {
  *   Firebase UID → HeatShield User Profile → Supabase profile
  */
 export function linkFirebaseUID(uid: string): UserProfile {
-  setSessionCookie(uid);
   return saveUserProfile({ firebase_uid: uid, id: uid });
 }
 

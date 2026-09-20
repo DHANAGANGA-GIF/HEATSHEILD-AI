@@ -8,6 +8,7 @@ import { saveUserProfile, getUserProfile } from '@/lib/store';
 import { ActivityLevel, AgeGroup, CoolingAccess, ExposureDuration, ExposureType, Language, LocationData } from '@/lib/types';
 import { DEFAULT_LOCATIONS, searchLocations } from '@/lib/weather-api';
 import { useAuth } from '@/lib/firebase/auth-context';
+import { authenticatedFetch } from '@/lib/api-client';
 
 export default function OnboardingPage() {
   const router = useRouter();
@@ -68,25 +69,20 @@ export default function OnboardingPage() {
       onboarded: true,
     });
 
-    getIdToken().then((idToken) => {
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (idToken) headers['Authorization'] = `Bearer ${idToken}`;
-
-      fetch('/api/broadcast/live-alerts', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          clientLocation: {
-            latitude: location.latitude,
-            longitude: location.longitude,
-            location_name: location.name,
-            location_source: location.gps_accuracy ? 'LIVE_GPS' : 'SAVED_LOCATION',
-            gps_accuracy: location.gps_accuracy,
-          },
-          customSubject: `HeatShield AI | Active Heat Protection & Guidance for ${location.name}`,
-        }),
-      }).catch(() => {});
-    });
+    authenticatedFetch('/api/broadcast/live-alerts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        clientLocation: {
+          latitude: location.latitude,
+          longitude: location.longitude,
+          location_name: location.name,
+          location_source: location.gps_accuracy ? 'LIVE_GPS' : 'SAVED_LOCATION',
+          gps_accuracy: location.gps_accuracy,
+        },
+        customSubject: `HeatShield AI | Active Heat Protection & Guidance for ${location.name}`,
+      }),
+    }).catch(() => {});
 
     router.push('/dashboard');
   };

@@ -31,6 +31,7 @@ import {
   fetchWeatherData, searchLocations, reverseGeocode, getWeatherConditionText
 } from '@/lib/weather-api';
 import { useAuth } from '@/lib/firebase/auth-context';
+import { authenticatedFetch } from '@/lib/api-client';
 
 function NotificationsContent() {
   const router = useRouter();
@@ -49,15 +50,33 @@ function NotificationsContent() {
   // Authoritative email derived ONLY from the authenticated Firebase user.
   // NEVER from localStorage, client state, or the request body.
   const authorizedEmail: string = firebaseUser?.email || authProfile?.email || '';
-  const [emailDeliveryMode, setEmailDeliveryMode] = useState<'SANDBOX' | 'PRODUCTION' | 'NOT_CONFIGURED'>('SANDBOX');
-  const [emailDeliveryMessage, setEmailDeliveryMessage] = useState<string>('Resend sandbox mode — emails can only be sent to the Resend account owner.');
+  const [emailStatus, setEmailStatus] = useState<{
+    ready: boolean;
+    mode: 'SANDBOX' | 'PRODUCTION' | 'NOT_READY' | 'NOT_CONFIGURED';
+    provider?: string;
+    message: string;
+    reason?: string;
+    oauthConnected?: boolean;
+  }>({
+    ready: true,
+    mode: 'PRODUCTION',
+    message: 'Active transactional email gateway',
+  });
 
   useEffect(() => {
     fetch('/api/email/status')
       .then((res) => res.json())
       .then((data) => {
-        if (data.mode) setEmailDeliveryMode(data.mode);
-        if (data.message) setEmailDeliveryMessage(data.message);
+        if (data) {
+          setEmailStatus({
+            ready: data.ready !== undefined ? Boolean(data.ready) : data.mode !== 'NOT_READY',
+            mode: data.mode || (data.ready ? 'PRODUCTION' : 'NOT_READY'),
+            provider: data.provider,
+            message: data.message || '',
+            reason: data.reason,
+            oauthConnected: data.oauthConnected,
+          });
+        }
       })
       .catch(() => {});
   }, []);
@@ -246,14 +265,9 @@ function NotificationsContent() {
     let activeAccuracy = gpsAccuracy;
 
     try {
-      // Obtain a fresh Firebase ID token to authenticate the server request.
-      const idToken = await getIdToken();
-      const authHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (idToken) authHeaders['Authorization'] = `Bearer ${idToken}`;
-
-      const response = await fetch('/api/admin/test-notifications', {
+      const response = await authenticatedFetch('/api/admin/test-notifications', {
         method: 'POST',
-        headers: authHeaders,
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           // SECURITY: Do NOT send targetEmail for single dispatch.
           // The server derives the recipient from the verified Firebase UID.
@@ -359,13 +373,9 @@ function NotificationsContent() {
     setOtpError(null);
     setOtpVerificationSuccess(null);
     try {
-      const idToken = await getIdToken();
-      const authHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (idToken) authHeaders['Authorization'] = `Bearer ${idToken}`;
-
-      const res = await fetch('/api/auth/otp/send', {
+      const res = await authenticatedFetch('/api/auth/otp/send', {
         method: 'POST',
-        headers: authHeaders,
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           channel: otpChannel,
           target: otpChannel === 'SMS' ? customPhone.trim() : undefined,
@@ -424,13 +434,9 @@ function NotificationsContent() {
     setIsVerifyingOtp(true);
     setOtpError(null);
     try {
-      const idToken = await getIdToken();
-      const authHeaders: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (idToken) authHeaders['Authorization'] = `Bearer ${idToken}`;
-
-      const res = await fetch('/api/auth/otp/verify', {
+      const res = await authenticatedFetch('/api/auth/otp/verify', {
         method: 'POST',
-        headers: authHeaders,
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           otpCode: verifyOtpInput.trim(),
         }),
@@ -689,23 +695,31 @@ function NotificationsContent() {
                           <AlertCircle className="w-3.5 h-3.5 text-sky-400" />
                           <span>Point-in-Time GPS Snapshot Dispatch</span>
                         </div>
-                        {emailDeliveryMode === 'SANDBOX' ? (
-                          <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-amber-950/80 text-amber-300 border border-amber-800/60">
-                            EMAIL DELIVERY: SANDBOX
+                        {!emailStatus.ready || emailStatus.mode === 'NOT_READY' ? (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-rose-950/80 text-rose-300 border border-rose-800/60">
+                            EMAIL DELIVERY: NOT READY{emailStatus.reason ? ` (${emailStatus.reason})` : ''}
                           </span>
-                        ) : emailDeliveryMode === 'PRODUCTION' ? (
-                          <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-emerald-950/80 text-emerald-300 border border-emerald-800/60">
-                            EMAIL DELIVERY: PRODUCTION
+                        ) : emailStatus.mode === 'SANDBOX' ? (
+                          <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-amber-950/80 text-amber-300 border border-amber-800/60">
+                            EMAIL DELIVERY: SANDBOX ({emailStatus.provider ? emailStatus.provider.toUpperCase() : 'RESEND'})
                           </span>
                         ) : (
-                          <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-rose-950/80 text-rose-300 border border-rose-800/60">
-                            EMAIL DELIVERY: NOT READY
+                          <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-emerald-950/80 text-emerald-300 border border-emerald-800/60">
+                            EMAIL DELIVERY: READY ({emailStatus.provider ? emailStatus.provider.toUpperCase() : 'ACTIVE'})
                           </span>
                         )}
                       </div>
-                      <p className="text-[10px] leading-relaxed">
-                        {emailDeliveryMessage}
-                      </p>
+                      <div className="text-[10px] leading-relaxed text-slate-400 flex flex-wrap items-center justify-between gap-2">
+                        <span>{emailStatus.message || (emailStatus.ready ? 'Live transactional email delivery operational.' : 'Email service configuration required.')}</span>
+                        {emailStatus.provider === 'gmail' && !emailStatus.oauthConnected && (
+                          <a
+                            href="/api/email/google/connect"
+                            className="text-emerald-400 hover:underline font-bold font-mono"
+                          >
+                            Connect Gmail OAuth &rarr;
+                          </a>
+                        )}
+                      </div>
                     </div>
 
                     <div className="flex gap-2 pt-1">

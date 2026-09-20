@@ -199,4 +199,55 @@ describe('Production Email Delivery & Trustworthy Mode Verification', () => {
     assert.equal(serialized.includes('service_account'), false);
     assert.equal(serialized.includes('secret'), false);
   });
+
+  it('13. ready and reason fields conform to EmailServiceStatus interface', async () => {
+    const origKey = process.env.RESEND_API_KEY;
+    delete process.env.RESEND_API_KEY;
+    delete process.env.EMAIL_PROVIDER;
+
+    const notReadyStatus = await getEmailServiceStatus();
+    assert.equal(notReadyStatus.ready, false);
+    assert.equal(typeof notReadyStatus.reason, 'string');
+    assert.ok(notReadyStatus.reason && notReadyStatus.reason.length > 0);
+
+    process.env.RESEND_API_KEY = 're_test_key_1234567890';
+    process.env.EMAIL_FROM = 'HeatShield AI Alerts <onboarding@resend.dev>';
+
+    const readySandboxStatus = await getEmailServiceStatus();
+    assert.equal(readySandboxStatus.ready, true);
+    assert.equal(readySandboxStatus.mode, 'SANDBOX');
+
+    process.env.RESEND_API_KEY = origKey;
+  });
+
+  it('14. If EMAIL_PROVIDER=resend, Gmail OAuth is NEVER checked or required', async () => {
+    const origProvider = process.env.EMAIL_PROVIDER;
+    const origKey = process.env.RESEND_API_KEY;
+    const origFrom = process.env.EMAIL_FROM;
+
+    process.env.EMAIL_PROVIDER = 'resend';
+    process.env.RESEND_API_KEY = 're_test_key_1234567890';
+    process.env.EMAIL_FROM = 'HeatShield AI Alerts <onboarding@resend.dev>';
+
+    const status = await getEmailServiceStatus();
+    assert.equal(status.provider, 'resend');
+    assert.equal(status.ready, true);
+    // Gmail OAuth must NOT be mentioned in Resend status
+    assert.equal(status.oauthConnected, undefined);
+    assert.ok(!status.message.toLowerCase().includes('gmail'));
+
+    process.env.EMAIL_PROVIDER = origProvider;
+    process.env.RESEND_API_KEY = origKey;
+    process.env.EMAIL_FROM = origFrom;
+  });
+
+  it('15. If EMAIL_PROVIDER=gmail, Gmail provider is selected', async () => {
+    const origProvider = process.env.EMAIL_PROVIDER;
+    process.env.EMAIL_PROVIDER = 'gmail';
+
+    const status = await getEmailServiceStatus();
+    assert.equal(status.provider, 'gmail');
+
+    process.env.EMAIL_PROVIDER = origProvider;
+  });
 });

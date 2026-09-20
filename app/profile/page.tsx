@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { useAuth } from '@/lib/firebase/auth-context';
+import { authenticatedFetch } from '@/lib/api-client';
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -159,25 +160,11 @@ export default function ProfilePage() {
     setOtpSuccessMsg(null);
 
     try {
-      let token = '';
-      if (firebaseUser) {
-        token = await firebaseUser.getIdToken();
-      }
-
-      if (!token) {
-        setOtpErrorMsg('Authentication required. Please sign in again.');
-        setIsSendingOtp(false);
-        return;
-      }
-
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      };
-
-      const res = await fetch('/api/auth/otp/send', {
+      const res = await authenticatedFetch('/api/auth/otp/send', {
         method: 'POST',
-        headers,
+        headers: {
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify({
           channel: otpChannel,
           target: otpChannel === 'SMS' ? phoneInput.trim() : undefined,
@@ -209,25 +196,11 @@ export default function ProfilePage() {
     setOtpErrorMsg(null);
 
     try {
-      let token = '';
-      if (firebaseUser) {
-        token = await firebaseUser.getIdToken();
-      }
-
-      if (!token) {
-        setOtpErrorMsg('Authentication required. Please sign in again.');
-        setIsVerifyingOtp(false);
-        return;
-      }
-
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      };
-
-      const res = await fetch('/api/auth/otp/verify', {
+      const res = await authenticatedFetch('/api/auth/otp/verify', {
         method: 'POST',
-        headers,
+        headers: {
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify({ otpCode: otpCode.trim() }),
       });
       const data = await res.json();

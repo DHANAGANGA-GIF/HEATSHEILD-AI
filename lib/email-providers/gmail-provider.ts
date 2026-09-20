@@ -7,7 +7,7 @@ import {
   GmailErrorCode,
 } from './types';
 import { generateEmailContent, isValidEmail } from './template';
-import { getGmailRefreshToken, getStoredSenderEmail } from './token-store';
+import { getGmailRefreshToken, getStoredSenderEmail, getStoredOAuthAccountEmail } from './token-store';
 
 /**
  * Creates RFC 2822 compliant MIME email string, then encodes as URL-safe base64.
@@ -149,13 +149,18 @@ export class GmailEmailProvider implements IEmailProvider {
   async getStatus(): Promise<EmailServiceStatus> {
     const clientId = process.env.GOOGLE_CLIENT_ID;
     const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-    const senderEmail = getStoredSenderEmail() || process.env.GMAIL_SENDER_EMAIL;
+    // IMPORTANT: configured sender email always comes from GMAIL_SENDER_EMAIL first.
+    const senderEmail = process.env.GMAIL_SENDER_EMAIL || getStoredSenderEmail();
     const refreshToken = await getGmailRefreshToken();
+    // The email address that authorized OAuth (may differ from GMAIL_SENDER_EMAIL).
+    const authorizedEmail = getStoredOAuthAccountEmail();
 
     if (!clientId || !clientSecret) {
       return {
         provider: 'gmail',
         mode: 'NOT_READY',
+        ready: false,
+        reason: 'Missing GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET',
         configured: false,
         senderConfigured: false,
         oauthConnected: false,
@@ -167,6 +172,8 @@ export class GmailEmailProvider implements IEmailProvider {
       return {
         provider: 'gmail',
         mode: 'NOT_READY',
+        ready: false,
+        reason: 'GMAIL_SENDER_EMAIL not set',
         configured: true,
         senderConfigured: false,
         oauthConnected: false,
@@ -178,6 +185,8 @@ export class GmailEmailProvider implements IEmailProvider {
       return {
         provider: 'gmail',
         mode: 'NOT_READY',
+        ready: false,
+        reason: 'Gmail OAuth not authorized — visit /api/email/google/connect',
         configured: true,
         senderConfigured: true,
         senderEmail,
@@ -186,25 +195,49 @@ export class GmailEmailProvider implements IEmailProvider {
       };
     }
 
+    // Requirement #8: Explicitly detect OAuth account mismatch.
+    // Only flag mismatch if we actually know which account authorized the token.
+    if (authorizedEmail && senderEmail && authorizedEmail.toLowerCase() !== senderEmail.toLowerCase()) {
+      return {
+        provider: 'gmail',
+        mode: 'NOT_READY',
+        ready: false,
+        reason: `OAuth account mismatch: refresh token belongs to ${authorizedEmail} but GMAIL_SENDER_EMAIL is ${senderEmail}`,
+        configured: true,
+        senderConfigured: true,
+        senderEmail,
+        oauthConnected: false,
+        oauthConnectedAccount: authorizedEmail,
+        authorizedEmail,
+        oauthAccountMismatch: true,
+        message: `OAuth account mismatch detected. The Gmail OAuth refresh token authorizes ${authorizedEmail}, but the configured sender is ${senderEmail}. Re-authorize via /api/email/google/connect using the ${senderEmail} Google account.`,
+      };
+    }
+
     return {
       provider: 'gmail',
       mode: 'PRODUCTION',
+      ready: true,
       configured: true,
       senderConfigured: true,
       senderEmail,
       oauthConnected: true,
+      oauthConnectedAccount: authorizedEmail || senderEmail,
+      authorizedEmail: authorizedEmail || undefined,
+      oauthAccountMismatch: false,
       domainVerified: true,
       message: `Gmail API delivery active for ${senderEmail} (authorized offline background dispatch).`,
     };
   }
 
   async sendEmail(options: SendEmailOptions): Promise<SendEmailResult> {
-    const senderEmail = getStoredSenderEmail() || process.env.GMAIL_SENDER_EMAIL;
-    const replyTo = options.replyTo || process.env.GMAIL_REPLY_TO || senderEmail;
+    // FINAL EMAIL CONTRACT: sender ALWAYS comes from GMAIL_SENDER_EMAIL, never from options or client.
+    const senderEmail = process.env.GMAIL_SENDER_EMAIL ?? getStoredSenderEmail() ?? '';
+    const replyTo = options.replyTo ?? process.env.GMAIL_REPLY_TO ?? senderEmail;
     const isProduction =
       process.env.NODE_ENV === 'production' || process.env.VERCEL_ENV === 'production';
 
-    // 1. Recipient safety check
+    // 1. Recipient safety check: format must be valid.
     if (!isValidEmail(options.to)) {
       return {
         success: false,
@@ -215,7 +248,7 @@ export class GmailEmailProvider implements IEmailProvider {
       };
     }
 
-    // 2. Sender email check (Strictly enforce GMAIL_SENDER_EMAIL to prevent user spoofing)
+    // 2. Sender email check: GMAIL_SENDER_EMAIL must be configured.
     if (!senderEmail || !senderEmail.includes('@')) {
       return {
         success: false,
@@ -223,6 +256,24 @@ export class GmailEmailProvider implements IEmailProvider {
         error: 'GMAIL_CONFIG_ERROR: GMAIL_SENDER_EMAIL environment variable is missing or invalid.',
         errorCode: 'GMAIL_CONFIG_ERROR',
         errorMessage: 'Missing sender configuration',
+      };
+    }
+
+    // 2b. CRITICAL SAFETY CHECK: recipient must NEVER equal the configured sender.
+    //     Sender identity (FROM) and recipient identity (TO) are two different concepts.
+    //     GMAIL_SENDER_EMAIL controls FROM. Authenticated user controls TO.
+    if (options.to.toLowerCase() === senderEmail.toLowerCase()) {
+      console.error(
+        `[HeatShield:SECURITY] BLOCKED: Attempted to send to sender address ${senderEmail}. ` +
+        `Recipient must come from the authenticated user's verified email, not the sender config. ` +
+        `Check that resolveAuthSession(request).email is being used as the recipient.`
+      );
+      return {
+        success: false,
+        provider: 'gmail',
+        error: `GMAIL_RECIPIENT_IS_SENDER: Recipient (${options.to}) must not equal the configured Gmail sender (${senderEmail}). The authenticated user's verified email must be used as the recipient.`,
+        errorCode: 'GMAIL_CONFIG_ERROR',
+        errorMessage: 'Recipient cannot be the configured sender address',
       };
     }
 

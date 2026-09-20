@@ -34,6 +34,7 @@ import {
   ShieldCheck, Activity, Users, Database, Server, BarChart3,
   AlertCircle, Plus, Trash2, CheckCircle, ShieldAlert, Lock, Loader2
 } from 'lucide-react';
+import { authenticatedFetch } from '@/lib/api-client';
 
 export default function AdminPage() {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
@@ -82,17 +83,14 @@ export default function AdminPage() {
 
       try {
         // Step 1: Try server-side verification with Firebase ID token
-        const idToken = await getIdToken();
-        if (idToken) {
-          const res = await fetch('/api/admin/verify-admin', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${idToken}`,
-            },
-            body: JSON.stringify({}),
-          });
-          const data = await res.json();
+        const res = await authenticatedFetch('/api/admin/verify-admin', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({}),
+        });
+        const data = await res.json();
           if (res.ok) {
             // Server says admin — trust it
             setIsAdmin(data.isAdmin === true);
@@ -108,7 +106,6 @@ export default function AdminPage() {
             }
             return;
           }
-        }
 
         // Step 2: Fallback — local role check (less secure, warns user)
         const authorized = isAdminAuthorized(profile.role);

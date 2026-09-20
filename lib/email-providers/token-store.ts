@@ -4,6 +4,7 @@ import { encryptString, decryptString } from '../crypto';
 // In-memory cache for fast access during runtime
 let inMemoryRefreshToken: string | null = null;
 let inMemorySenderEmail: string | null = null;
+let inMemoryAuthorizedEmail: string | null = null;
 
 /**
  * Retrieves the Gmail OAuth2 refresh token from:
@@ -33,6 +34,7 @@ export async function getGmailRefreshToken(): Promise<string | null> {
           if (decrypted && decrypted.length > 5) {
             inMemoryRefreshToken = decrypted;
             if (data.account_email) {
+              inMemoryAuthorizedEmail = data.account_email;
               inMemorySenderEmail = data.account_email;
             }
             return decrypted;
@@ -65,6 +67,7 @@ export async function saveGmailRefreshToken(
 ): Promise<{ success: boolean; error?: string }> {
   inMemoryRefreshToken = refreshToken;
   if (accountEmail) {
+    inMemoryAuthorizedEmail = accountEmail;
     inMemorySenderEmail = accountEmail;
   }
 
@@ -75,10 +78,12 @@ export async function saveGmailRefreshToken(
       // Check if a record already exists
       const { data: existing } = await supabase
         .from('oauth_tokens')
-        .select('id')
+        .select('id, account_email')
         .eq('provider', 'google')
         .limit(1)
         .maybeSingle();
+
+      const emailToPersist = accountEmail || existing?.account_email || process.env.GMAIL_SENDER_EMAIL || null;
 
       if (existing?.id) {
         const { error } = await supabase
@@ -87,7 +92,7 @@ export async function saveGmailRefreshToken(
             encrypted_token: ciphertext,
             iv,
             auth_tag: authTag,
-            account_email: accountEmail || process.env.GMAIL_SENDER_EMAIL || null,
+            account_email: emailToPersist,
             updated_at: new Date().toISOString(),
           })
           .eq('id', existing.id);
@@ -102,7 +107,7 @@ export async function saveGmailRefreshToken(
           iv,
           auth_tag: authTag,
           scope: 'https://www.googleapis.com/auth/gmail.send',
-          account_email: accountEmail || process.env.GMAIL_SENDER_EMAIL || null,
+          account_email: emailToPersist,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         });
@@ -123,10 +128,24 @@ export async function saveGmailRefreshToken(
 }
 
 /**
- * Returns the cached account email associated with the token, if known.
+ * Returns the verified Google account email that authorized OAuth, if known.
+ */
+export function getStoredOAuthAccountEmail(): string | null {
+  return inMemoryAuthorizedEmail || null;
+}
+
+/**
+ * Sets or overrides the authorized OAuth account email in memory (for tests or detection).
+ */
+export function setAuthorizedEmailForTesting(email: string | null): void {
+  inMemoryAuthorizedEmail = email;
+}
+
+/**
+ * Returns the configured sender email (strictly prioritizes GMAIL_SENDER_EMAIL).
  */
 export function getStoredSenderEmail(): string | null {
-  return inMemorySenderEmail || process.env.GMAIL_SENDER_EMAIL || null;
+  return process.env.GMAIL_SENDER_EMAIL || inMemoryAuthorizedEmail || inMemorySenderEmail || null;
 }
 
 /**
@@ -135,4 +154,5 @@ export function getStoredSenderEmail(): string | null {
 export function clearTokenCacheForTesting(): void {
   inMemoryRefreshToken = null;
   inMemorySenderEmail = null;
+  inMemoryAuthorizedEmail = null;
 }

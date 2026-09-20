@@ -88,6 +88,17 @@ async function fetchEligibleSubscribers(): Promise<RecipientNotificationProfile[
   const subscribers: RecipientNotificationProfile[] = [];
   const seenEmails = new Set<string>();
 
+  // SAFETY: Build a blacklist of sender addresses that must NEVER appear as recipients.
+  // GMAIL_SENDER_EMAIL controls FROM. Subscriber email controls TO.
+  const senderBlacklist = new Set<string>();
+  if (process.env.GMAIL_SENDER_EMAIL) senderBlacklist.add(process.env.GMAIL_SENDER_EMAIL.toLowerCase().trim());
+  if (process.env.EMAIL_FROM) {
+    // EMAIL_FROM may be "Name <addr@domain>" — extract the email part
+    const emailMatch = process.env.EMAIL_FROM.match(/<([^>]+)>/);
+    const emailPart = emailMatch ? emailMatch[1] : process.env.EMAIL_FROM;
+    if (emailPart && emailPart.includes('@')) senderBlacklist.add(emailPart.toLowerCase().trim());
+  }
+
   // 1. Query Supabase profiles if database is configured
   if (isSupabaseConfigured && supabase) {
     try {
@@ -100,6 +111,11 @@ async function fetchEligibleSubscribers(): Promise<RecipientNotificationProfile[
         for (const p of data) {
           if (p.email && p.email.includes('@')) {
             const emailLower = p.email.toLowerCase().trim();
+            // NEVER dispatch to sender address
+            if (senderBlacklist.has(emailLower)) {
+              console.warn(`[HeatShield:SECURITY] Skipped subscriber ${emailLower} — matches configured sender address. Sender and recipient must be separate identities.`);
+              continue;
+            }
             if (!seenEmails.has(emailLower)) {
               seenEmails.add(emailLower);
               subscribers.push({
@@ -134,6 +150,11 @@ async function fetchEligibleSubscribers(): Promise<RecipientNotificationProfile[
   for (const r of localRecipients) {
     if (r.email && r.email.includes('@')) {
       const emailLower = r.email.toLowerCase().trim();
+      // NEVER dispatch to sender address
+      if (senderBlacklist.has(emailLower)) {
+        console.warn(`[HeatShield:SECURITY] Skipped local subscriber ${emailLower} — matches configured sender address.`);
+        continue;
+      }
       // Only include if hourly_heat_alerts_enabled is true
       if (r.hourly_heat_alerts_enabled && !seenEmails.has(emailLower)) {
         seenEmails.add(emailLower);

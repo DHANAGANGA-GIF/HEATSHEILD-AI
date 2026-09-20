@@ -23,6 +23,7 @@ import {
 import { getRecipientProfiles, getHeatRiskDispatchLogs } from '@/lib/store';
 import { RecipientNotificationProfile, HeatRiskDispatchLog, RiskLevel } from '@/lib/types';
 import { useAuth } from '@/lib/firebase/auth-context';
+import { authenticatedFetch } from '@/lib/api-client';
 
 export const RealtimeBroadcastCommandCenter: React.FC = () => {
   const { firebaseUser, getIdToken } = useAuth();
@@ -95,19 +96,12 @@ export const RealtimeBroadcastCommandCenter: React.FC = () => {
     setResults([]);
 
     try {
-      const idToken = await getIdToken();
       setProgress(50);
-
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-      };
-      if (idToken) {
-        headers['Authorization'] = `Bearer ${idToken}`;
-      }
-
-      const res = await fetch('/api/broadcast/live-alerts', {
+      const res = await authenticatedFetch('/api/broadcast/live-alerts', {
         method: 'POST',
-        headers,
+        headers: {
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify({
           mode: 'TEST',
           customSubject: customSubject.trim() || undefined,
@@ -163,19 +157,12 @@ export const RealtimeBroadcastCommandCenter: React.FC = () => {
     setResults([]);
 
     try {
-      const idToken = await getIdToken();
       setProgress(50);
-
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-      };
-      if (idToken) {
-        headers['Authorization'] = `Bearer ${idToken}`;
-      }
-
-      const res = await fetch('/api/broadcast/live-alerts', {
+      const res = await authenticatedFetch('/api/broadcast/live-alerts', {
         method: 'POST',
-        headers,
+        headers: {
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify({
           mode: 'MANUAL',
           targetEmail: selectedRecipientEmail,
@@ -217,14 +204,11 @@ export const RealtimeBroadcastCommandCenter: React.FC = () => {
     setResults([]);
 
     try {
-      const idToken = await getIdToken();
       setProgress(60);
-
-      const res = await fetch('/api/cron/heat-risk-dispatch', {
+      const res = await authenticatedFetch('/api/cron/heat-risk-dispatch', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}),
         },
       });
 
@@ -336,8 +320,20 @@ export const RealtimeBroadcastCommandCenter: React.FC = () => {
 
           <div className="bg-slate-900/90 p-2.5 rounded-xl border border-slate-800">
             <span className="text-[10px] text-slate-500 block">PROVIDER</span>
-            <span className="text-sky-400 font-bold block mt-0.5 uppercase">
-              {emailServiceStatus?.provider || 'EMAIL'} ({emailServiceStatus?.mode || 'ACTIVE'})
+            <span className={`font-bold block mt-0.5 uppercase ${
+              emailServiceStatus?.ready === false || emailServiceStatus?.mode === 'NOT_READY'
+                ? 'text-rose-400'
+                : emailServiceStatus?.mode === 'SANDBOX'
+                ? 'text-amber-400'
+                : 'text-emerald-400'
+            }`}>
+              {emailServiceStatus?.provider || 'EMAIL'} ({
+                emailServiceStatus?.ready === false || emailServiceStatus?.mode === 'NOT_READY'
+                  ? 'NOT READY'
+                  : emailServiceStatus?.mode === 'SANDBOX'
+                  ? 'SANDBOX'
+                  : 'READY'
+              })
             </span>
           </div>
 
@@ -347,9 +343,13 @@ export const RealtimeBroadcastCommandCenter: React.FC = () => {
           </div>
         </div>
 
-        {emailServiceStatus?.message && (
-          <div className="p-2 bg-slate-900/80 rounded-xl border border-slate-800 text-[11px] font-mono text-slate-400 flex items-center justify-between">
-            <span>Provider Status: {emailServiceStatus.message}</span>
+        {emailServiceStatus && (
+          <div className="p-2 bg-slate-900/80 rounded-xl border border-slate-800 text-[11px] font-mono text-slate-400 flex flex-wrap items-center justify-between gap-2">
+            <span>
+              Provider: <strong className="text-white uppercase">{emailServiceStatus.provider || 'EMAIL'}</strong> —{' '}
+              {emailServiceStatus.message}
+              {emailServiceStatus.reason ? ` (${emailServiceStatus.reason})` : ''}
+            </span>
             {emailServiceStatus.provider === 'gmail' && !emailServiceStatus.oauthConnected && (
               <a
                 href="/api/email/google/connect"

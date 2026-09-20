@@ -5,7 +5,7 @@ import { fetchWeatherData, reverseGeocode, getWeatherConditionText } from '@/lib
 import { calculateRiskAssessment } from '@/lib/risk-engine';
 import { generatePersonalizedGuidance, MEDICAL_SAFETY_DISCLAIMER } from '@/lib/guidance-engine';
 import { SmartAlert, NotificationLog, RecipientNotificationProfile } from '@/lib/types';
-import { verifyFirebaseToken, extractBearerToken } from '@/lib/firebase/admin';
+import { resolveAuthSession } from '@/lib/firebase/admin';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,20 +26,19 @@ export async function POST(request: Request) {
     // ── Step 1: Verify Firebase Authentication Token ──────────────────────────
     // The authenticated Firebase user is the SOLE authority for email identity.
     // The client MUST NOT supply targetEmail — we derive it from the verified token.
-    const authHeader = request.headers.get('authorization');
-    const idToken = extractBearerToken(authHeader);
+    const decoded = await resolveAuthSession(request);
     let verifiedUid: string | null = null;
     let verifiedEmail: string | null = null;
 
-    if (idToken && idToken.length > 20) {
-      const decoded = await verifyFirebaseToken(idToken);
-      if (decoded) {
-        verifiedUid = decoded.uid;
-        verifiedEmail = decoded.email || null;
-      } else {
-        // Token was supplied but invalid — reject immediately
+    if (decoded) {
+      verifiedUid = decoded.uid;
+      verifiedEmail = decoded.email || null;
+    } else {
+      const hasAuthHeader = Boolean(request.headers.get('authorization'));
+      const hasCookie = Boolean(request.headers.get('cookie')?.includes('hs_session='));
+      if (hasAuthHeader || hasCookie) {
         return NextResponse.json(
-          { success: false, error: 'Invalid or expired authentication token. Please sign in again.' },
+          { success: false, error: 'Invalid or expired authentication session. Please sign in again.' },
           { status: 401 }
         );
       }

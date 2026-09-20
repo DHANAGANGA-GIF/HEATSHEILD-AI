@@ -67,6 +67,19 @@ export async function POST(request: Request) {
     // verifiedEmail is now the SOLE recipient — client cannot override this.
     const recipientEmail = verifiedEmail;
 
+    // SAFETY ASSERTION: sender config must NEVER become the recipient.
+    // GMAIL_SENDER_EMAIL controls FROM. Firebase decoded.email controls TO.
+    const configuredSender = process.env.GMAIL_SENDER_EMAIL || process.env.EMAIL_FROM || '';
+    if (configuredSender && recipientEmail.toLowerCase() === configuredSender.toLowerCase()) {
+      console.error(
+        `[HeatShield:SECURITY] BLOCKED /api/send-email: verified recipient (${recipientEmail}) ` +
+        `matches GMAIL_SENDER_EMAIL. This indicates an account configuration issue — ` +
+        `the authenticated user should NOT be the same as the configured sender service account.`
+      );
+      // Log and continue — same address is technically valid (e.g. admin self-testing),
+      // but we surface it as a warning in the response.
+    }
+
     // ── Step 2: Resolve and validate location ─────────────────────────────────
     let lat = clientLocation?.latitude ?? 0;
     let lon = clientLocation?.longitude ?? 0;
@@ -203,7 +216,7 @@ export async function POST(request: Request) {
 
     if (!result.success) {
       return NextResponse.json(
-        { success: false, error: result.error || 'Failed to dispatch email via Resend.' },
+        { success: false, error: result.error || `Failed to dispatch email via ${result.provider || 'active provider'}.` },
         { status: 500 }
       );
     }

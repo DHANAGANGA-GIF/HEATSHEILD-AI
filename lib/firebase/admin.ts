@@ -92,15 +92,37 @@ function getAdminAuth(): Auth | null {
       return adminAuthInstance;
     }
 
-    const serviceAccount = JSON.parse(serviceAccountJson);
+    let serviceAccount: any;
+    try {
+      serviceAccount = JSON.parse(serviceAccountJson);
+    } catch {
+      try {
+        serviceAccount = JSON.parse(JSON.parse(serviceAccountJson));
+      } catch (jsonErr: any) {
+        console.warn('[HeatShield Auth] Failed to parse FIREBASE_SERVICE_ACCOUNT_JSON:', jsonErr?.message);
+        return null;
+      }
+    }
+
+    // Handle escaped newlines in private_key (common in environment variable strings)
+    if (serviceAccount.private_key && typeof serviceAccount.private_key === 'string') {
+      serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
+    }
+
+    const projectId =
+      serviceAccount.project_id ||
+      process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ||
+      process.env.FIREBASE_PROJECT_ID;
+
     admin.initializeApp({
       credential: admin.credential.cert(serviceAccount),
+      projectId,
     });
     adminAuthInstance = admin.auth();
     isAdminSDKConfigured = true;
     return adminAuthInstance;
-  } catch (err) {
-    console.error('[HeatShield] Firebase Admin SDK initialization failed:', err);
+  } catch (err: any) {
+    console.warn('[HeatShield Auth] Firebase Admin SDK initialization failed:', err?.message);
     return null;
   }
 }
@@ -108,6 +130,7 @@ function getAdminAuth(): Auth | null {
 /**
  * Verify a Firebase ID token or Supabase session token from the client.
  * Returns the decoded token payload (uid, email, etc.) or null if invalid.
+ * Strictly verifies cryptographic signatures and rejects bare UIDs or malformed strings.
  */
 export async function verifyFirebaseToken(
   idToken: string
@@ -116,18 +139,28 @@ export async function verifyFirebaseToken(
   const token = idToken.trim();
   if (token.length < 10) return null;
 
+  // Strict check: valid JWTs MUST contain exactly 3 dot-separated base64url segments.
+  // Rejects bare UIDs, email addresses, or arbitrary strings immediately.
+  const parts = token.split('.');
+  if (parts.length !== 3) {
+    return null;
+  }
+
   // ── Layer 1: Firebase Admin SDK (Full Service Account verification) ──────
   const auth = getAdminAuth();
   if (auth) {
     try {
-      const decoded = await auth.verifyIdToken(token, true /* checkRevoked */);
-      return {
-        uid: decoded.uid,
-        email: decoded.email,
-        name: decoded.name,
-      };
-    } catch {
-      // Continue to public certificate and fallback verification layers
+      // checkRevoked = false: verifies JWT signature locally without making an extra network RPC
+      const decoded = await auth.verifyIdToken(token, false);
+      if (decoded && decoded.uid) {
+        return {
+          uid: decoded.uid,
+          email: decoded.email,
+          name: decoded.name,
+        };
+      }
+    } catch (err: any) {
+      console.warn('[HeatShield Auth] Layer 1 Admin SDK verify failed:', err?.code || err?.message);
     }
   }
 
@@ -140,7 +173,7 @@ export async function verifyFirebaseToken(
       try {
         const verifier = crypto.createVerify('RSA-SHA256');
         verifier.update(jwt.signedContent);
-        const isSigValid = verifier.verify(cert, jwt.signature, 'base64url');
+        const isSigValid = verifier.verify(cert, Buffer.from(jwt.signature, 'base64url'));
         const nowSec = Math.floor(Date.now() / 1000);
         const isNotExpired = typeof jwt.payload?.exp === 'number' && jwt.payload.exp > nowSec;
         const isGoogleIssuer =
@@ -154,8 +187,8 @@ export async function verifyFirebaseToken(
             name: jwt.payload.name || jwt.payload.display_name,
           };
         }
-      } catch (err) {
-        console.warn('[HeatShield] Google public cert verification error:', err);
+      } catch (err: any) {
+        console.warn('[HeatShield Auth] Layer 2 public cert verification error:', err?.message);
       }
     }
   }
@@ -172,27 +205,7 @@ export async function verifyFirebaseToken(
         };
       }
     } catch {
-      // Continue to UID / database profile check
-    }
-  }
-
-  // ── Layer 4: Supabase Database Profile Lookup (for authenticated UID sessions) ──
-  if (isSupabaseConfigured && supabase) {
-    try {
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('id, email, full_name')
-        .eq('id', token)
-        .single();
-      if (profile && profile.email) {
-        return {
-          uid: profile.id,
-          email: profile.email,
-          name: profile.full_name || profile.email.split('@')[0],
-        };
-      }
-    } catch {
-      // No match in database
+      // Continue to rejection
     }
   }
 
@@ -201,11 +214,14 @@ export async function verifyFirebaseToken(
 
 /**
  * Extract the Bearer token from an Authorization header.
+ * Case-insensitive match for Bearer prefix with one or more spaces.
  * Returns null if header is missing or malformed.
  */
 export function extractBearerToken(authHeader: string | null): string | null {
-  if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
-  const token = authHeader.slice(7).trim();
+  if (!authHeader) return null;
+  const match = authHeader.match(/^Bearer\s+(.+)$/i);
+  if (!match || !match[1]) return null;
+  const token = match[1].trim();
   return token.length > 0 ? token : null;
 }
 
@@ -216,45 +232,79 @@ export function extractBearerToken(authHeader: string | null): string | null {
 export async function resolveAuthSession(
   request: Request
 ): Promise<{ uid: string; email?: string; name?: string } | null> {
-  // 1. Check Authorization: Bearer <token>
   const authHeader = request.headers.get('authorization');
+  const cookieHeader = request.headers.get('cookie');
   const bearerToken = extractBearerToken(authHeader);
-  if (bearerToken) {
-    const verified = await verifyFirebaseToken(bearerToken);
-    if (verified) return verified;
+
+  let authorizationScheme: 'Bearer' | 'missing' | 'other' = 'missing';
+  if (authHeader) {
+    authorizationScheme = authHeader.trim().toLowerCase().startsWith('bearer ') ? 'Bearer' : 'other';
   }
 
-  // 2. Check HTTP Cookies (hs_session or Supabase auth cookie)
-  const cookieHeader = request.headers.get('cookie');
-  if (cookieHeader) {
+  const hasHsSessionCookie = !!cookieHeader && cookieHeader.includes('hs_session=');
+
+  // Candidate token for JWT shape diagnostic: bearer preferred, else hs_session cookie
+  let candidateToken = bearerToken;
+  if (!candidateToken && cookieHeader) {
+    const match = cookieHeader.match(/(?:^|;\s*)hs_session=([^;]+)/);
+    if (match && match[1]) {
+      candidateToken = decodeURIComponent(match[1]).trim();
+    }
+  }
+  const tokenLooksLikeJwt = candidateToken ? candidateToken.split('.').length === 3 : false;
+
+  let decodedToken: { uid: string; email?: string; name?: string } | null = null;
+
+  // 1. Check Authorization: Bearer <token> — always takes precedence over cookie
+  if (bearerToken) {
+    decodedToken = await verifyFirebaseToken(bearerToken);
+  }
+
+  // 2. Fallback to HTTP Cookies (hs_session or Supabase auth cookie)
+  if (!decodedToken && cookieHeader) {
     const cookies: Record<string, string> = {};
     cookieHeader.split(';').forEach((part) => {
       const [k, ...v] = part.trim().split('=');
       if (k) cookies[k] = decodeURIComponent(v.join('='));
     });
 
-    // Try HeatShield session cookie (hs_session)
+    // Try HeatShield session cookie (hs_session) — strictly only if 3-part JWT
     if (cookies['hs_session']) {
-      const verified = await verifyFirebaseToken(cookies['hs_session']);
-      if (verified) return verified;
+      const sessionToken = cookies['hs_session'].trim();
+      if (sessionToken.split('.').length === 3) {
+        decodedToken = await verifyFirebaseToken(sessionToken);
+      }
     }
 
-    // Try Supabase auth cookie
-    const sbKey = Object.keys(cookies).find((k) => k.startsWith('sb-') && k.includes('auth-token'));
-    if (sbKey) {
-      try {
-        const parsed = JSON.parse(cookies[sbKey]);
-        const token = parsed?.access_token || (Array.isArray(parsed) ? parsed[0] : null);
-        if (token) {
-          const verified = await verifyFirebaseToken(token);
-          if (verified) return verified;
+    // Try Supabase auth cookie if not verified yet
+    if (!decodedToken) {
+      const sbKey = Object.keys(cookies).find((k) => k.startsWith('sb-') && k.includes('auth-token'));
+      if (sbKey) {
+        try {
+          const parsed = JSON.parse(cookies[sbKey]);
+          const token = parsed?.access_token || (Array.isArray(parsed) ? parsed[0] : null);
+          if (token && typeof token === 'string' && token.split('.').length === 3) {
+            decodedToken = await verifyFirebaseToken(token);
+          }
+        } catch {
+          const rawToken = cookies[sbKey];
+          if (rawToken && rawToken.split('.').length === 3) {
+            decodedToken = await verifyFirebaseToken(rawToken);
+          }
         }
-      } catch {
-        const verified = await verifyFirebaseToken(cookies[sbKey]);
-        if (verified) return verified;
       }
     }
   }
 
-  return null;
+  // Step 8 Safe Server-Side Diagnostics — NEVER logs the actual JWT or secrets
+  console.log('[HeatShield Auth Diagnostic]', JSON.stringify({
+    hasAuthorizationHeader: !!authHeader,
+    authorizationScheme,
+    hasHsSessionCookie,
+    tokenLooksLikeJwt,
+    firebaseVerification: decodedToken ? 'success' : 'failure',
+    uid: decodedToken?.uid ?? null,
+  }));
+
+  return decodedToken;
 }

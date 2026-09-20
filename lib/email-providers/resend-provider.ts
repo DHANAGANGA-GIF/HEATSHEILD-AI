@@ -105,6 +105,8 @@ export class ResendEmailProvider implements IEmailProvider {
       return {
         provider: 'resend',
         mode: 'NOT_READY',
+        ready: false,
+        reason: 'RESEND_API_KEY missing or invalid',
         configured: false,
         domain: '',
         domainVerified: false,
@@ -117,6 +119,8 @@ export class ResendEmailProvider implements IEmailProvider {
       return {
         provider: 'resend',
         mode: 'NOT_READY',
+        ready: false,
+        reason: 'EMAIL_FROM or RESEND_FROM_EMAIL not set',
         configured: true,
         domain: '',
         domainVerified: false,
@@ -130,6 +134,8 @@ export class ResendEmailProvider implements IEmailProvider {
       return {
         provider: 'resend',
         mode: 'NOT_READY',
+        ready: false,
+        reason: 'EMAIL_FROM address has invalid format',
         configured: true,
         domain: '',
         domainVerified: false,
@@ -144,6 +150,7 @@ export class ResendEmailProvider implements IEmailProvider {
       return {
         provider: 'resend',
         mode: 'SANDBOX',
+        ready: true,
         configured: true,
         domain: 'resend.dev',
         domainVerified: false,
@@ -163,6 +170,7 @@ export class ResendEmailProvider implements IEmailProvider {
         return {
           provider: 'resend',
           mode: 'PRODUCTION',
+          ready: true,
           configured: true,
           domain,
           domainVerified: true,
@@ -174,6 +182,8 @@ export class ResendEmailProvider implements IEmailProvider {
       return {
         provider: 'resend',
         mode: 'NOT_READY',
+        ready: false,
+        reason: `Domain "${domain}" not verified in Resend`,
         configured: true,
         domain,
         domainVerified: false,
@@ -191,6 +201,8 @@ export class ResendEmailProvider implements IEmailProvider {
         return {
           provider: 'resend',
           mode: 'NOT_READY',
+          ready: false,
+          reason: 'Could not verify domain with Resend API',
           configured: true,
           domain,
           domainVerified: false,
@@ -208,6 +220,8 @@ export class ResendEmailProvider implements IEmailProvider {
         return {
           provider: 'resend',
           mode: 'NOT_READY',
+          ready: false,
+          reason: `Domain "${domain}" not found in Resend account`,
           configured: true,
           domain,
           domainVerified: false,
@@ -229,6 +243,8 @@ export class ResendEmailProvider implements IEmailProvider {
         return {
           provider: 'resend',
           mode: 'NOT_READY',
+          ready: false,
+          reason: `Domain "${domain}" pending verification (status: ${matched.status})`,
           configured: true,
           domain,
           domainVerified: false,
@@ -241,6 +257,7 @@ export class ResendEmailProvider implements IEmailProvider {
       return {
         provider: 'resend',
         mode: 'PRODUCTION',
+        ready: true,
         configured: true,
         domain,
         domainVerified: true,
@@ -252,6 +269,8 @@ export class ResendEmailProvider implements IEmailProvider {
       return {
         provider: 'resend',
         mode: 'NOT_READY',
+        ready: false,
+        reason: 'Network error contacting Resend API',
         configured: true,
         domain,
         domainVerified: false,

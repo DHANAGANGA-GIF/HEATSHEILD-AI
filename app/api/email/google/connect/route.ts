@@ -31,11 +31,17 @@ export async function GET(request: Request) {
 
   const oauth2Client = new google.auth.OAuth2(clientId, clientSecret, redirectUri);
 
-  // Generate OAuth consent URL requesting offline access to acquire refresh token
+  // Generate OAuth consent URL requesting offline access to acquire refresh token.
+  // Include openid + email scopes so the callback receives an id_token with the
+  // authorized account email — needed to detect OAuth account mismatch with GMAIL_SENDER_EMAIL.
   const authUrl = oauth2Client.generateAuthUrl({
     access_type: 'offline',
     prompt: 'consent', // Forces refresh token issuance
-    scope: ['https://www.googleapis.com/auth/gmail.send'],
+    scope: [
+      'https://www.googleapis.com/auth/gmail.send',
+      'openid',
+      'https://www.googleapis.com/auth/userinfo.email',
+    ],
     include_granted_scopes: false,
     state: Buffer.from(JSON.stringify({ initiatedAt: Date.now() })).toString('base64url'),
   });

@@ -24,6 +24,7 @@ import { getUserProfile, saveUserProfile } from '@/lib/store';
 import { LocationData, WeatherData } from '@/lib/types';
 import { useAuth } from '@/lib/firebase/auth-context';
 import { writeUserLocation } from '@/lib/firebase/firestore';
+import { authenticatedFetch } from '@/lib/api-client';
 
 interface RealtimeLiveLocationTrackerProps {
   onLocationUpdate?: (location: LocationData) => void;
@@ -36,15 +37,33 @@ export const RealtimeLiveLocationTracker: React.FC<RealtimeLiveLocationTrackerPr
   // The user CANNOT type a different email address into the dispatch field.
   const { firebaseUser, appProfile: authProfile, getIdToken } = useAuth();
   const authorizedEmail: string = firebaseUser?.email || authProfile?.email || '';
-  const [emailDeliveryMode, setEmailDeliveryMode] = useState<'SANDBOX' | 'PRODUCTION' | 'NOT_CONFIGURED'>('SANDBOX');
-  const [emailDeliveryMessage, setEmailDeliveryMessage] = useState<string>('Resend sandbox mode — emails can only be sent to the Resend account owner.');
+  const [emailStatus, setEmailStatus] = useState<{
+    ready: boolean;
+    mode: 'SANDBOX' | 'PRODUCTION' | 'NOT_READY' | 'NOT_CONFIGURED';
+    provider?: string;
+    message: string;
+    reason?: string;
+    oauthConnected?: boolean;
+  }>({
+    ready: true,
+    mode: 'PRODUCTION',
+    message: 'Active transactional email gateway',
+  });
 
   useEffect(() => {
     fetch('/api/email/status')
       .then((res) => res.json())
       .then((data) => {
-        if (data.mode) setEmailDeliveryMode(data.mode);
-        if (data.message) setEmailDeliveryMessage(data.message);
+        if (data) {
+          setEmailStatus({
+            ready: data.ready !== undefined ? Boolean(data.ready) : data.mode !== 'NOT_READY',
+            mode: data.mode || (data.ready ? 'PRODUCTION' : 'NOT_READY'),
+            provider: data.provider,
+            message: data.message || '',
+            reason: data.reason,
+            oauthConnected: data.oauthConnected,
+          });
+        }
       })
       .catch(() => {});
   }, []);
@@ -225,26 +244,13 @@ export const RealtimeLiveLocationTracker: React.FC<RealtimeLiveLocationTrackerPr
     setDispatchMessage(null);
 
     try {
-      // Get a fresh authentication token — the server uses this to derive the recipient.
-      const idToken = await getIdToken();
-      if (!idToken && !authorizedEmail) {
-        setDispatchStatus('error');
-        setDispatchMessage('Authentication required. Please sign in again.');
-        return;
-      }
-
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-      };
-      if (idToken) {
-        headers['Authorization'] = `Bearer ${idToken}`;
-      }
-
-      const res = await fetch('/api/broadcast/live-alerts', {
+      const res = await authenticatedFetch('/api/broadcast/live-alerts', {
         method: 'POST',
-        headers,
+        headers: {
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify({
-          // NOTE: Do NOT include targetEmail — the server derives it from the JWT.
+          // NOTE: Do NOT include targetEmail — the server derives it from the verified token.
           clientLocation: {
             latitude: coords.latitude,
             longitude: coords.longitude,
@@ -442,23 +448,31 @@ export const RealtimeLiveLocationTracker: React.FC<RealtimeLiveLocationTrackerPr
           <div className="flex flex-wrap items-center gap-2 text-xs font-bold text-white font-mono">
             <Sparkles className="w-4 h-4 text-emerald-400" />
             <span>INSTANT REAL-TIME SAFETY & PRECAUTIONS DISPATCH</span>
-            {emailDeliveryMode === 'SANDBOX' ? (
-              <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-amber-950/80 text-amber-300 border border-amber-800/60 flex items-center gap-1">
-                EMAIL DELIVERY: SANDBOX
+            {!emailStatus.ready || emailStatus.mode === 'NOT_READY' ? (
+              <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-rose-950/80 text-rose-300 border border-rose-800/60 flex items-center gap-1">
+                EMAIL DELIVERY: NOT READY{emailStatus.reason ? ` (${emailStatus.reason})` : ''}
               </span>
-            ) : emailDeliveryMode === 'PRODUCTION' ? (
-              <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-emerald-950/80 text-emerald-300 border border-emerald-800/60 flex items-center gap-1">
-                EMAIL DELIVERY: PRODUCTION
+            ) : emailStatus.mode === 'SANDBOX' ? (
+              <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-amber-950/80 text-amber-300 border border-amber-800/60 flex items-center gap-1">
+                EMAIL DELIVERY: SANDBOX ({emailStatus.provider ? emailStatus.provider.toUpperCase() : 'RESEND'})
               </span>
             ) : (
-              <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-rose-950/80 text-rose-300 border border-rose-800/60 flex items-center gap-1">
-                EMAIL DELIVERY: NOT READY
+              <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-emerald-950/80 text-emerald-300 border border-emerald-800/60 flex items-center gap-1">
+                EMAIL DELIVERY: READY ({emailStatus.provider ? emailStatus.provider.toUpperCase() : 'ACTIVE'})
               </span>
             )}
           </div>
-          <p className="text-[11px] text-slate-400">
-            {emailDeliveryMessage}
-          </p>
+          <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
+            <span>{emailStatus.message || (emailStatus.ready ? 'Live transactional email delivery operational.' : 'Email service configuration required.')}</span>
+            {emailStatus.provider === 'gmail' && !emailStatus.oauthConnected && (
+              <a
+                href="/api/email/google/connect"
+                className="text-emerald-400 hover:underline font-bold font-mono"
+              >
+                Connect Gmail OAuth &rarr;
+              </a>
+            )}
+          </div>
         </div>
 
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">

@@ -54,12 +54,34 @@ export async function GET(request: Request) {
     const oauth2Client = new google.auth.OAuth2(clientId, clientSecret, redirectUri);
     const { tokens } = await oauth2Client.getToken(code);
 
+    // Extract the authorized Google account email from the ID token (JWT payload).
+    // This identifies WHICH Google account authorized the OAuth flow — critical for
+    // detecting OAuth account mismatch with GMAIL_SENDER_EMAIL.
+    let authorizedAccountEmail: string | undefined;
+    if (tokens.id_token) {
+      try {
+        // Decode the JWT payload (base64url — no verification needed here, it's from Google's own response)
+        const parts = tokens.id_token.split('.');
+        if (parts.length === 3) {
+          const payloadJson = Buffer.from(parts[1], 'base64url').toString('utf-8');
+          const payload = JSON.parse(payloadJson);
+          authorizedAccountEmail = payload.email || undefined;
+          if (authorizedAccountEmail) {
+            console.log(`[HeatShield OAuth] Authorized Google account: ${authorizedAccountEmail}`);
+          }
+        }
+      } catch (jwtErr) {
+        console.warn('[HeatShield OAuth] Could not parse id_token payload:', jwtErr);
+      }
+    }
+
     if (!tokens.refresh_token) {
       // If prompt: consent was not forced or token already granted without revoke
       console.warn('[HeatShield OAuth] No refresh_token returned by Google. Access token granted.');
     } else {
-      await saveGmailRefreshToken(tokens.refresh_token);
-      console.log('[HeatShield OAuth] Encrypted Gmail OAuth refresh token securely persisted.');
+      await saveGmailRefreshToken(tokens.refresh_token, authorizedAccountEmail);
+      console.log('[HeatShield OAuth] Encrypted Gmail OAuth refresh token securely persisted.' +
+        (authorizedAccountEmail ? ` Authorized account: ${authorizedAccountEmail}` : ''));
     }
 
     return new Response(

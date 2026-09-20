@@ -10,7 +10,7 @@ import {
 import { useAuth } from '@/lib/firebase/auth-context';
 import { isFirebaseConfigured } from '@/lib/firebase/client';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
-import { saveUserProfile, getUserProfile, setSessionCookie } from '@/lib/store';
+import { saveUserProfile, getUserProfile } from '@/lib/store';
 
 export const dynamic = 'force-dynamic';
 
@@ -66,10 +66,6 @@ function LoginContent() {
       currentProfile.role,
       currentProfile.onboarded !== false
     );
-
-    if (currentProfile.id || currentProfile.firebase_uid) {
-      setSessionCookie(currentProfile.firebase_uid || currentProfile.id);
-    }
 
     router.replace(destination);
   }, [searchParams, router]);
