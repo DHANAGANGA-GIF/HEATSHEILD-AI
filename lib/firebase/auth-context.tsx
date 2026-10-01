@@ -301,18 +301,26 @@ export function FirebaseAuthProvider({ children }: { children: ReactNode }) {
         token = null;
       }
       if (token) {
+        // Eagerly set user and token before redirect
+        setFirebaseUser(user);
         setIdToken(token);
         setSessionCookie(token);
-        try {
-          await fetch('/api/auth/session', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ idToken: token }),
-            credentials: 'include',
-          });
-        } catch {}
+        syncAppProfile(user);
+        saveUserProfile({ last_login_at: new Date().toISOString() } as any);
+        setLoading(false);
+
+        // Fire-and-forget server session sync
+        fetch('/api/auth/session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ idToken: token }),
+          credentials: 'include',
+        }).catch(() => {});
+      } else {
+        setFirebaseUser(user);
+        syncAppProfile(user);
+        setLoading(false);
       }
-      syncAppProfile(user);
       return { success: true };
     } catch (err) {
       const msg = normalizeAuthError(err);
