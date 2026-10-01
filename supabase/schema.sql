@@ -68,7 +68,7 @@ CREATE TABLE IF NOT EXISTS public.risk_assessments (
     apparent_temperature DOUBLE PRECISION NOT NULL,
     relative_humidity DOUBLE PRECISION NOT NULL,
     activity_level TEXT NOT NULL,
-    model_version TEXT DEFAULT 'HeatShield-XAI v1.2',
+    model_version TEXT DEFAULT 'Rule-Based Heat Risk Engine v1.3',
     data_source TEXT DEFAULT 'Open-Meteo API',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );

@@ -120,7 +120,7 @@ export const HeatGauge: React.FC<HeatGaugeProps> = ({
       {lastUpdated && (
         <div className="mt-4 pt-3 border-t border-black/5 flex items-center justify-between text-[11px] opacity-75 font-mono">
           <span>Data Timestamp: {lastUpdated}</span>
-          <span>Engine: HeatShield-XAI v1.2</span>
+          <span>Engine: Rule-Based Heat Risk Engine</span>
         </div>
       )}
     </div>

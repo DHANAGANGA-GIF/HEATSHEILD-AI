@@ -16,7 +16,7 @@ HeatShield AI categorizes spatial and environmental information into four distin
 | Data Stream Class | Icon / Badge Label | Source Engine | Verification Level | Scientific Weight |
 |---|---|---|---|---|
 | **LIVE ENVIRONMENTAL DATA** | `[LIVE ENVIRONMENTAL]` | Open-Meteo API / WMO Weather Stream | Sensor Observed | Ground Truth Observation |
-| **ML RISK ESTIMATE** | `[ML RISK ESTIMATE]` | Gradient Boosting Model (HeatShield-XAI v1.2) | Algorithmically Inferred | Decision-Support Model Estimate |
+| **CALCULATED RISK ESTIMATE** | `[RISK ESTIMATE]` | Rule-Based Heat Risk Engine (v1.3) | Algorithmically Inferred | Decision-Support Risk Assessment |
 | **COMMUNITY REPORT** | `[COMMUNITY REPORT]` | Crowdsourced User Submissions | Unverified / Crowdsourced | User Observation |
 | **VERIFIED LOCATION** | `[VERIFIED LOCATION]` | Official Municipal / Public Cooling Registry | Public / Municipal Verified | Officially Verified Infrastructure |
 

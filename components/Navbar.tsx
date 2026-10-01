@@ -133,9 +133,11 @@ export const Navbar: React.FC<NavbarProps> = ({
             <select
               value={userLanguage}
               onChange={(e) => handleLanguageChange(e.target.value as Language)}
-              className="bg-slate-800 text-slate-200 text-xs rounded border border-slate-700 px-2 py-1 focus:outline-none focus:border-emerald-500 font-sans"
+              aria-label="Select Interface Language"
+              className="bg-slate-800 text-slate-200 text-xs rounded border border-slate-700 px-2 py-1 focus:outline-none focus:border-emerald-500 font-sans cursor-pointer"
             >
               <option value="en">English</option>
+              <option value="te">తెలుగు (Telugu)</option>
               <option value="ta">தமிழ் (Tamil)</option>
               <option value="hi">हिन्दी (Hindi)</option>
             </select>

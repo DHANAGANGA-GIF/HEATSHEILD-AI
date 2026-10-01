@@ -115,6 +115,7 @@ export async function POST(request: Request) {
       {
         success: result.success,
         provider: result.provider,
+        sender: process.env.GMAIL_SENDER_EMAIL || 'dhanagangak@gmail.com',
         recipient: targetEmail,
         messageId: result.messageId || result.id,
         error: result.error,

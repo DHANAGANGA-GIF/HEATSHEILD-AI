@@ -153,7 +153,7 @@ export default function DashboardPage() {
     : 'MANUAL';
 
   return (
-    <div className="min-h-screen bg-slate-100 text-slate-900 font-sans flex flex-col">
+    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans flex flex-col">
       <Navbar
         onToggleMobileSidebar={() => setMobileSidebarOpen(!mobileSidebarOpen)}
         techMode={techMode}
@@ -168,27 +168,27 @@ export default function DashboardPage() {
 
         <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full space-y-5">
           {/* Dashboard Header Bar */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-xl border border-slate-200 shadow-xs">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-900 p-5 rounded-xl border border-slate-800">
             <div>
-              <h1 className="text-xl font-bold text-slate-900">
+              <h1 className="text-sm font-bold text-white font-mono uppercase tracking-wider">
                 OPERATIONAL HEAT RISK DASHBOARD
               </h1>
-              <p className="text-xs text-slate-500 mt-0.5 font-mono">
-                Contextual Heat Strain Assessment for <span className="font-semibold text-slate-800">{displayUserName}</span> {displayUserEmail ? <span className="text-slate-400">({displayUserEmail})</span> : null} • <span className="text-emerald-700 font-bold">{displayRole} MODE</span>
+              <p className="text-xs text-slate-400 mt-0.5 font-mono">
+                Contextual Heat Strain Assessment for <span className="font-semibold text-slate-200">{displayUserName}</span> {displayUserEmail ? <span className="text-slate-500">({displayUserEmail})</span> : null} • <span className="text-emerald-400 font-bold">{displayRole} MODE</span>
               </p>
             </div>
 
             <div className="flex items-center gap-2">
               <Link
                 href="/timeline"
-                className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg border border-slate-200 transition flex items-center gap-1.5"
+                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg border border-slate-700 transition flex items-center gap-1.5"
               >
                 <Clock className="w-3.5 h-3.5" />
                 <span>Forecast Timeline</span>
               </Link>
               <button
                 onClick={() => setShowAssistant(!showAssistant)}
-                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-lg shadow-xs transition flex items-center gap-1.5"
+                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-lg shadow-sm transition flex items-center gap-1.5"
               >
                 <MessageSquare className="w-3.5 h-3.5" />
                 <span>{showAssistant ? 'Hide Assistant' : 'Ask AI Assistant'}</span>
@@ -232,14 +232,14 @@ export default function DashboardPage() {
 
           {/* Loading State */}
           {loading && !weather ? (
-            <div className="p-12 bg-white rounded-xl border border-slate-200 text-center font-mono text-xs text-slate-500 animate-pulse">
+            <div className="p-12 bg-slate-900 rounded-xl border border-slate-800 text-center font-mono text-xs text-slate-400 animate-pulse">
               Retrieving environmental data for {currentLocation.name}...
             </div>
           ) : !weather || !risk ? (
             /* Unavailable State */
-            <div className="p-10 bg-white rounded-xl border border-slate-200 text-center space-y-3">
-              <p className="text-sm font-semibold text-slate-700">We couldn&apos;t retrieve current weather data.</p>
-              <p className="text-xs text-slate-500">Risk assessment is temporarily unavailable because current environmental data could not be retrieved.</p>
+            <div className="p-10 bg-slate-900 rounded-xl border border-slate-800 text-center space-y-3">
+              <p className="text-sm font-semibold text-slate-200">We couldn&apos;t retrieve current weather data.</p>
+              <p className="text-xs text-slate-400">Risk assessment is temporarily unavailable because current environmental data could not be retrieved.</p>
               <button
                 onClick={loadDashboardData}
                 className="mt-2 px-4 py-2 text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition"
@@ -291,35 +291,35 @@ export default function DashboardPage() {
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <Link
                   href="/timeline"
-                  className="p-4 bg-white rounded-xl border border-slate-200 hover:border-emerald-500 transition shadow-xs group"
+                  className="p-4 bg-slate-900 rounded-xl border border-slate-800 hover:border-emerald-500 transition shadow-xs group"
                 >
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-bold font-mono text-emerald-700">FORECAST TIMELINE</span>
-                    <Clock className="w-4 h-4 text-slate-400 group-hover:text-emerald-600" />
+                    <span className="text-xs font-bold font-mono text-emerald-400">FORECAST TIMELINE</span>
+                    <Clock className="w-4 h-4 text-slate-500 group-hover:text-emerald-400" />
                   </div>
-                  <p className="text-xs text-slate-500">See when heat risk peaks over the next 24–48 hours.</p>
+                  <p className="text-xs text-slate-400">See when heat risk peaks over the next 24–48 hours.</p>
                 </Link>
 
                 <Link
                   href="/simulator"
-                  className="p-4 bg-white rounded-xl border border-slate-200 hover:border-emerald-500 transition shadow-xs group"
+                  className="p-4 bg-slate-900 rounded-xl border border-slate-800 hover:border-emerald-500 transition shadow-xs group"
                 >
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-bold font-mono text-emerald-700">WHAT-IF SIMULATOR</span>
-                    <Sliders className="w-4 h-4 text-slate-400 group-hover:text-emerald-600" />
+                    <span className="text-xs font-bold font-mono text-emerald-400">WHAT-IF SIMULATOR</span>
+                    <Sliders className="w-4 h-4 text-slate-500 group-hover:text-emerald-400" />
                   </div>
-                  <p className="text-xs text-slate-500">Test how changing activity or cooling affects your risk.</p>
+                  <p className="text-xs text-slate-400">Test how changing activity or cooling affects your risk.</p>
                 </Link>
 
                 <Link
                   href="/community/map"
-                  className="p-4 bg-white rounded-xl border border-slate-200 hover:border-emerald-500 transition shadow-xs group"
+                  className="p-4 bg-slate-900 rounded-xl border border-slate-800 hover:border-emerald-500 transition shadow-xs group"
                 >
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-bold font-mono text-emerald-700">COMMUNITY MAP</span>
-                    <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-emerald-600" />
+                    <span className="text-xs font-bold font-mono text-emerald-400">COMMUNITY MAP</span>
+                    <ArrowRight className="w-4 h-4 text-slate-500 group-hover:text-emerald-400" />
                   </div>
-                  <p className="text-xs text-slate-500">View water points, shade reports, and cooling centers.</p>
+                  <p className="text-xs text-slate-400">View water points, shade reports, and cooling centers.</p>
                 </Link>
               </div>
             </>

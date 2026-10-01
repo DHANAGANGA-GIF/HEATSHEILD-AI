@@ -199,11 +199,12 @@ export default function OnboardingPage() {
             {/* Preferred Language */}
             <div>
               <label className="block text-xs font-bold font-mono text-slate-300 uppercase mb-2">Interface Language</label>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 {[
                   { id: 'en', label: 'English' },
-                  { id: 'ta', label: 'à®¤à®®à®¿à®´à¯ (Tamil)' },
-                  { id: 'hi', label: 'à¤¹à¤¿à¤¨à¥à¤¦à¥€ (Hindi)' },
+                  { id: 'te', label: 'తెలుగు (Telugu)' },
+                  { id: 'ta', label: 'தமிழ் (Tamil)' },
+                  { id: 'hi', label: 'हिन्दी (Hindi)' },
                 ].map(opt => (
                   <button
                     key={opt.id}

@@ -83,7 +83,24 @@ function hasAuthSignal(request: NextRequest): boolean {
 
   // Check HeatShield session cookie (set on successful Firebase login)
   const sessionCookie = request.cookies.get('hs_session');
-  if (sessionCookie?.value && sessionCookie.value.length > 10) return true;
+  if (sessionCookie?.value && sessionCookie.value.length > 10) {
+    const val = decodeURIComponent(sessionCookie.value).trim();
+    const parts = val.split('.');
+    if (parts.length === 3) {
+      try {
+        const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+        if (payload.exp && typeof payload.exp === 'number') {
+          const nowSec = Math.floor(Date.now() / 1000);
+          if (payload.exp <= nowSec) {
+            return false; // Expired token
+          }
+        }
+      } catch {
+        // Non-blocking fallback
+      }
+    }
+    return true;
+  }
 
   // Check Supabase auth cookie (legacy auth compatibility)
   const cookieNames = [...request.cookies.getAll().map((c) => c.name)];
@@ -97,6 +114,15 @@ function hasAuthSignal(request: NextRequest): boolean {
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  // If already authenticated and visiting /login, redirect to intended destination or /dashboard
+  if (pathname === '/login' && hasAuthSignal(request)) {
+    const redirectParam = request.nextUrl.searchParams.get('redirect');
+    const destination = (redirectParam && redirectParam.startsWith('/') && !redirectParam.startsWith('//') && !redirectParam.includes(':') && !redirectParam.includes('\\'))
+      ? redirectParam
+      : '/dashboard';
+    return NextResponse.redirect(new URL(destination, request.url));
+  }
 
   // Always allow public paths and static assets
   if (

@@ -26,10 +26,10 @@ const PRIORITY_ORDER: Record<AlertPriority, number> = {
 
 function priorityStyles(priority: AlertPriority) {
   const map: Record<AlertPriority, { badge: string; icon: string; border: string; bg: string }> = {
-    INFO: { badge: 'bg-blue-100 text-blue-800 border-blue-200', icon: 'bg-blue-100 text-blue-700', border: 'border-blue-200', bg: 'bg-white' },
-    CAUTION: { badge: 'bg-amber-100 text-amber-900 border-amber-200', icon: 'bg-amber-100 text-amber-700', border: 'border-amber-200', bg: 'bg-white' },
-    'HIGH PRIORITY': { badge: 'bg-orange-100 text-orange-900 border-orange-300', icon: 'bg-orange-100 text-orange-700', border: 'border-orange-300', bg: 'bg-white' },
-    CRITICAL: { badge: 'bg-rose-100 text-rose-900 border-rose-300', icon: 'bg-rose-100 text-rose-700', border: 'border-rose-300', bg: 'bg-white' },
+    INFO: { badge: 'bg-blue-950/60 text-blue-300 border-blue-800/60', icon: 'bg-blue-950 text-blue-400', border: 'border-blue-800/60', bg: 'bg-slate-900' },
+    CAUTION: { badge: 'bg-amber-950/60 text-amber-300 border-amber-800/60', icon: 'bg-amber-950 text-amber-400', border: 'border-amber-800/60', bg: 'bg-slate-900' },
+    'HIGH PRIORITY': { badge: 'bg-orange-950/60 text-orange-300 border-orange-800/60', icon: 'bg-orange-950 text-orange-400', border: 'border-orange-800/60', bg: 'bg-slate-900' },
+    CRITICAL: { badge: 'bg-rose-950/60 text-rose-300 border-rose-800/60', icon: 'bg-rose-950 text-rose-400', border: 'border-rose-800/60', bg: 'bg-slate-900' },
   };
   return map[priority];
 }
@@ -152,7 +152,7 @@ export default function AlertsPage() {
   const unreadCount = activeAlerts.filter(a => !a.read).length;
 
   return (
-    <div className="min-h-screen bg-slate-100 text-slate-900 font-sans flex flex-col">
+    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans flex flex-col">
       <Navbar onToggleMobileSidebar={() => setMobileSidebarOpen(!mobileSidebarOpen)} />
 
       <div className="flex-1 flex">
@@ -161,25 +161,25 @@ export default function AlertsPage() {
         <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-4xl mx-auto w-full space-y-6">
 
           {/* Header */}
-          <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="bg-slate-900 p-5 rounded-xl border border-slate-800 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
               <div className="flex items-center gap-2.5">
-                <Bell className="w-5 h-5 text-slate-500" />
-                <h1 className="text-xl font-bold text-slate-900">NOTIFICATION & ALERT CENTER</h1>
+                <Bell className="w-5 h-5 text-emerald-400" />
+                <h1 className="text-xl font-bold text-slate-100">NOTIFICATION & ALERT CENTER</h1>
               </div>
-              <p className="text-xs text-slate-500 font-mono mt-0.5">
+              <p className="text-xs text-slate-400 font-mono mt-0.5">
                 Rule-based environmental threshold alerts & channel status center
               </p>
             </div>
             <div className="flex items-center gap-2">
               {unreadCount > 0 && (
-                <span className="text-xs font-mono font-bold px-2.5 py-1 bg-rose-100 text-rose-800 rounded border border-rose-200">
+                <span className="text-xs font-mono font-bold px-2.5 py-1 bg-rose-950/60 text-rose-300 rounded border border-rose-800/80">
                   {unreadCount} UNREAD
                 </span>
               )}
               <button
                 onClick={() => setShowSettings(!showSettings)}
-                className="p-2 rounded-lg text-slate-600 hover:bg-slate-100 border border-slate-200 transition"
+                className="p-2 rounded-lg text-slate-300 hover:bg-slate-800 border border-slate-700 transition"
                 title="Alert Settings"
               >
                 <Settings2 className="w-4 h-4" />
@@ -193,21 +193,21 @@ export default function AlertsPage() {
               ALERT DELIVERY CHANNELS STATUS
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs font-mono">
-              <div className="p-2.5 bg-slate-800 rounded-lg border border-slate-700">
+              <div className="p-2.5 bg-slate-950 rounded-lg border border-slate-800">
                 <span className="text-[10px] text-slate-400 block">IN-APP</span>
                 <span className="font-bold text-emerald-400">ACTIVE</span>
               </div>
-              <div className="p-2.5 bg-slate-800 rounded-lg border border-slate-700">
+              <div className="p-2.5 bg-slate-950 rounded-lg border border-slate-800">
                 <span className="text-[10px] text-slate-400 block">BROWSER</span>
                 <span className={`font-bold ${notifPermission === 'granted' ? 'text-emerald-400' : 'text-slate-400'}`}>
                   {notifPermission === 'granted' ? 'ENABLED' : notifPermission === 'denied' ? 'BLOCKED' : 'DISABLED'}
                 </span>
               </div>
-              <div className="p-2.5 bg-slate-800 rounded-lg border border-slate-700">
+              <div className="p-2.5 bg-slate-950 rounded-lg border border-slate-800">
                 <span className="text-[10px] text-slate-400 block">EMAIL</span>
                 <span className="font-bold text-slate-400">NOT CONFIGURED</span>
               </div>
-              <div className="p-2.5 bg-slate-800 rounded-lg border border-slate-700">
+              <div className="p-2.5 bg-slate-950 rounded-lg border border-slate-800">
                 <span className="text-[10px] text-slate-400 block">SMS GATEWAY</span>
                 <span className="font-bold text-slate-400">NOT CONFIGURED</span>
               </div>
@@ -215,8 +215,8 @@ export default function AlertsPage() {
           </div>
 
           {/* Safety Notice */}
-          <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl flex items-start gap-2.5 text-xs text-blue-900">
-            <Info className="w-4 h-4 shrink-0 text-blue-500 mt-0.5" />
+          <div className="p-3 bg-blue-950/40 border border-blue-800/60 rounded-xl flex items-start gap-2.5 text-xs text-blue-200">
+            <Info className="w-4 h-4 shrink-0 text-blue-400 mt-0.5" />
             <span>
               <strong>ENVIRONMENTAL DECISION-SUPPORT NOTICE:</strong> These alerts represent estimated environmental heat-risk thresholds derived from forecast data. They do <strong>NOT</strong> predict medical outcomes or substitute for professional emergency advice.
             </span>
@@ -230,8 +230,8 @@ export default function AlertsPage() {
                 onClick={() => setSelectedCategory(cat)}
                 className={`px-3 py-1.5 rounded-lg font-mono font-semibold transition whitespace-nowrap ${
                   selectedCategory === cat
-                    ? 'bg-emerald-700 text-white shadow-xs'
-                    : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+                    ? 'bg-emerald-600 text-white shadow-xs'
+                    : 'bg-slate-900 text-slate-300 border border-slate-800 hover:bg-slate-800'
                 }`}
               >
                 {cat}
@@ -241,13 +241,13 @@ export default function AlertsPage() {
 
           {/* Alert Settings Panel */}
           {showSettings && settings && (
-            <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs space-y-5">
-              <h3 className="text-xs font-bold font-mono text-slate-500 uppercase border-b pb-2">ALERT SETTINGS</h3>
+            <div className="bg-slate-900 p-5 rounded-xl border border-slate-800 shadow-xs space-y-5">
+              <h3 className="text-xs font-bold font-mono text-slate-400 uppercase border-b border-slate-800 pb-2">ALERT SETTINGS</h3>
 
               {/* Enable/Disable Toggle */}
               <div className="flex items-center justify-between">
                 <div>
-                  <div className="text-sm font-semibold text-slate-900">Alerts Enabled</div>
+                  <div className="text-sm font-semibold text-slate-100">Alerts Enabled</div>
                   <div className="text-xs text-slate-500">Enable or disable all smart heat-risk alerts</div>
                 </div>
                 <button
@@ -263,13 +263,13 @@ export default function AlertsPage() {
               {/* Forecast Alerts Toggle */}
               <div className="flex items-center justify-between">
                 <div>
-                  <div className="text-sm font-semibold text-slate-900">Forecast-Based Alerts</div>
-                  <div className="text-xs text-slate-500">Generate alerts from Open-Meteo forecast data</div>
+                  <div className="text-sm font-semibold text-slate-100">Forecast-Based Alerts</div>
+                  <div className="text-xs text-slate-400">Generate alerts from Open-Meteo forecast data</div>
                 </div>
                 <button
                   onClick={() => updateSetting({ forecast_alerts_enabled: !settings.forecast_alerts_enabled })}
                   className={`relative inline-flex h-6 w-11 items-center rounded-full transition ${
-                    settings.forecast_alerts_enabled ? 'bg-emerald-600' : 'bg-slate-300'
+                    settings.forecast_alerts_enabled ? 'bg-emerald-600' : 'bg-slate-700'
                   }`}
                 >
                   <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${settings.forecast_alerts_enabled ? 'translate-x-6' : 'translate-x-1'}`} />
@@ -278,8 +278,8 @@ export default function AlertsPage() {
 
               {/* Min Severity Filter */}
               <div>
-                <div className="text-sm font-semibold text-slate-900 mb-1.5">Minimum Alert Severity</div>
-                <div className="text-xs text-slate-500 mb-2">Only show alerts at or above this priority level</div>
+                <div className="text-sm font-semibold text-slate-100 mb-1.5">Minimum Alert Severity</div>
+                <div className="text-xs text-slate-400 mb-2">Only show alerts at or above this priority level</div>
                 <div className="grid grid-cols-4 gap-2">
                   {SEVERITY_OPTIONS.map(sev => (
                     <button
@@ -287,8 +287,8 @@ export default function AlertsPage() {
                       onClick={() => updateSetting({ min_severity: sev })}
                       className={`p-2 rounded-lg text-[11px] font-bold font-mono border transition ${
                         settings.min_severity === sev
-                          ? 'bg-slate-900 text-white border-slate-900'
-                          : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                          ? 'bg-emerald-600 text-white border-emerald-500'
+                          : 'bg-slate-950 text-slate-300 border-slate-800 hover:bg-slate-800'
                       }`}
                     >
                       {sev}
@@ -299,23 +299,23 @@ export default function AlertsPage() {
 
               {/* Browser Notifications — user-initiated only */}
               <div>
-                <div className="text-sm font-semibold text-slate-900 mb-1">Browser Notifications</div>
-                <div className="text-xs text-slate-500 mb-2">
+                <div className="text-sm font-semibold text-slate-100 mb-1">Browser Notifications</div>
+                <div className="text-xs text-slate-400 mb-2">
                   Permission is only requested when you click this button. Never auto-requested on page load.
                 </div>
                 {notifPermission === 'unsupported' ? (
                   <span className="text-xs font-mono text-slate-400">Browser notifications not supported in this environment.</span>
                 ) : notifPermission === 'granted' ? (
-                  <div className="flex items-center gap-2 text-xs text-emerald-700 font-medium">
+                  <div className="flex items-center gap-2 text-xs text-emerald-400 font-medium">
                     <CheckCircle2 className="w-4 h-4" />
                     <span>Notifications enabled</span>
                   </div>
                 ) : notifPermission === 'denied' ? (
-                  <span className="text-xs font-mono text-rose-600">Notifications blocked by browser. Enable in browser site settings to use this feature.</span>
+                  <span className="text-xs font-mono text-rose-400">Notifications blocked by browser. Enable in browser site settings to use this feature.</span>
                 ) : (
                   <button
                     onClick={handleRequestNotifPermission}
-                    className="px-3 py-1.5 bg-slate-800 hover:bg-slate-900 text-white text-xs font-semibold rounded-lg transition flex items-center gap-1.5"
+                    className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white text-xs font-semibold rounded-lg transition flex items-center gap-1.5"
                   >
                     <Bell className="w-3.5 h-3.5" />
                     Enable Browser Notifications
@@ -326,31 +326,31 @@ export default function AlertsPage() {
           )}
 
           {/* Generate Alerts Button + Status */}
-          <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs space-y-3">
+          <div className="bg-slate-900 p-5 rounded-xl border border-slate-800 shadow-xs space-y-3">
             <div className="flex items-center justify-between">
               <div>
-                <h3 className="text-sm font-bold text-slate-900">Generate Alerts from Current Forecast</h3>
-                <p className="text-xs text-slate-500 mt-0.5">
+                <h3 className="text-sm font-bold text-slate-100">Generate Alerts from Current Forecast</h3>
+                <p className="text-xs text-slate-400 mt-0.5">
                   Runs rule-based analysis on live Open-Meteo forecast data. Deduplication prevents repeated alerts within a 60-min cooldown window.
                 </p>
               </div>
               <button
                 onClick={handleGenerateAlerts}
                 disabled={generating || !settings?.alerts_enabled}
-                className="px-4 py-2 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-300 text-white text-xs font-bold rounded-lg transition flex items-center gap-2 whitespace-nowrap"
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-800 disabled:text-slate-500 text-white text-xs font-bold rounded-lg transition flex items-center gap-2 whitespace-nowrap"
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${generating ? 'animate-spin' : ''}`} />
                 {generating ? 'Analysing...' : 'Run Alert Check'}
               </button>
             </div>
             {!settings?.alerts_enabled && (
-              <div className="text-xs text-slate-500 font-mono flex items-center gap-1.5">
+              <div className="text-xs text-slate-400 font-mono flex items-center gap-1.5">
                 <BellOff className="w-3.5 h-3.5" />
                 Alerts are disabled. Enable in Settings to run alert checks.
               </div>
             )}
             {generateMsg && (
-              <div className="text-xs font-mono text-slate-700 p-2.5 bg-slate-50 rounded border border-slate-200">
+              <div className="text-xs font-mono text-slate-300 p-2.5 bg-slate-950 rounded border border-slate-800">
                 {generateMsg}
               </div>
             )}
@@ -359,13 +359,13 @@ export default function AlertsPage() {
           {/* Active Alerts List */}
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <h3 className="text-xs font-bold font-mono text-slate-500 uppercase">
+              <h3 className="text-xs font-bold font-mono text-slate-400 uppercase">
                 ACTIVE ALERTS ({activeAlerts.length})
               </h3>
               {dismissedAlerts.length > 0 && (
                 <button
                   onClick={handleClearDismissed}
-                  className="text-xs text-slate-500 hover:text-slate-700 flex items-center gap-1"
+                  className="text-xs text-slate-400 hover:text-slate-200 flex items-center gap-1"
                 >
                   <RotateCcw className="w-3 h-3" />
                   Clear {dismissedAlerts.length} dismissed
@@ -374,10 +374,10 @@ export default function AlertsPage() {
             </div>
 
             {activeAlerts.length === 0 ? (
-              <div className="bg-white p-8 rounded-xl border border-slate-200 text-center space-y-2">
+              <div className="bg-slate-900 p-8 rounded-xl border border-slate-800 text-center space-y-2">
                 <CheckCircle2 className="w-8 h-8 mx-auto text-emerald-400" />
-                <div className="text-sm font-semibold text-slate-700">No active alerts</div>
-                <div className="text-xs text-slate-500">
+                <div className="text-sm font-semibold text-slate-200">No active alerts</div>
+                <div className="text-xs text-slate-400">
                   Click &quot;Run Alert Check&quot; above to analyse current forecast data. No alerts will be fabricated if data is unavailable.
                 </div>
               </div>
@@ -387,7 +387,7 @@ export default function AlertsPage() {
                 return (
                   <div
                     key={alert.id}
-                    className={`p-4 rounded-xl border ${styles.border} ${!alert.read ? styles.bg + ' shadow-xs' : 'bg-slate-50 opacity-80'} transition`}
+                    className={`p-4 rounded-xl border ${styles.border} ${!alert.read ? styles.bg + ' shadow-xs' : 'bg-slate-900/60 opacity-80'} transition`}
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex items-start gap-3 flex-1 min-w-0">
@@ -404,26 +404,26 @@ export default function AlertsPage() {
                               {alert.rule_id.replace(/_/g, ' ')}
                             </span>
                             <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${
-                              alert.source_status === 'LIVE' ? 'bg-emerald-50 text-emerald-700'
-                              : alert.source_status === 'FORECAST' ? 'bg-blue-50 text-blue-700'
-                              : 'bg-amber-50 text-amber-700'
+                              alert.source_status === 'LIVE' ? 'bg-emerald-950/60 text-emerald-400 border border-emerald-800/60'
+                              : alert.source_status === 'FORECAST' ? 'bg-blue-950/60 text-blue-400 border border-blue-800/60'
+                              : 'bg-amber-950/60 text-amber-400 border border-amber-800/60'
                             }`}>
                               {alert.source_status}
                             </span>
-                            {!alert.read && <span className="text-[9px] font-bold bg-slate-900 text-white px-1.5 py-0.5 rounded">UNREAD</span>}
+                            {!alert.read && <span className="text-[9px] font-bold bg-emerald-500 text-slate-950 px-1.5 py-0.5 rounded">UNREAD</span>}
                           </div>
 
-                          <h3 className="text-sm font-bold text-slate-900">{alert.title}</h3>
+                          <h3 className="text-sm font-bold text-slate-100">{alert.title}</h3>
 
-                          <p className="text-xs text-slate-700 leading-relaxed">{alert.message}</p>
+                          <p className="text-xs text-slate-300 leading-relaxed">{alert.message}</p>
 
                           {alert.affected_period_label && (
-                            <div className="text-[11px] font-mono text-slate-500">
-                              Affected period: <strong className="text-slate-700">{alert.affected_period_label}</strong>
+                            <div className="text-[11px] font-mono text-slate-400">
+                              Affected period: <strong className="text-slate-200">{alert.affected_period_label}</strong>
                             </div>
                           )}
 
-                          <div className="flex flex-wrap gap-3 text-[11px] font-mono text-slate-500 pt-1">
+                          <div className="flex flex-wrap gap-3 text-[11px] font-mono text-slate-400 pt-1">
                             {alert.trigger_data.temperature != null && (
                               <span>{alert.trigger_data.temperature}°C</span>
                             )}
@@ -431,15 +431,15 @@ export default function AlertsPage() {
                               <span>Humidity {alert.trigger_data.humidity}%</span>
                             )}
                             <span>Risk {alert.trigger_data.risk_score}/100</span>
-                            <span className="font-bold text-slate-700">{alert.trigger_data.risk_level}</span>
+                            <span className="font-bold text-slate-200">{alert.trigger_data.risk_level}</span>
                           </div>
 
-                          <div className="p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-900 flex items-start gap-2 mt-1">
-                            <CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-emerald-600 mt-0.5" />
+                          <div className="p-2.5 bg-emerald-950/40 border border-emerald-800/60 rounded-lg text-xs text-emerald-200 flex items-start gap-2 mt-1">
+                            <CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-emerald-400 mt-0.5" />
                             <span>{alert.recommended_action}</span>
                           </div>
 
-                          <span className="text-[10px] font-mono text-slate-400 block">
+                          <span className="text-[10px] font-mono text-slate-500 block">
                             Generated: {new Date(alert.timestamp).toLocaleString()}
                           </span>
                         </div>
@@ -450,7 +450,7 @@ export default function AlertsPage() {
                           <button
                             onClick={() => handleMarkRead(alert.id)}
                             title="Mark as Read"
-                            className="p-1.5 rounded text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition"
+                            className="p-1.5 rounded text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition"
                           >
                             <Eye className="w-3.5 h-3.5" />
                           </button>
@@ -458,7 +458,7 @@ export default function AlertsPage() {
                         <button
                           onClick={() => handleDismiss(alert.id)}
                           title="Dismiss"
-                          className="p-1.5 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition"
+                          className="p-1.5 rounded text-slate-400 hover:text-rose-400 hover:bg-slate-800 transition"
                         >
                           <X className="w-3.5 h-3.5" />
                         </button>
@@ -475,7 +475,7 @@ export default function AlertsPage() {
             <div>
               <button
                 onClick={() => setShowDismissed(!showDismissed)}
-                className="flex items-center gap-2 text-xs font-mono text-slate-400 hover:text-slate-600 transition"
+                className="flex items-center gap-2 text-xs font-mono text-slate-400 hover:text-slate-200 transition"
               >
                 {showDismissed ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                 {showDismissed ? 'Hide' : 'Show'} {dismissedAlerts.length} dismissed alert(s)
@@ -485,11 +485,11 @@ export default function AlertsPage() {
                   {dismissedAlerts.map(alert => {
                     const styles = priorityStyles(alert.priority);
                     return (
-                      <div key={alert.id} className="p-3 rounded-xl border border-slate-200 bg-slate-50 opacity-60">
+                      <div key={alert.id} className="p-3 rounded-xl border border-slate-800 bg-slate-900/60 opacity-60">
                         <div className="flex items-center gap-2">
                           <span className={`text-[10px] font-bold font-mono px-2 py-0.5 rounded border ${styles.badge}`}>{alert.priority}</span>
-                          <span className="text-xs text-slate-600 font-medium">{alert.title}</span>
-                          <span className="text-[10px] font-mono text-slate-400 ml-auto">{new Date(alert.timestamp).toLocaleString()}</span>
+                          <span className="text-xs text-slate-300 font-medium">{alert.title}</span>
+                          <span className="text-[10px] font-mono text-slate-500 ml-auto">{new Date(alert.timestamp).toLocaleString()}</span>
                         </div>
                       </div>
                     );

@@ -324,18 +324,18 @@ export const RealtimeLiveLocationTracker: React.FC<RealtimeLiveLocationTrackerPr
           <div>
             <div className="flex items-center gap-2">
               <h2 className="text-base font-bold text-white font-mono tracking-tight uppercase">
-                REAL-TIME LIVE GPS & TELEMETRY STREAM
+                LOCATION-BASED WEATHER & ADVISORY DISPATCH
               </h2>
               <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full font-bold uppercase ${
                 isWatching
                   ? 'bg-emerald-950 text-emerald-400 border border-emerald-800'
                   : 'bg-slate-800 text-slate-400'
               }`}>
-                {isWatching ? 'LIVE SENSOR LOCK' : 'STANDBY'}
+                {isWatching ? 'BROWSER LOCATION ACTIVE' : 'PROFILE DEFAULT'}
               </span>
             </div>
             <p className="text-xs text-slate-400 mt-0.5">
-              Continuous high-frequency geolocation, thermal microclimate mapping & instant mail broadcast
+              Current weather data for your selected location (Open-Meteo) with personalized safety advisory dispatch
             </p>
           </div>
         </div>
@@ -345,17 +345,17 @@ export const RealtimeLiveLocationTracker: React.FC<RealtimeLiveLocationTrackerPr
           {isWatching ? (
             <button
               onClick={stopWatchingLocation}
-              className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-rose-300 border border-slate-700 text-xs font-mono font-bold transition flex items-center gap-2 shadow-xs"
+              className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-mono font-bold transition flex items-center gap-2 shadow-xs cursor-pointer"
             >
-              <span>Pause GPS Watcher</span>
+              <span>Reset to Default Location</span>
             </button>
           ) : (
             <button
               onClick={startWatchingLocation}
-              className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-mono font-bold transition flex items-center gap-2 shadow-md shadow-emerald-950/40"
+              className="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-mono font-bold transition flex items-center gap-2 shadow-md shadow-emerald-950/40 cursor-pointer"
             >
               <Navigation className="w-3.5 h-3.5" />
-              <span>Enable Live GPS Watcher</span>
+              <span>Use Approximate Location</span>
             </button>
           )}
         </div>
@@ -363,25 +363,24 @@ export const RealtimeLiveLocationTracker: React.FC<RealtimeLiveLocationTrackerPr
 
       {/* Grid: Coordinates & Telemetry Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-5 relative z-10">
-        {/* Card 1: GPS Coordinates */}
+        {/* Card 1: Location Coordinates */}
         <div className="bg-slate-950/70 rounded-2xl p-4 border border-slate-800 space-y-2">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-mono font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
               <Compass className="w-3.5 h-3.5" />
-              <span>Live Coordinates</span>
+              <span>Location Coordinates</span>
             </span>
             <span className="text-[10px] font-mono text-slate-500">
-              Accuracy: {coords?.accuracy ? `±${coords.accuracy}m` : '±15m'}
+              {isWatching ? 'Browser Geolocation' : 'Default / Saved'}
             </span>
           </div>
 
           <div className="font-mono text-base font-extrabold text-white">
-            {coords ? `${coords.latitude.toFixed(5)}°, ${coords.longitude.toFixed(5)}°` : '13.08270°, 80.27070°'}
+            {coords ? `${coords.latitude.toFixed(3)}° N, ${coords.longitude.toFixed(3)}° E` : '13.083° N, 80.271° E'}
           </div>
 
           <div className="flex items-center gap-3 text-[11px] font-mono text-slate-400 pt-1">
-            <span>Speed: <strong className="text-slate-200">{coords?.speed || 0} km/h</strong></span>
-            <span>Alt: <strong className="text-slate-200">{coords?.altitude !== null && coords?.altitude !== undefined ? `${coords.altitude}m` : 'Sea Level'}</strong></span>
+            <span>Precision: <strong className="text-slate-200">{isWatching ? 'Approximate (Browser)' : 'City Center'}</strong></span>
           </div>
         </div>
 
@@ -390,28 +389,28 @@ export const RealtimeLiveLocationTracker: React.FC<RealtimeLiveLocationTrackerPr
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-mono font-bold text-sky-400 uppercase tracking-wider flex items-center gap-1.5">
               <MapPin className="w-3.5 h-3.5" />
-              <span>Resolved Region</span>
+              <span>Selected Location</span>
             </span>
             <span className="text-[10px] font-mono text-emerald-400">
-              {isWatching ? 'Auto-Geocoded' : 'Profile Default'}
+              {isWatching ? 'Auto-Resolved' : 'Profile Default'}
             </span>
           </div>
 
           <div className="text-base font-bold text-white truncate">
-            {resolvedName}
+            {resolvedName || 'Chennai'}
           </div>
 
           <div className="text-[11px] text-slate-400 truncate">
-            {resolvedLocality || 'Monitored Climate Zone'}
+            {resolvedLocality || 'Monitored Region'}
           </div>
         </div>
 
-        {/* Card 3: Live Microclimate Stream */}
+        {/* Card 3: Live Weather Stream */}
         <div className="bg-slate-950/70 rounded-2xl p-4 border border-slate-800 space-y-2">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-mono font-bold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
               <Thermometer className="w-3.5 h-3.5" />
-              <span>Real-Time Weather</span>
+              <span>Current Weather</span>
             </span>
             {isFetchingWeather ? (
               <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-400" />
@@ -422,21 +421,21 @@ export const RealtimeLiveLocationTracker: React.FC<RealtimeLiveLocationTrackerPr
 
           <div className="flex items-baseline justify-between">
             <div className="text-2xl font-extrabold text-white font-mono">
-              {liveWeather ? `${liveWeather.temperature}°C` : '34.2°C'}
+              {liveWeather ? `${liveWeather.temperature}°C` : '--°C'}
             </div>
             <span className="text-[11px] text-slate-300 font-mono">
-              Feels {liveWeather ? `${liveWeather.apparent_temperature}°C` : '39.0°C'}
+              {liveWeather ? `Feels ${liveWeather.apparent_temperature}°C` : 'Fetching...'}
             </span>
           </div>
 
           <div className="grid grid-cols-2 gap-2 text-[10px] font-mono text-slate-400">
             <div className="flex items-center gap-1">
               <Droplets className="w-3 h-3 text-blue-400" />
-              <span>Humidity: {liveWeather ? `${liveWeather.relative_humidity}%` : '64%'}</span>
+              <span>Humidity: {liveWeather ? `${liveWeather.relative_humidity}%` : '--%'}</span>
             </div>
             <div className="flex items-center gap-1">
               <Wind className="w-3 h-3 text-emerald-400" />
-              <span>Wind: {liveWeather ? `${liveWeather.wind_speed} km/h` : '14 km/h'}</span>
+              <span>Wind: {liveWeather ? `${liveWeather.wind_speed} km/h` : '-- km/h'}</span>
             </div>
           </div>
         </div>
@@ -447,7 +446,7 @@ export const RealtimeLiveLocationTracker: React.FC<RealtimeLiveLocationTrackerPr
         <div className="space-y-1.5">
           <div className="flex flex-wrap items-center gap-2 text-xs font-bold text-white font-mono">
             <Sparkles className="w-4 h-4 text-emerald-400" />
-            <span>INSTANT REAL-TIME SAFETY & PRECAUTIONS DISPATCH</span>
+            <span>PERSONAL HEAT ADVISORY EMAIL DISPATCH</span>
             {!emailStatus.ready || emailStatus.mode === 'NOT_READY' ? (
               <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-rose-950/80 text-rose-300 border border-rose-800/60 flex items-center gap-1">
                 EMAIL DELIVERY: NOT READY{emailStatus.reason ? ` (${emailStatus.reason})` : ''}
@@ -499,7 +498,7 @@ export const RealtimeLiveLocationTracker: React.FC<RealtimeLiveLocationTrackerPr
             ) : (
               <>
                 <Send className="w-3.5 h-3.5" />
-                <span>Email My Live Report</span>
+                <span>Email My Heat Advisory</span>
               </>
             )}
           </button>

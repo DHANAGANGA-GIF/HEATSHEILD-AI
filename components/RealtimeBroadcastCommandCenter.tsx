@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Radio,
   Send,
@@ -45,25 +45,23 @@ export const RealtimeBroadcastCommandCenter: React.FC = () => {
   const [customSubject, setCustomSubject] = useState('');
   const [minRiskFilter, setMinRiskFilter] = useState<RiskLevel | 'ALL'>('ALL');
 
-  const loadData = () => {
+  const loadData = useCallback(() => {
     const recs = getRecipientProfiles();
     setRecipients(recs);
     const logs = getHeatRiskDispatchLogs();
     setDispatchLogs(logs);
-    if (!selectedRecipientEmail && recs.length > 0) {
-      setSelectedRecipientEmail(recs[0].email);
-    }
+    setSelectedRecipientEmail((prev) => (!prev && recs.length > 0 ? recs[0].email : prev));
     fetch('/api/email/status')
       .then((res) => res.json())
       .then((data) => setEmailServiceStatus(data))
       .catch(() => {});
-  };
+  }, []);
 
   useEffect(() => {
     loadData();
     const interval = setInterval(loadData, 8000);
     return () => clearInterval(interval);
-  }, []);
+  }, [loadData]);
 
   // Compute live dispatch telemetry from real logs
   const totalDispatches = dispatchLogs.length;

@@ -123,18 +123,18 @@ Welcome to HeatShield AI. Environmental data is loading or unavailable. Ask gene
   const dataStatus = !weather || !risk ? 'UNAVAILABLE' : weather.is_cached ? 'CACHED' : 'LIVE';
 
   return (
-    <div className={`bg-white rounded-xl border border-slate-200 shadow-xs flex flex-col h-full overflow-hidden ${className}`}>
+    <div className={`bg-slate-900 rounded-xl border border-slate-800 shadow-xs flex flex-col h-full overflow-hidden ${className}`}>
       {/* Assistant Header */}
-      <div className="p-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between flex-wrap gap-2">
+      <div className="p-4 border-b border-slate-800 bg-slate-950/60 flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-lg bg-emerald-600 flex items-center justify-center text-white">
             <Sparkles className="w-4 h-4" />
           </div>
           <div>
-            <h2 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+            <h2 className="text-sm font-bold text-slate-100 flex items-center gap-2">
               HEATSHIELD AI ASSISTANT
             </h2>
-            <p className="text-[11px] text-slate-500 font-mono">
+            <p className="text-[11px] text-slate-400 font-mono">
               Context-Aware Decision Support
             </p>
           </div>
@@ -145,21 +145,21 @@ Welcome to HeatShield AI. Environmental data is loading or unavailable. Ask gene
           <span
             className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded border ${
               dataStatus === 'LIVE'
-                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                ? 'bg-emerald-950/50 text-emerald-300 border-emerald-800'
                 : dataStatus === 'CACHED'
-                ? 'bg-amber-50 text-amber-700 border-amber-200'
-                : 'bg-rose-50 text-rose-700 border-rose-200'
+                ? 'bg-amber-950/50 text-amber-300 border-amber-800'
+                : 'bg-rose-950/50 text-rose-300 border-rose-800'
             }`}
           >
             STATUS: {dataStatus}
           </span>
 
           {/* Mode Toggle */}
-          <div className="flex items-center bg-slate-200 p-0.5 rounded-lg text-[11px] font-medium">
+          <div className="flex items-center bg-slate-800 p-0.5 rounded-lg text-[11px] font-medium border border-slate-700">
             <button
               onClick={() => handleToggleMode('simple')}
               className={`px-2 py-0.5 rounded-md transition ${
-                activeMode === 'simple' ? 'bg-white text-slate-900 shadow-2xs font-semibold' : 'text-slate-600 hover:text-slate-900'
+                activeMode === 'simple' ? 'bg-slate-700 text-white shadow-2xs font-semibold' : 'text-slate-400 hover:text-slate-200'
               }`}
             >
               Simple
@@ -167,7 +167,7 @@ Welcome to HeatShield AI. Environmental data is loading or unavailable. Ask gene
             <button
               onClick={() => handleToggleMode('technical')}
               className={`px-2 py-0.5 rounded-md transition ${
-                activeMode === 'technical' ? 'bg-white text-slate-900 shadow-2xs font-semibold' : 'text-slate-600 hover:text-slate-900'
+                activeMode === 'technical' ? 'bg-slate-700 text-white shadow-2xs font-semibold' : 'text-slate-400 hover:text-slate-200'
               }`}
             >
               Technical
@@ -177,8 +177,8 @@ Welcome to HeatShield AI. Environmental data is loading or unavailable. Ask gene
       </div>
 
       {/* Safety Notice */}
-      <div className="bg-amber-50 border-b border-amber-200 px-4 py-2 flex items-center gap-2 text-[11px] text-amber-900 font-medium">
-        <ShieldAlert className="w-4 h-4 text-amber-600 flex-shrink-0" />
+      <div className="bg-amber-950/30 border-b border-amber-900/50 px-4 py-2 flex items-center gap-2 text-[11px] text-amber-300 font-medium">
+        <ShieldAlert className="w-4 h-4 text-amber-400 flex-shrink-0" />
         <span>
           <strong>Safety Notice:</strong> HeatShield AI provides preventive guidance and is <strong>not a medical diagnosis tool</strong>. For emergencies, call local emergency response.
         </span>
@@ -186,25 +186,25 @@ Welcome to HeatShield AI. Environmental data is loading or unavailable. Ask gene
 
       {/* Context Card (if weather & risk available) */}
       {weather && risk && (
-        <div className="mx-4 mt-3 p-3 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-between text-xs font-mono">
+        <div className="mx-4 mt-3 p-3 bg-slate-950 border border-slate-800 rounded-lg flex items-center justify-between text-xs font-mono">
           <div className="flex items-center gap-3">
-            <span className="font-bold text-slate-700">{weather.location?.name}</span>
-            <span className="text-slate-500">|</span>
-            <span>{weather.temperature}°C (Feels {weather.apparent_temperature}°C)</span>
-            <span className="text-slate-500">|</span>
-            <span>RH {weather.relative_humidity}%</span>
+            <span className="font-bold text-slate-200">{weather.location?.name}</span>
+            <span className="text-slate-600">|</span>
+            <span className="text-slate-300">{weather.temperature}°C (Feels {weather.apparent_temperature}°C)</span>
+            <span className="text-slate-600">|</span>
+            <span className="text-slate-300">RH {weather.relative_humidity}%</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="text-slate-500">Risk:</span>
+            <span className="text-slate-400">Risk:</span>
             <span
-              className={`font-bold px-1.5 py-0.5 rounded ${
+              className={`font-bold px-1.5 py-0.5 rounded border text-[11px] ${
                 risk.risk_level === 'EXTREME'
-                  ? 'bg-rose-100 text-rose-800'
+                  ? 'bg-rose-950/60 text-rose-300 border-rose-800'
                   : risk.risk_level === 'HIGH'
-                  ? 'bg-orange-100 text-orange-800'
+                  ? 'bg-orange-950/60 text-orange-300 border-orange-800'
                   : risk.risk_level === 'MODERATE'
-                  ? 'bg-amber-100 text-amber-800'
-                  : 'bg-emerald-100 text-emerald-800'
+                  ? 'bg-amber-950/60 text-amber-300 border-amber-800'
+                  : 'bg-emerald-950/60 text-emerald-300 border-emerald-800'
               }`}
             >
               {risk.risk_level} ({risk.risk_score}/100)
@@ -220,7 +220,7 @@ Welcome to HeatShield AI. Environmental data is loading or unavailable. Ask gene
             key={idx}
             onClick={() => handleSend(q)}
             disabled={isLoading}
-            className="text-[11px] bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 px-2.5 py-1 rounded-md transition font-medium text-left"
+            className="text-[11px] bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-slate-100 border border-slate-700/80 px-2.5 py-1 rounded-md transition font-medium text-left"
           >
             {q}
           </button>
@@ -237,14 +237,14 @@ Welcome to HeatShield AI. Environmental data is loading or unavailable. Ask gene
             <div
               className={`max-w-xl p-3.5 rounded-xl text-xs leading-relaxed ${
                 msg.sender === 'user'
-                  ? 'bg-slate-900 text-white font-medium'
+                  ? 'bg-emerald-600 text-white font-medium'
                   : msg.is_emergency_warning
-                  ? 'bg-rose-50 border border-rose-300 text-rose-950 font-medium'
-                  : 'bg-slate-50 border border-slate-200 text-slate-900'
+                  ? 'bg-rose-950/50 border border-rose-800 text-rose-200 font-medium'
+                  : 'bg-slate-800 border border-slate-700/80 text-slate-100'
               }`}
             >
               <div className="whitespace-pre-wrap font-sans">{msg.text}</div>
-              <div className="mt-2 flex items-center justify-between text-[10px] opacity-60 font-mono border-t border-slate-200/50 pt-1">
+              <div className="mt-2 flex items-center justify-between text-[10px] opacity-70 font-mono border-t border-slate-700/50 pt-1 text-slate-400">
                 <span>{msg.data_status ? `[DATA: ${msg.data_status}]` : ''}</span>
                 <span>{msg.timestamp}</span>
               </div>
@@ -253,14 +253,14 @@ Welcome to HeatShield AI. Environmental data is loading or unavailable. Ask gene
         ))}
 
         {isLoading && (
-          <div className="flex items-center gap-2 text-xs text-slate-500 font-mono p-2 animate-pulse">
-            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+          <div className="flex items-center gap-2 text-xs text-slate-400 font-mono p-2 animate-pulse">
+            <RefreshCw className="w-3.5 h-3.5 animate-spin text-emerald-400" />
             <span>Analyzing application context & generating guidance...</span>
           </div>
         )}
 
         {errorMessage && (
-          <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg text-xs text-rose-800 flex items-center gap-2">
+          <div className="p-3 bg-rose-950/40 border border-rose-800 rounded-lg text-xs text-rose-300 flex items-center gap-2">
             <AlertCircle className="w-4 h-4 flex-shrink-0" />
             <span>{errorMessage}</span>
           </div>
@@ -275,7 +275,7 @@ Welcome to HeatShield AI. Environmental data is loading or unavailable. Ask gene
           e.preventDefault();
           handleSend();
         }}
-        className="p-3 border-t border-slate-200 bg-slate-50 flex gap-2"
+        className="p-3 border-t border-slate-800 bg-slate-950/80 flex gap-2"
       >
         <input
           type="text"
@@ -283,12 +283,12 @@ Welcome to HeatShield AI. Environmental data is loading or unavailable. Ask gene
           value={inputQuery}
           onChange={(e) => setInputQuery(e.target.value)}
           disabled={isLoading}
-          className="flex-1 bg-white border border-slate-300 text-slate-900 text-xs rounded-lg px-3.5 py-2.5 focus:outline-none focus:border-emerald-600 disabled:opacity-50"
+          className="flex-1 bg-slate-900 border border-slate-700 text-slate-100 placeholder:text-slate-500 text-xs rounded-lg px-3.5 py-2.5 focus:outline-none focus:border-emerald-500 disabled:opacity-50"
         />
         <button
           type="submit"
           disabled={isLoading || !inputQuery.trim()}
-          className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-300 text-white rounded-lg font-semibold text-xs flex items-center gap-1.5 shadow-xs transition"
+          className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-800 disabled:text-slate-600 text-white rounded-lg font-semibold text-xs flex items-center gap-1.5 shadow-xs transition"
         >
           <span>Send</span>
           <Send className="w-3.5 h-3.5" />

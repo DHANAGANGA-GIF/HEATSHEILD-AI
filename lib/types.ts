@@ -3,7 +3,7 @@ export type ExposureType = 'indoors' | 'occasional' | 'work' | 'physical';
 export type ActivityLevel = 'low' | 'moderate' | 'high';
 export type ExposureDuration = 'short' | 'moderate' | 'long';
 export type CoolingAccess = 'good' | 'limited' | 'prefer_not_to_say';
-export type Language = 'en' | 'ta' | 'hi';
+export type Language = 'en' | 'te' | 'ta' | 'hi';
 export type TechMode = 'technical' | 'simple';
 
 export interface UserProfile {

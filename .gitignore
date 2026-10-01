@@ -37,3 +37,7 @@ yarn-error.log*
 
 # Vercel
 .vercel
+
+# Scratch & IDE
+.kilo/
+scratch/

@@ -123,8 +123,6 @@ export function FirebaseAuthProvider({ children }: { children: ReactNode }) {
   const syncAppProfile = useCallback((user: User | null) => {
     if (!user) {
       setAppProfile(null);
-      clearSessionCookie();
-      clearUserProfile();
       return;
     }
     const stored = getUserProfile();
@@ -173,20 +171,24 @@ export function FirebaseAuthProvider({ children }: { children: ReactNode }) {
 
         if (user) {
           try {
-            const token = await user.getIdToken(true /* force fresh token */);
-            // Only store a real JWT in the session cookie — never a bare UID
+            const token = await user.getIdToken(false /* retrieve existing or refreshed */);
             setIdToken(token || null);
-            if (token) setSessionCookie(token);
-            // Update last_login_at
+            if (token) {
+              setSessionCookie(token);
+              // Ensure server session cookie is synchronized
+              fetch('/api/auth/session', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ idToken: token }),
+                credentials: 'include',
+              }).catch(() => {});
+            }
             saveUserProfile({ last_login_at: new Date().toISOString() } as any);
           } catch {
-            // Token fetch failed — clear stale session data
             setIdToken(null);
-            clearSessionCookie();
           }
         } else {
           setIdToken(null);
-          clearSessionCookie();
         }
 
         setLoading(false);
@@ -207,6 +209,15 @@ export function FirebaseAuthProvider({ children }: { children: ReactNode }) {
       try {
         const token = await firebaseUser.getIdToken(true /* force refresh */);
         setIdToken(token);
+        if (token) {
+          setSessionCookie(token);
+          fetch('/api/auth/session', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ idToken: token }),
+            credentials: 'include',
+          }).catch(() => {});
+        }
       } catch {
         setIdToken(null);
       }
@@ -233,11 +244,28 @@ export function FirebaseAuthProvider({ children }: { children: ReactNode }) {
       } catch {
         token = null;
       }
+      if (!token) {
+        throw new Error('Failed to retrieve authentication token from Firebase.');
+      }
       setIdToken(token);
-      // Only store a real JWT in the session cookie — never a bare UID
-      if (token) setSessionCookie(token);
+      setSessionCookie(token);
+
+      // Establish authoritative server session cookie before completing sign-in
+      try {
+        const sessionRes = await fetch('/api/auth/session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ idToken: token }),
+          credentials: 'include',
+        });
+        if (!sessionRes.ok) {
+          console.warn('[HeatShield] Server session establishment returned status:', sessionRes.status);
+        }
+      } catch (sessionErr) {
+        console.warn('[HeatShield] Server session fetch error:', sessionErr);
+      }
+
       syncAppProfile(user);
-      // Persist last login
       saveUserProfile({ last_login_at: new Date().toISOString() } as any);
       return { success: true };
     } catch (err) {
@@ -272,9 +300,18 @@ export function FirebaseAuthProvider({ children }: { children: ReactNode }) {
       } catch {
         token = null;
       }
-      setIdToken(token);
-      // Only store a real JWT in the session cookie — never a bare UID
-      if (token) setSessionCookie(token);
+      if (token) {
+        setIdToken(token);
+        setSessionCookie(token);
+        try {
+          await fetch('/api/auth/session', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ idToken: token }),
+            credentials: 'include',
+          });
+        } catch {}
+      }
       syncAppProfile(user);
       return { success: true };
     } catch (err) {
@@ -290,20 +327,25 @@ export function FirebaseAuthProvider({ children }: { children: ReactNode }) {
     setActionLoading(true);
     setError(null);
     try {
-      // 1. Sign out from Firebase
+      // 1. Terminate server session cookie
+      try {
+        await fetch('/api/auth/session', { method: 'DELETE', credentials: 'include' });
+      } catch {}
+
+      // 2. Sign out from Firebase
       if (isFirebaseConfigured && firebaseAuth) {
         await firebaseSignOut(firebaseAuth);
       }
     } catch (err) {
       console.warn('[HeatShield] Firebase sign-out error (non-critical):', err);
     } finally {
-      // 2. Clear session cookie immediately
+      // 3. Clear session cookie immediately
       clearSessionCookie();
-      // 3. Clear application state regardless of Firebase success
+      // 4. Clear application state regardless of Firebase success
       setFirebaseUser(null);
       setAppProfile(null);
       setIdToken(null);
-      // 4. Clear localStorage profile and cached location/weather
+      // 5. Clear localStorage profile and cached location/weather
       clearUserProfile();
       if (typeof window !== 'undefined') {
         // Clear all heatshield storage on logout (prevents stale data for next user)

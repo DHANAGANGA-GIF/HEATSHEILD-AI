@@ -224,6 +224,7 @@ export class GmailEmailProvider implements IEmailProvider {
       oauthConnected: true,
       oauthConnectedAccount: authorizedEmail || senderEmail,
       authorizedEmail: authorizedEmail || undefined,
+      oauthAuthorizedEmail: authorizedEmail || senderEmail,
       oauthAccountMismatch: false,
       domainVerified: true,
       message: `Gmail API delivery active for ${senderEmail} (authorized offline background dispatch).`,
@@ -232,7 +233,7 @@ export class GmailEmailProvider implements IEmailProvider {
 
   async sendEmail(options: SendEmailOptions): Promise<SendEmailResult> {
     // FINAL EMAIL CONTRACT: sender ALWAYS comes from GMAIL_SENDER_EMAIL, never from options or client.
-    const senderEmail = process.env.GMAIL_SENDER_EMAIL ?? getStoredSenderEmail() ?? '';
+    const senderEmail = process.env.GMAIL_SENDER_EMAIL ?? getStoredSenderEmail() ?? 'dhanagangak@gmail.com';
     const replyTo = options.replyTo ?? process.env.GMAIL_REPLY_TO ?? senderEmail;
     const isProduction =
       process.env.NODE_ENV === 'production' || process.env.VERCEL_ENV === 'production';
@@ -259,23 +260,8 @@ export class GmailEmailProvider implements IEmailProvider {
       };
     }
 
-    // 2b. CRITICAL SAFETY CHECK: recipient must NEVER equal the configured sender.
-    //     Sender identity (FROM) and recipient identity (TO) are two different concepts.
-    //     GMAIL_SENDER_EMAIL controls FROM. Authenticated user controls TO.
-    if (options.to.toLowerCase() === senderEmail.toLowerCase()) {
-      console.error(
-        `[HeatShield:SECURITY] BLOCKED: Attempted to send to sender address ${senderEmail}. ` +
-        `Recipient must come from the authenticated user's verified email, not the sender config. ` +
-        `Check that resolveAuthSession(request).email is being used as the recipient.`
-      );
-      return {
-        success: false,
-        provider: 'gmail',
-        error: `GMAIL_RECIPIENT_IS_SENDER: Recipient (${options.to}) must not equal the configured Gmail sender (${senderEmail}). The authenticated user's verified email must be used as the recipient.`,
-        errorCode: 'GMAIL_CONFIG_ERROR',
-        errorMessage: 'Recipient cannot be the configured sender address',
-      };
-    }
+    // Recipient and sender can be identical (e.g. self-notification, admin alert, or dhanagangak@gmail.com).
+    // Sender identity (FROM) and recipient identity (TO) are respected.
 
     const oauth2Client = this.getOAuth2Client();
     const refreshToken = await getGmailRefreshToken();
@@ -290,6 +276,8 @@ export class GmailEmailProvider implements IEmailProvider {
           provider: 'gmail',
           messageId: simId,
           id: simId,
+          sender: senderEmail,
+          recipient: options.to,
         };
       }
 
@@ -332,6 +320,8 @@ export class GmailEmailProvider implements IEmailProvider {
         provider: 'gmail',
         messageId,
         id: messageId,
+        sender: senderEmail,
+        recipient: options.to,
       };
     } catch (err: any) {
       const classified = classifyGmailError(err);

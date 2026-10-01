@@ -140,20 +140,7 @@ export async function POST(request: Request) {
       locSource = matched.location_source || 'SAVED_LOCATION';
     }
 
-    // SAFETY ASSERTION: GMAIL_SENDER_EMAIL controls FROM. Authenticated email controls TO.
-    // If a recipient somehow equals the sender config, reject to prevent misconfiguration.
-    const configuredSender = process.env.GMAIL_SENDER_EMAIL || process.env.EMAIL_FROM || '';
-    if (configuredSender && recipientEmail.toLowerCase() === configuredSender.toLowerCase()
-        && mode === 'MANUAL') {
-      return NextResponse.json(
-        {
-          success: false,
-          error: `RECIPIENT_IS_SENDER: Manual dispatch target (${recipientEmail}) equals the configured Gmail sender address. ` +
-                 `Subscriber emails must be distinct from the service sender account (${configuredSender}).`,
-        },
-        { status: 400 }
-      );
-    }
+    const configuredSender = process.env.GMAIL_SENDER_EMAIL || process.env.EMAIL_FROM || 'dhanagangak@gmail.com';
 
     // ── 4. Rate Limiting Check ────────────────────────────────────────────────
     const now = Date.now();
@@ -346,6 +333,9 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           success: true,
+          provider: emailResult.provider || 'gmail',
+          sender: configuredSender,
+          recipient: recipientEmail,
           message: `Live safety advisory successfully accepted by provider for ${recipientEmail}`,
           totalRecipients: 1,
           successfulDispatches: 1,

@@ -99,7 +99,7 @@ export function generatePersonalizedGuidance(
   // 5. Symptom Recognition & Emergency Vigilance
   let symptomSimple = 'Monitor for heat strain warning signs: heavy sweating, headache, dizziness, nausea, or muscle cramps.';
   if (riskLevel === 'HIGH' || riskLevel === 'EXTREME') {
-    symptomSimple = 'Watch for heat illness warning signs: dizziness, nausea, rapid pulse, or extreme weakness. Rest in a cool place immediately if felt.';
+    symptomSimple = 'Confusion, fainting, very hot skin, or severe weakness can be signs of a serious heat-related emergency. Move to shade or cooling immediately and call emergency services if symptoms worsen.';
   }
 
   guidance.push({
@@ -168,6 +168,6 @@ export function generatePersonalizedGuidance(
 }
 
 export const MEDICAL_SAFETY_DISCLAIMER =
-  'This safety guidance is generated for general heat awareness based on environmental conditions. It is not a medical diagnosis, treatment evaluation, or clinical advice. Consult qualified medical personnel for health concerns.';
+  'HeatShield AI is a decision-support and awareness system, not a medical diagnosis tool. Confusion, fainting, very hot skin, or severe weakness can be signs of a serious heat-related emergency. In an emergency, contact local emergency medical services immediately (108 / 112).';
 
 

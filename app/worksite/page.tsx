@@ -73,7 +73,7 @@ export default function WorksitePage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-100 text-slate-900 font-sans flex flex-col">
+    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans flex flex-col">
       <Navbar onToggleMobileSidebar={() => setMobileSidebarOpen(!mobileSidebarOpen)} />
 
       <div className="flex-1 flex">
@@ -81,14 +81,14 @@ export default function WorksitePage() {
 
         <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto w-full space-y-6">
           {/* Header */}
-          <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="bg-slate-900 p-6 rounded-xl border border-slate-800 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <div className="p-3 bg-amber-100 text-amber-900 rounded-xl">
+              <div className="p-3 bg-amber-950/60 text-amber-400 border border-amber-800/60 rounded-xl">
                 <Briefcase className="w-6 h-6" />
               </div>
               <div>
-                <h1 className="text-xl font-bold text-slate-900">OUTDOOR WORKSITE SAFETY PORTAL</h1>
-                <p className="text-xs text-slate-500 font-mono">
+                <h1 className="text-xl font-bold text-slate-100">OUTDOOR WORKSITE SAFETY PORTAL</h1>
+                <p className="text-xs text-slate-400 font-mono">
                   NIOSH/OSHA-Aligned Work-Rest Cycle Planner & Operational Hydration Protocol
                 </p>
               </div>
@@ -102,7 +102,7 @@ export default function WorksitePage() {
                     const found = organizations.find((o) => o.id === e.target.value);
                     if (found) setSelectedOrg(found);
                   }}
-                  className="bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 font-semibold text-slate-800 focus:outline-none"
+                  className="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 font-semibold text-slate-200 focus:outline-none focus:border-emerald-500"
                 >
                   {organizations.map((o) => (
                     <option key={o.id} value={o.id}>
@@ -111,14 +111,14 @@ export default function WorksitePage() {
                   ))}
                 </select>
               )}
-              <span className="px-3 py-1.5 bg-amber-50 text-amber-900 font-bold rounded border border-amber-200">
+              <span className="px-3 py-1.5 bg-amber-950/60 text-amber-300 font-bold rounded border border-amber-800/80">
                 WORKSITE OFFICER MODE
               </span>
             </div>
           </div>
 
           {error && (
-            <div className="p-4 bg-amber-50 border border-amber-300 rounded-xl text-xs font-mono text-amber-900 flex items-center justify-between">
+            <div className="p-4 bg-amber-950/40 border border-amber-800/60 rounded-xl text-xs font-mono text-amber-300 flex items-center justify-between">
               <span>{error}</span>
               <button onClick={() => window.location.reload()} className="underline flex items-center gap-1 font-bold">
                 <RefreshCw className="w-3.5 h-3.5" /> Retry
@@ -129,38 +129,38 @@ export default function WorksitePage() {
           {/* Environmental Overview */}
           {weather && risk && (
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs font-mono">
-              <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-xs">
-                <span className="text-slate-500 block">WORKSITE TEMPERATURE</span>
-                <span className="text-2xl font-bold text-slate-900">{weather.temperature.toFixed(1)}°C</span>
-                <span className="text-[10px] text-slate-400 block mt-0.5">Humidity: {weather.relative_humidity}%</span>
+              <div className="p-4 bg-slate-900 rounded-xl border border-slate-800 shadow-xs">
+                <span className="text-slate-400 block">WORKSITE TEMPERATURE</span>
+                <span className="text-2xl font-bold text-slate-100">{weather.temperature.toFixed(1)}°C</span>
+                <span className="text-[10px] text-slate-500 block mt-0.5">Humidity: {weather.relative_humidity}%</span>
               </div>
 
-              <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-xs">
-                <span className="text-slate-500 block">APPARENT HEAT STRAIN</span>
-                <span className="text-2xl font-bold text-amber-600">{weather.apparent_temperature.toFixed(1)}°C</span>
-                <span className="text-[10px] text-slate-400 block mt-0.5">Heavy Workload Context</span>
+              <div className="p-4 bg-slate-900 rounded-xl border border-slate-800 shadow-xs">
+                <span className="text-slate-400 block">APPARENT HEAT STRAIN</span>
+                <span className="text-2xl font-bold text-amber-400">{weather.apparent_temperature.toFixed(1)}°C</span>
+                <span className="text-[10px] text-slate-500 block mt-0.5">Heavy Workload Context</span>
               </div>
 
-              <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-xs">
-                <span className="text-slate-500 block">EVALUATED RISK SCORE</span>
-                <span className="text-2xl font-bold text-slate-900">{risk.risk_score} / 100</span>
+              <div className="p-4 bg-slate-900 rounded-xl border border-slate-800 shadow-xs">
+                <span className="text-slate-400 block">EVALUATED RISK SCORE</span>
+                <span className="text-2xl font-bold text-slate-100">{risk.risk_score} / 100</span>
                 <span
                   className={`text-[10px] font-bold block mt-0.5 ${
                     risk.risk_level === 'EXTREME'
-                      ? 'text-rose-700'
+                      ? 'text-rose-400'
                       : risk.risk_level === 'HIGH'
-                      ? 'text-amber-700'
-                      : 'text-emerald-700'
+                      ? 'text-amber-400'
+                      : 'text-emerald-400'
                   }`}
                 >
                   TIER: {risk.risk_level}
                 </span>
               </div>
 
-              <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-xs">
-                <span className="text-slate-500 block">PRIMARY DATA STREAM</span>
-                <span className="text-sm font-bold text-blue-800 mt-1 block">LIVE WMO METEO</span>
-                <span className="text-[10px] text-emerald-600 font-bold block">✓ VERIFIED SOURCE</span>
+              <div className="p-4 bg-slate-900 rounded-xl border border-slate-800 shadow-xs">
+                <span className="text-slate-400 block">PRIMARY DATA STREAM</span>
+                <span className="text-sm font-bold text-blue-400 mt-1 block">LIVE WMO METEO</span>
+                <span className="text-[10px] text-emerald-400 font-bold block">✓ VERIFIED SOURCE</span>
               </div>
             </div>
           )}
@@ -168,10 +168,10 @@ export default function WorksitePage() {
           {risk && (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {/* Work-Rest Cycle Schedule */}
-              <div className="md:col-span-2 bg-white p-6 rounded-xl border border-slate-200 shadow-xs space-y-4">
-                <h3 className="text-xs font-bold font-mono text-slate-500 uppercase">REQUIRED WORK-REST CYCLE</h3>
+              <div className="md:col-span-2 bg-slate-900 p-6 rounded-xl border border-slate-800 shadow-xs space-y-4">
+                <h3 className="text-xs font-bold font-mono text-slate-400 uppercase">REQUIRED WORK-REST CYCLE</h3>
 
-                <div className="p-5 rounded-xl bg-slate-900 text-white space-y-3 font-mono">
+                <div className="p-5 rounded-xl bg-slate-950 border border-slate-800 text-white space-y-3 font-mono">
                   <div className="flex items-center justify-between">
                     <span className="text-xs text-slate-400">RECOMMENDED CYCLE RATIO</span>
                     <span className="text-xs font-bold text-amber-400">NIOSH HEAT ALIGNED</span>
@@ -191,60 +191,60 @@ export default function WorksitePage() {
                 </div>
 
                 <div className="space-y-2 text-xs font-sans">
-                  <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-between">
+                  <div className="p-3 bg-slate-950 border border-slate-800 rounded-lg flex items-center justify-between text-slate-300">
                     <span>Mandatory Hydration Target</span>
-                    <span className="font-mono font-bold text-blue-700">1 Liter / Hour / Worker</span>
+                    <span className="font-mono font-bold text-blue-400">1 Liter / Hour / Worker</span>
                   </div>
-                  <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-between">
+                  <div className="p-3 bg-slate-950 border border-slate-800 rounded-lg flex items-center justify-between text-slate-300">
                     <span>Rest Area Requirement</span>
-                    <span className="font-mono font-bold text-emerald-700">Shaded Canopy + Forced Air Circulation</span>
+                    <span className="font-mono font-bold text-emerald-400">Shaded Canopy + Forced Air Circulation</span>
                   </div>
                 </div>
               </div>
 
               {/* Worksite Action Plan */}
-              <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-xs space-y-4">
-                <h3 className="text-xs font-bold font-mono text-slate-500 uppercase">SITE ACTION PLAN</h3>
+              <div className="bg-slate-900 p-6 rounded-xl border border-slate-800 shadow-xs space-y-4">
+                <h3 className="text-xs font-bold font-mono text-slate-400 uppercase">SITE ACTION PLAN</h3>
 
                 <div className="space-y-3 text-xs font-sans">
-                  <label className="flex items-center gap-2 p-2.5 bg-slate-50 border border-slate-200 rounded-lg cursor-pointer hover:bg-slate-100 transition">
+                  <label className="flex items-center gap-2 p-2.5 bg-slate-950 border border-slate-800 rounded-lg cursor-pointer hover:bg-slate-800 transition">
                     <input
                       type="checkbox"
                       checked={checklist.waterCoolers}
                       onChange={() => toggleChecklist('waterCoolers')}
-                      className="rounded text-emerald-600 focus:ring-0"
+                      className="rounded text-emerald-600 focus:ring-0 bg-slate-900 border-slate-700"
                     />
-                    <span>Cold water cooler stations verified</span>
+                    <span className="text-slate-300">Cold water cooler stations verified</span>
                   </label>
 
-                  <label className="flex items-center gap-2 p-2.5 bg-slate-50 border border-slate-200 rounded-lg cursor-pointer hover:bg-slate-100 transition">
+                  <label className="flex items-center gap-2 p-2.5 bg-slate-950 border border-slate-800 rounded-lg cursor-pointer hover:bg-slate-800 transition">
                     <input
                       type="checkbox"
                       checked={checklist.shadeCanopy}
                       onChange={() => toggleChecklist('shadeCanopy')}
-                      className="rounded text-emerald-600 focus:ring-0"
+                      className="rounded text-emerald-600 focus:ring-0 bg-slate-900 border-slate-700"
                     />
-                    <span>Shade canopy deployed at active zone</span>
+                    <span className="text-slate-300">Shade canopy deployed at active zone</span>
                   </label>
 
-                  <label className="flex items-center gap-2 p-2.5 bg-slate-50 border border-slate-200 rounded-lg cursor-pointer hover:bg-slate-100 transition">
+                  <label className="flex items-center gap-2 p-2.5 bg-slate-950 border border-slate-800 rounded-lg cursor-pointer hover:bg-slate-800 transition">
                     <input
                       type="checkbox"
                       checked={checklist.buddySystem}
                       onChange={() => toggleChecklist('buddySystem')}
-                      className="rounded text-emerald-600 focus:ring-0"
+                      className="rounded text-emerald-600 focus:ring-0 bg-slate-900 border-slate-700"
                     />
-                    <span>Buddy system check-in executed</span>
+                    <span className="text-slate-300">Buddy system check-in executed</span>
                   </label>
 
-                  <label className="flex items-center gap-2 p-2.5 bg-slate-50 border border-slate-200 rounded-lg cursor-pointer hover:bg-slate-100 transition">
+                  <label className="flex items-center gap-2 p-2.5 bg-slate-950 border border-slate-800 rounded-lg cursor-pointer hover:bg-slate-800 transition">
                     <input
                       type="checkbox"
                       checked={checklist.electrolytePacks}
                       onChange={() => toggleChecklist('electrolytePacks')}
-                      className="rounded text-emerald-600 focus:ring-0"
+                      className="rounded text-emerald-600 focus:ring-0 bg-slate-900 border-slate-700"
                     />
-                    <span>Electrolyte hydration packs stocked</span>
+                    <span className="text-slate-300">Electrolyte hydration packs stocked</span>
                   </label>
                 </div>
               </div>
@@ -252,28 +252,28 @@ export default function WorksitePage() {
           )}
 
           {/* Worksite Incidents & Reports */}
-          <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-xs space-y-4">
-            <h3 className="text-xs font-bold font-mono text-slate-500 uppercase">RECENT SITE REPORTS</h3>
+          <div className="bg-slate-900 p-6 rounded-xl border border-slate-800 shadow-xs space-y-4">
+            <h3 className="text-xs font-bold font-mono text-slate-400 uppercase">RECENT SITE REPORTS</h3>
 
             {reports.length === 0 ? (
-              <div className="p-6 bg-slate-50 rounded-xl border border-slate-200 text-center text-xs font-mono text-slate-500">
+              <div className="p-6 bg-slate-950 rounded-xl border border-slate-800 text-center text-xs font-mono text-slate-400">
                 No incidents recorded for this worksite.
               </div>
             ) : (
               <div className="space-y-3">
                 {reports.slice(0, 3).map((rep) => (
-                  <div key={rep.id} className="p-3.5 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-between text-xs font-sans">
+                  <div key={rep.id} className="p-3.5 bg-slate-950 border border-slate-800 rounded-lg flex items-center justify-between text-xs font-sans">
                     <div>
-                      <span className="font-bold font-mono uppercase text-slate-900 mr-2">{rep.category.replace('_', ' ')}</span>
-                      <span className="text-slate-700">{rep.description}</span>
+                      <span className="font-bold font-mono uppercase text-slate-200 mr-2">{rep.category.replace('_', ' ')}</span>
+                      <span className="text-slate-300">{rep.description}</span>
                     </div>
-                    <span className="font-mono text-xs font-bold text-slate-600">{rep.status}</span>
+                    <span className="font-mono text-xs font-bold text-slate-400">{rep.status}</span>
                   </div>
                 ))}
               </div>
             )}
 
-            <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-[11px] font-mono text-slate-500 flex items-center gap-2">
+            <div className="p-3 bg-slate-950 border border-slate-800 rounded-lg text-[11px] font-mono text-slate-400 flex items-center gap-2">
               <Info className="w-4 h-4 text-slate-400 shrink-0" />
               <span>
                 Compliance Disclaimer: HeatShield AI provides environmental heat-risk decision support. It does not constitute legal compliance certification or regulatory medical guarantee.

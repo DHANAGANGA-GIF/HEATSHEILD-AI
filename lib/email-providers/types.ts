@@ -61,6 +61,8 @@ export interface SendEmailResult {
   provider: 'gmail' | 'resend';
   messageId?: string;
   id?: string; // alias for backward compatibility with existing tests
+  sender?: string;
+  recipient?: string;
   error?: string;
   errorCode?: EmailErrorCode;
   errorMessage?: string;
@@ -80,6 +82,7 @@ export interface EmailServiceStatus {
   oauthConnected?: boolean;
   oauthConnectedAccount?: string;
   authorizedEmail?: string;
+  oauthAuthorizedEmail?: string;
   oauthAccountMismatch?: boolean;
   message: string;
 }

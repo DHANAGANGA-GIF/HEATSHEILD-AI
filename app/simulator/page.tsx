@@ -104,7 +104,7 @@ export default function SimulatorPage() {
   );
 
   return (
-    <div className="min-h-screen bg-slate-100 text-slate-900 font-sans flex flex-col">
+    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans flex flex-col">
       <Navbar onToggleMobileSidebar={() => setMobileSidebarOpen(!mobileSidebarOpen)} />
 
       <div className="flex-1 flex">
@@ -112,24 +112,24 @@ export default function SimulatorPage() {
 
         <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full space-y-6">
           {/* Header */}
-          <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="bg-slate-900 p-5 rounded-xl border border-slate-800 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
-              <div className="flex items-center gap-2.5 text-emerald-700">
+              <div className="flex items-center gap-2.5 text-emerald-400">
                 <Sliders className="w-5 h-5" />
-                <h1 className="text-xl font-bold text-slate-900">HEATSHIELD RISK SCENARIO SIMULATOR</h1>
+                <h1 className="text-xl font-bold text-slate-100">HEATSHIELD RISK SCENARIO SIMULATOR</h1>
               </div>
-              <p className="text-xs text-slate-500 mt-0.5 font-mono">
+              <p className="text-xs text-slate-400 mt-0.5 font-mono">
                 Explore how workload, duration, cooling access, & microclimate changes impact heat-risk
               </p>
             </div>
 
             <div className="flex items-center gap-3">
-              <span className="text-[11px] font-mono font-extrabold px-3 py-1 bg-amber-100 text-amber-950 rounded border border-amber-300">
+              <span className="text-[11px] font-mono font-extrabold px-3 py-1 bg-amber-950/60 text-amber-300 rounded border border-amber-800/80">
                 {MANDATORY_SIMULATOR_LABEL}
               </span>
               <button
                 onClick={handleResetScenario}
-                className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg border border-slate-200 transition flex items-center gap-1.5"
+                className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg border border-slate-700 transition flex items-center gap-1.5"
               >
                 <RotateCcw className="w-3.5 h-3.5" />
                 <span>Reset to Baseline</span>
@@ -138,11 +138,11 @@ export default function SimulatorPage() {
           </div>
 
           {/* Safety Disclaimer Banner */}
-          <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-2.5 text-xs text-amber-900 font-medium">
-            <AlertTriangle className="w-4 h-4 shrink-0 text-amber-600 mt-0.5" />
+          <div className="p-3.5 bg-amber-950/40 border border-amber-800/60 rounded-xl flex items-start gap-2.5 text-xs text-amber-200 font-medium">
+            <AlertTriangle className="w-4 h-4 shrink-0 text-amber-400 mt-0.5" />
             <div>
-              <strong className="block font-mono text-[11px] uppercase">DECISION-SUPPORT SCENARIO ESTIMATE NOTICE</strong>
-              <span>
+              <strong className="block font-mono text-[11px] uppercase text-amber-300">DECISION-SUPPORT SCENARIO ESTIMATE NOTICE</strong>
+              <span className="text-slate-300">
                 Simulated outputs represent estimated environmental heat-risk under hypothetical conditions. They do <strong>NOT</strong> constitute medical diagnosis, predict illness, or guarantee health outcomes.
               </span>
             </div>
@@ -153,16 +153,16 @@ export default function SimulatorPage() {
             {/* Left Column (5 cols): Baseline Card & Scenario Controls */}
             <div className="lg:col-span-5 space-y-6">
               {/* Baseline Summary Card */}
-              <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs space-y-3">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                  <h3 className="text-xs font-bold font-mono text-slate-500 uppercase">LIVE CURRENT BASELINE</h3>
+              <div className="bg-slate-900 p-5 rounded-xl border border-slate-800 shadow-xs space-y-3">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                  <h3 className="text-xs font-bold font-mono text-slate-400 uppercase">LIVE CURRENT BASELINE</h3>
                   <span
                     className={`text-[10px] font-mono font-bold px-2 py-0.5 rounded border ${
                       baselineWeather?.is_cached
-                        ? 'bg-amber-50 text-amber-700 border-amber-200'
+                        ? 'bg-amber-950/60 text-amber-400 border-amber-800/60'
                         : baselineWeather
-                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                        : 'bg-rose-50 text-rose-700 border-rose-200'
+                        ? 'bg-emerald-950/60 text-emerald-400 border-emerald-800/60'
+                        : 'bg-rose-950/60 text-rose-400 border-rose-800/60'
                     }`}
                   >
                     STATUS: {baselineWeather ? (baselineWeather.is_cached ? 'CACHED' : 'LIVE') : 'UNAVAILABLE'}
@@ -176,31 +176,31 @@ export default function SimulatorPage() {
                 ) : (
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-700">
-                        <MapPin className="w-3.5 h-3.5 text-slate-400" />
+                      <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-300">
+                        <MapPin className="w-3.5 h-3.5 text-slate-500" />
                         <span>{baselineWeather.location?.name}</span>
                       </div>
-                      <span className="text-xs font-mono font-bold text-slate-900">
+                      <span className="text-xs font-mono font-bold text-slate-100">
                         {baselineWeather.temperature}°C (Feels {baselineWeather.apparent_temperature}°C)
                       </span>
                     </div>
 
-                    <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 flex items-center justify-between">
+                    <div className="p-3 bg-slate-950 rounded-lg border border-slate-800 flex items-center justify-between">
                       <div>
-                        <div className="text-[10px] font-mono text-slate-500">CURRENT BASELINE SCORE</div>
-                        <div className="text-xl font-bold font-mono text-slate-900">
+                        <div className="text-[10px] font-mono text-slate-400">CURRENT BASELINE SCORE</div>
+                        <div className="text-xl font-bold font-mono text-slate-100">
                           {baselineRisk.risk_score} <span className="text-xs text-slate-400 font-sans">/ 100</span>
                         </div>
                       </div>
                       <span
                         className={`font-bold px-2.5 py-1 text-xs rounded uppercase ${
                           baselineRisk.risk_level === 'EXTREME'
-                            ? 'bg-rose-100 text-rose-800'
+                            ? 'bg-rose-950 text-rose-300 border border-rose-800'
                             : baselineRisk.risk_level === 'HIGH'
-                            ? 'bg-orange-100 text-orange-800'
+                            ? 'bg-orange-950 text-orange-300 border border-orange-800'
                             : baselineRisk.risk_level === 'MODERATE'
-                            ? 'bg-amber-100 text-amber-800'
-                            : 'bg-emerald-100 text-emerald-800'
+                            ? 'bg-amber-950 text-amber-300 border border-amber-800'
+                            : 'bg-emerald-950 text-emerald-300 border border-emerald-800'
                         }`}
                       >
                         {baselineRisk.risk_level}
@@ -211,14 +211,14 @@ export default function SimulatorPage() {
               </div>
 
               {/* Scenario Control Panel */}
-              <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs space-y-5">
-                <h3 className="text-xs font-bold font-mono text-slate-500 uppercase pb-2 border-b">
+              <div className="bg-slate-900 p-5 rounded-xl border border-slate-800 shadow-xs space-y-5">
+                <h3 className="text-xs font-bold font-mono text-slate-400 uppercase pb-2 border-b border-slate-800">
                   SCENARIO CONTROLS
                 </h3>
 
                 {/* Location Switcher */}
                 <div>
-                  <label className="block text-xs font-bold font-mono text-slate-700 uppercase mb-1.5">
+                  <label className="block text-xs font-bold font-mono text-slate-300 uppercase mb-1.5">
                     Location Scenario
                   </label>
                   <select
@@ -231,7 +231,7 @@ export default function SimulatorPage() {
                       };
                       handleLocationChange(selected);
                     }}
-                    className="w-full bg-slate-50 border border-slate-300 text-slate-900 text-xs rounded-lg p-2.5 font-medium focus:outline-none focus:border-emerald-600"
+                    className="w-full bg-slate-950 border border-slate-800 text-slate-100 text-xs rounded-lg p-2.5 font-medium focus:outline-none focus:border-emerald-500"
                   >
                     <option value={profile.location?.name || 'Chennai'}>
                       {profile.location?.name || 'Chennai'} (Current)
@@ -253,7 +253,7 @@ export default function SimulatorPage() {
 
                 {/* Activity Level Toggle */}
                 <div>
-                  <label className="block text-xs font-bold font-mono text-slate-700 uppercase mb-1.5">
+                  <label className="block text-xs font-bold font-mono text-slate-300 uppercase mb-1.5">
                     Physical Activity Workload
                   </label>
                   <div className="grid grid-cols-3 gap-2">
@@ -267,8 +267,8 @@ export default function SimulatorPage() {
                         onClick={() => setSimActivity(opt.id as ActivityLevel)}
                         className={`p-2.5 rounded-lg text-xs font-semibold border transition ${
                           simActivity === opt.id
-                            ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
-                            : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                            ? 'bg-emerald-600 text-white border-emerald-500 shadow-xs'
+                            : 'bg-slate-950 text-slate-300 border-slate-800 hover:bg-slate-800'
                         }`}
                       >
                         {opt.label}
@@ -279,7 +279,7 @@ export default function SimulatorPage() {
 
                 {/* Exposure Duration Toggle */}
                 <div>
-                  <label className="block text-xs font-bold font-mono text-slate-700 uppercase mb-1.5">
+                  <label className="block text-xs font-bold font-mono text-slate-300 uppercase mb-1.5">
                     Continuous Sun / Outdoor Exposure
                   </label>
                   <div className="grid grid-cols-3 gap-2">
@@ -293,8 +293,8 @@ export default function SimulatorPage() {
                         onClick={() => setSimDuration(opt.id as ExposureDuration)}
                         className={`p-2.5 rounded-lg text-xs font-semibold border transition ${
                           simDuration === opt.id
-                            ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
-                            : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                            ? 'bg-emerald-600 text-white border-emerald-500 shadow-xs'
+                            : 'bg-slate-950 text-slate-300 border-slate-800 hover:bg-slate-800'
                         }`}
                       >
                         {opt.label}
@@ -305,7 +305,7 @@ export default function SimulatorPage() {
 
                 {/* Cooling Infrastructure Toggle */}
                 <div>
-                  <label className="block text-xs font-bold font-mono text-slate-700 uppercase mb-1.5">
+                  <label className="block text-xs font-bold font-mono text-slate-300 uppercase mb-1.5">
                     Cooling Access & Rest Option
                   </label>
                   <div className="grid grid-cols-3 gap-2">
@@ -319,8 +319,8 @@ export default function SimulatorPage() {
                         onClick={() => setSimCooling(opt.id as CoolingAccess)}
                         className={`p-2.5 rounded-lg text-xs font-semibold border transition ${
                           simCooling === opt.id
-                            ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
-                            : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                            ? 'bg-emerald-600 text-white border-emerald-500 shadow-xs'
+                            : 'bg-slate-950 text-slate-300 border-slate-800 hover:bg-slate-800'
                         }`}
                       >
                         {opt.label}
@@ -331,7 +331,7 @@ export default function SimulatorPage() {
 
                 {/* Age Group Vulnerability Toggle */}
                 <div>
-                  <label className="block text-xs font-bold font-mono text-slate-700 uppercase mb-1.5">
+                  <label className="block text-xs font-bold font-mono text-slate-300 uppercase mb-1.5">
                     Vulnerability Age Category
                   </label>
                   <div className="grid grid-cols-3 gap-2">
@@ -345,8 +345,8 @@ export default function SimulatorPage() {
                         onClick={() => setSimAgeGroup(opt.id as AgeGroup)}
                         className={`p-2.5 rounded-lg text-xs font-semibold border transition ${
                           simAgeGroup === opt.id
-                            ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
-                            : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                            ? 'bg-emerald-600 text-white border-emerald-500 shadow-xs'
+                            : 'bg-slate-950 text-slate-300 border-slate-800 hover:bg-slate-800'
                         }`}
                       >
                         {opt.label}
@@ -360,12 +360,12 @@ export default function SimulatorPage() {
             {/* Right Column (7 cols): Scenario Comparison & Outcomes */}
             <div className="lg:col-span-7 space-y-6">
               {/* Scenario Assessment Outcome Header */}
-              <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-xs space-y-5">
-                <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="bg-slate-900 p-6 rounded-xl border border-slate-800 shadow-xs space-y-5">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-3">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold font-mono text-slate-500 uppercase">SIMULATED SCENARIO RESULT</span>
+                    <span className="text-xs font-bold font-mono text-slate-400 uppercase">SIMULATED SCENARIO RESULT</span>
                   </div>
-                  <span className="text-[11px] font-mono font-bold text-amber-900 bg-amber-100 px-2.5 py-0.5 rounded border border-amber-300">
+                  <span className="text-[11px] font-mono font-bold text-amber-300 bg-amber-950/60 px-2.5 py-0.5 rounded border border-amber-800/80">
                     {comparison.label}
                   </span>
                 </div>
@@ -373,18 +373,18 @@ export default function SimulatorPage() {
                 {/* Score Comparison Display */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {/* Baseline Outcome */}
-                  <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
-                    <div className="text-[11px] font-mono text-slate-500 uppercase mb-1">BASELINE RISK SCORE</div>
-                    <div className="text-3xl font-extrabold font-mono text-slate-800">
+                  <div className="p-4 bg-slate-950 rounded-xl border border-slate-800">
+                    <div className="text-[11px] font-mono text-slate-400 uppercase mb-1">BASELINE RISK SCORE</div>
+                    <div className="text-3xl font-extrabold font-mono text-slate-100">
                       {comparison.baselineScore} <span className="text-xs text-slate-400 font-sans">/ 100</span>
                     </div>
-                    <div className="mt-2 text-xs font-bold uppercase font-mono text-slate-700">
+                    <div className="mt-2 text-xs font-bold uppercase font-mono text-slate-300">
                       TIER: {comparison.baselineLevel}
                     </div>
                   </div>
 
                   {/* Scenario Outcome */}
-                  <div className="p-4 bg-slate-900 text-white rounded-xl shadow-md relative overflow-hidden">
+                  <div className="p-4 bg-slate-950 text-white rounded-xl border border-slate-800 shadow-md relative overflow-hidden">
                     <div className="text-[11px] font-mono text-slate-400 uppercase mb-1">SCENARIO ESTIMATED SCORE</div>
                     <div className="text-3xl font-extrabold font-mono text-emerald-400">
                       {comparison.scenarioScore} <span className="text-xs text-slate-400 font-sans">/ 100</span>
@@ -409,33 +409,33 @@ export default function SimulatorPage() {
                 </div>
 
                 {/* ML Inference & Calculation Attribution Notice */}
-                <div className="p-3 bg-slate-50 rounded-lg border border-slate-200 text-[11px] font-mono text-slate-600">
+                <div className="p-3 bg-slate-950 rounded-lg border border-slate-800 text-[11px] font-mono text-slate-400">
                   <span>{comparison.mlInferenceNotice}</span>
                 </div>
               </div>
 
               {/* Major Changed Risk Drivers */}
-              <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-xs space-y-4">
-                <h3 className="text-xs font-bold font-mono text-slate-500 uppercase pb-2 border-b">
+              <div className="bg-slate-900 p-6 rounded-xl border border-slate-800 shadow-xs space-y-4">
+                <h3 className="text-xs font-bold font-mono text-slate-400 uppercase pb-2 border-b border-slate-800">
                   MAJOR CHANGED RISK DRIVERS
                 </h3>
 
                 {comparison.changedFactors.length === 0 ? (
-                  <div className="p-4 bg-slate-50 rounded-lg text-xs font-mono text-slate-500 text-center">
+                  <div className="p-4 bg-slate-950 rounded-lg text-xs font-mono text-slate-400 text-center border border-slate-800">
                     No contextual parameter changes from baseline. Modify controls on the left to simulate risk shifts.
                   </div>
                 ) : (
                   <div className="space-y-2.5">
                     {comparison.changedFactors.map((chg, idx) => (
-                      <div key={idx} className="p-3 bg-slate-50 rounded-lg border border-slate-200 text-xs">
-                        <div className="flex items-center justify-between font-bold text-slate-900 mb-1">
+                      <div key={idx} className="p-3 bg-slate-950 rounded-lg border border-slate-800 text-xs">
+                        <div className="flex items-center justify-between font-bold text-slate-200 mb-1">
                           <span>{chg.factorName}</span>
-                          <span className="font-mono text-emerald-700 text-[11px]">{chg.impactDeltaText}</span>
+                          <span className="font-mono text-emerald-400 text-[11px]">{chg.impactDeltaText}</span>
                         </div>
-                        <div className="flex items-center gap-2 font-mono text-[11px] text-slate-600">
-                          <span className="line-through text-slate-400">{chg.baselineValue}</span>
-                          <ArrowRight className="w-3 h-3 text-slate-400" />
-                          <span className="font-bold text-slate-900">{chg.scenarioValue}</span>
+                        <div className="flex items-center gap-2 font-mono text-[11px] text-slate-400">
+                          <span className="line-through text-slate-500">{chg.baselineValue}</span>
+                          <ArrowRight className="w-3 h-3 text-slate-500" />
+                          <span className="font-bold text-slate-200">{chg.scenarioValue}</span>
                         </div>
                       </div>
                     ))}
@@ -445,18 +445,18 @@ export default function SimulatorPage() {
 
               {/* Recommended Preventive Actions */}
               {comparison.scenarioAssessment && (
-                <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-xs space-y-4">
-                  <h3 className="text-xs font-bold font-mono text-slate-500 uppercase pb-2 border-b">
+                <div className="bg-slate-900 p-6 rounded-xl border border-slate-800 shadow-xs space-y-4">
+                  <h3 className="text-xs font-bold font-mono text-slate-400 uppercase pb-2 border-b border-slate-800">
                     SCENARIO PREVENTIVE GUIDANCE
                   </h3>
 
                   <div className="space-y-3">
                     {comparison.scenarioAssessment.recommendations.map((rec) => (
-                      <div key={rec.id} className="p-3.5 bg-slate-50 rounded-lg border border-slate-200 flex items-start gap-3">
-                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                      <div key={rec.id} className="p-3.5 bg-slate-950 rounded-lg border border-slate-800 flex items-start gap-3">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
                         <div>
-                          <h4 className="text-xs font-bold text-slate-900">{rec.title}</h4>
-                          <p className="text-xs text-slate-600 mt-0.5 leading-relaxed">{rec.technical_text}</p>
+                          <h4 className="text-xs font-bold text-slate-100">{rec.title}</h4>
+                          <p className="text-xs text-slate-400 mt-0.5 leading-relaxed">{rec.technical_text}</p>
                         </div>
                       </div>
                     ))}

@@ -15,8 +15,8 @@ import { saveUserProfile, getUserProfile } from '@/lib/store';
 export const dynamic = 'force-dynamic';
 
 function getSafeRedirectUrl(param: string | null, role?: string, onboarded: boolean = true): string {
-  // Validate redirect param: must start with single '/' and not contain protocol or '//'
-  if (param && param.startsWith('/') && !param.startsWith('//') && !param.includes(':')) {
+  // Validate redirect param: must start with single '/' and not contain protocol, '//', or backslash
+  if (param && param.startsWith('/') && !param.startsWith('//') && !param.includes(':') && !param.includes('\\')) {
     return param;
   }
   if (!onboarded) {
@@ -67,7 +67,13 @@ function LoginContent() {
       currentProfile.onboarded !== false
     );
 
-    router.replace(destination);
+    // Hard navigation guarantees fresh request headers with hs_session cookie
+    // and completely eliminates Next.js App Router client-side router cache staleness
+    if (typeof window !== 'undefined') {
+      window.location.replace(destination);
+    } else {
+      router.replace(destination);
+    }
   }, [searchParams, router]);
 
   // Redirect if already authenticated
@@ -96,20 +102,22 @@ function LoginContent() {
     if (authMode === 'signup') {
       const result = await signUp(email, password, name || email.split('@')[0]);
       if (!result.success) {
+        isRedirectingRef.current = false;
         setErrorMsg(result.error || 'Sign-up failed.');
         setLoading(false);
         return;
       }
-      setSuccessMsg('Account created! Redirecting...');
+      setSuccessMsg('Account created! Entering HeatShield AI...');
       performRedirect('/onboarding');
     } else {
       const result = await signIn(email, password);
       if (!result.success) {
+        isRedirectingRef.current = false;
         setErrorMsg(result.error || 'Sign-in failed.');
         setLoading(false);
         return;
       }
-      setSuccessMsg('Login successful! Redirecting...');
+      setSuccessMsg('Login successful! Entering dashboard...');
       const profile = getUserProfile();
       if (!profile.email) {
         saveUserProfile({
@@ -188,6 +196,7 @@ function LoginContent() {
         }
       }
     } catch (err: any) {
+      isRedirectingRef.current = false;
       const msg = err?.message || 'Authentication failed.';
       if (msg.includes('Invalid login')) setErrorMsg('Invalid email or password. Please check your credentials.');
       else if (msg.includes('already registered')) setErrorMsg('This email is already registered. Try signing in instead.');
@@ -263,9 +272,11 @@ function LoginContent() {
         setSuccessMsg('Phone verified! Redirecting...');
         performRedirect();
       } else {
+        isRedirectingRef.current = false;
         setErrorMsg(data.error || 'OTP verification failed.');
       }
     } catch (err: any) {
+      isRedirectingRef.current = false;
       setErrorMsg(err.message || 'Error verifying OTP.');
     } finally {
       setLoading(false);

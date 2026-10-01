@@ -145,7 +145,7 @@ export function setAuthorizedEmailForTesting(email: string | null): void {
  * Returns the configured sender email (strictly prioritizes GMAIL_SENDER_EMAIL).
  */
 export function getStoredSenderEmail(): string | null {
-  return process.env.GMAIL_SENDER_EMAIL || inMemoryAuthorizedEmail || inMemorySenderEmail || null;
+  return process.env.GMAIL_SENDER_EMAIL || inMemoryAuthorizedEmail || inMemorySenderEmail || 'dhanagangak@gmail.com';
 }
 
 /**

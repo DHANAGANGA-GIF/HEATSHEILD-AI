@@ -69,7 +69,7 @@ export function generateEmailContent(options: SendEmailOptions): RenderedEmail {
   const alertTime = alert.timestamp ? new Date(alert.timestamp).toUTCString() : new Date().toUTCString();
   const riskLevel = alert.trigger_data?.risk_level || 'EVALUATED';
   const riskScore = alert.trigger_data?.risk_score ?? 0;
-  const effectiveModelVersion = modelVersion || 'HeatShield-ML v1.3.0 (Physics-Context Dual Engine)';
+  const effectiveModelVersion = modelVersion || 'Rule-Based Heat Risk Engine (Physics & Context)';
 
   const subject =
     customSubject ||
@@ -238,7 +238,7 @@ Manage preferences / unsubscribe: https://heatshield-ai-kare.vercel.app/profile`
           </div>
 
           <div class="meta-info">
-            <div><strong>Location:</strong> ${escapeHtml(loc)} (${escapeHtml(coordsStr)}) • <strong>Source:</strong> ${escapeHtml(locSourceStr)}</div>
+            <div><strong>Location:</strong> ${escapeHtml(loc)} • <strong>Source:</strong> ${escapeHtml(locSourceStr)}</div>
             <div><strong>Observation Time:</strong> ${escapeHtml(observedTimeStr)} • <strong>Data Status:</strong> ${escapeHtml(qualityStr)}</div>
             <div><strong>Inference Model:</strong> ${escapeHtml(effectiveModelVersion)}</div>
           </div>

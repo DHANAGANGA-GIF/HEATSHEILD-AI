@@ -203,7 +203,7 @@ export function createEnvironmentalSnapshot(params: {
 
     precautions,
 
-    model_version: 'HeatShield-XAI v1.2',
+    model_version: 'Rule-Based Heat Risk Engine v1.2',
   };
 
   // Freeze to enforce immutability

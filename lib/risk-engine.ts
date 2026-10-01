@@ -5,16 +5,15 @@ import { validateWeatherMetrics, validateContextualInputs } from './input-valida
 import { logger } from './logger';
 
 /**
- * HeatShield AI — Physics + ML Dual Inference Engine
+ * HeatShield AI — Rule-Based Heat Risk Engine
  *
- * ARCHITECTURAL SEPARATION:
- * 1. Physical Thermodynamic Layer: Computes atmospheric Steadman / NWS Rothfusz
+ * ARCHITECTURAL FLOW:
+ * 1. Physical Atmospheric Layer: Computes atmospheric Steadman / NWS Rothfusz
  *    Heat Index (°C) from dry-bulb temperature and relative humidity.
- * 2. Contextual Physiological Layer: Evaluates metabolic heat generation (activity level),
- *    cumulative exposure duration, cooling infrastructure access, and age vulnerability
- *    grounded in NIOSH and OSHA occupational thermal stress criteria.
- * 3. Explainability Layer: Directional XAI decomposing prediction into risk escalators (+)
- *    and cooling mitigators (-).
+ * 2. Contextual Physiological Layer: Evaluates heat-risk factors including metabolic
+ *    heat generation (activity level), cumulative exposure duration, cooling infrastructure
+ *    access, and age vulnerability.
+ * 3. Transparent Breakdown: Evaluates risk escalators (+) and cooling mitigators (-).
  */
 
 /**
@@ -127,7 +126,7 @@ export function evaluateHeatRisk(
   const explanation = explainPrediction(totalScore, riskLevel, safeWeather, safeContext);
   const recommendations = generatePersonalizedGuidance(riskLevel, safeContext, safeWeather);
 
-  const modelVersion = 'HeatShield-ML v1.3.0 (Physics-Context Dual Engine)';
+  const modelVersion = 'Rule-Based Heat Risk Engine v1.3 (Environmental & Contextual)';
   const durationMs = Date.now() - startTime;
   logger.trackInference(durationMs, totalScore, riskLevel, modelVersion);
 

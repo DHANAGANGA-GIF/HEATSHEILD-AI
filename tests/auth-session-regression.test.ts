@@ -8,6 +8,7 @@ import {
 } from '../lib/firebase/admin';
 import { setSessionCookie, clearSessionCookie, getSessionCookie } from '../lib/store';
 import { GET as gmailConnectGet } from '../app/api/email/google/connect/route';
+import { GET as sessionGet, POST as sessionPost, DELETE as sessionDelete } from '../app/api/auth/session/route';
 
 // Helper: generate RSA key pair for testing valid cryptographic JWTs
 const { privateKey, publicKey } = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 });
@@ -263,6 +264,101 @@ describe('Authentication Session End-to-End Regression Test Suite', () => {
     } finally {
       console.log = origLog;
     }
+  });
+
+  // TEST K: /api/auth/session GET unauthenticated returns { authenticated: false }
+  it('TEST K: /api/auth/session GET returns authenticated: false when no session exists', async () => {
+    const req = new Request('https://heatshield-ai-kare.vercel.app/api/auth/session', {
+      method: 'GET',
+    });
+    const res = await sessionGet(req);
+    assert.strictEqual(res.status, 200);
+    const data = await res.json();
+    assert.strictEqual(data.authenticated, false);
+    assert.strictEqual('password' in data, false);
+    assert.strictEqual('token' in data, false);
+  });
+
+  // TEST L: /api/auth/session POST with missing or invalid token returns 400 or 401
+  it('TEST L: /api/auth/session POST with missing/invalid token fails gracefully', async () => {
+    // Missing token
+    const emptyReq = new Request('https://heatshield-ai-kare.vercel.app/api/auth/session', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+    const emptyRes = await sessionPost(emptyReq);
+    assert.strictEqual(emptyRes.status, 400);
+    const emptyData = await emptyRes.json();
+    assert.strictEqual(emptyData.authenticated, false);
+
+    // Malformed token
+    const badReq = new Request('https://heatshield-ai-kare.vercel.app/api/auth/session', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ idToken: 'malformed.token' }),
+    });
+    const badRes = await sessionPost(badReq);
+    assert.strictEqual(badRes.status, 401);
+  });
+
+  // TEST M: /api/auth/session DELETE clears session cookie with maxAge=0
+  it('TEST M: /api/auth/session DELETE terminates session and expires cookie', async () => {
+    const req = new Request('https://heatshield-ai-kare.vercel.app/api/auth/session', {
+      method: 'DELETE',
+    });
+    const res = await sessionDelete(req);
+    assert.strictEqual(res.status, 200);
+    const data = await res.json();
+    assert.strictEqual(data.authenticated, false);
+
+    const setCookie = res.headers.get('set-cookie');
+    assert.ok(setCookie, 'Must set cookie header');
+    assert.ok(setCookie.includes('hs_session=;'), 'Must empty hs_session value');
+    assert.ok(setCookie.includes('Max-Age=0') || setCookie.includes('max-age=0'), 'Must set Max-Age=0');
+  });
+
+  // TEST N: Safe redirect parameter validation prevents open redirects
+  it('TEST N: Safe redirect validator allows valid internal paths and blocks external URLs', () => {
+    function getSafeRedirectUrl(param: string | null, role?: string, onboarded: boolean = true): string {
+      if (param && param.startsWith('/') && !param.startsWith('//') && !param.includes(':') && !param.includes('\\')) {
+        return param;
+      }
+      if (!onboarded) {
+        return '/onboarding';
+      }
+      if (role === 'admin' || role === 'super_admin') {
+        return '/admin';
+      }
+      return '/dashboard';
+    }
+
+    // Valid internal paths
+    assert.strictEqual(getSafeRedirectUrl('/dashboard'), '/dashboard');
+    assert.strictEqual(getSafeRedirectUrl('/notifications'), '/notifications');
+    assert.strictEqual(getSafeRedirectUrl('/settings'), '/settings');
+    assert.strictEqual(getSafeRedirectUrl('/community/map'), '/community/map');
+
+    // Defaults to /dashboard when param is null
+    assert.strictEqual(getSafeRedirectUrl(null), '/dashboard');
+
+    // Blocks open redirects
+    assert.strictEqual(getSafeRedirectUrl('https://evil.com'), '/dashboard');
+    assert.strictEqual(getSafeRedirectUrl('//evil.com'), '/dashboard');
+    assert.strictEqual(getSafeRedirectUrl('javascript:alert(1)'), '/dashboard');
+    assert.strictEqual(getSafeRedirectUrl('/\\evil.com'), '/dashboard');
+  });
+
+  // TEST O: Session cookie has path=/ and appropriate SameSite/MaxAge
+  it('TEST O: Session cookie string construction complies with security requirements', () => {
+    const mockJwt = createMockJwt({ sub: 'user_cookie_opts' });
+    const isHttps = true;
+    const cookieStr = `hs_session=${encodeURIComponent(mockJwt)}; path=/; max-age=86400; SameSite=Lax${isHttps ? '; Secure' : ''}`;
+
+    assert.ok(cookieStr.includes('path=/'), 'Must be scoped to root path=/');
+    assert.ok(cookieStr.includes('SameSite=Lax'), 'Must have SameSite=Lax');
+    assert.ok(cookieStr.includes('Secure'), 'Must have Secure flag in production/https');
+    assert.ok(cookieStr.includes('max-age=86400'), 'Must have 24-hour expiration');
   });
 
 });

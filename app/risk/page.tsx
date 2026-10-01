@@ -32,55 +32,55 @@ export default function RiskPage() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-slate-100 text-slate-900 font-sans flex flex-col">
+    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans flex flex-col">
       <Navbar onToggleMobileSidebar={() => setMobileSidebarOpen(!mobileSidebarOpen)} />
 
       <div className="flex-1 flex">
         <Sidebar mobileOpen={mobileSidebarOpen} onCloseMobile={() => setMobileSidebarOpen(false)} />
 
         <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-5xl mx-auto w-full space-y-6">
-          <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-xs">
-            <div className="flex items-center gap-2 text-emerald-700 mb-1">
+          <div className="bg-slate-900 p-6 rounded-xl border border-slate-800 shadow-xs">
+            <div className="flex items-center gap-2 text-emerald-400 mb-1">
               <Flame className="w-5 h-5" />
-              <h1 className="text-xl font-bold text-slate-900">HEAT RISK METHODOLOGY & FACTOR ANALYSIS</h1>
+              <h1 className="text-xl font-bold text-slate-100">HEAT RISK METHODOLOGY & FACTOR ANALYSIS</h1>
             </div>
-            <p className="text-xs text-slate-500 font-mono">
+            <p className="text-xs text-slate-400 font-mono">
               In-depth breakdown of Steadman equations, humidity adjustments, and contextual workload multipliers
             </p>
           </div>
 
           {risk && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-xs space-y-4">
-                <h3 className="text-sm font-bold text-slate-900 border-b pb-2">STEADMAN HEAT INDEX CALCULATION</h3>
-                <div className="text-xs text-slate-600 leading-relaxed space-y-2">
+              <div className="bg-slate-900 p-6 rounded-xl border border-slate-800 shadow-xs space-y-4">
+                <h3 className="text-sm font-bold text-slate-100 border-b border-slate-800 pb-2">STEADMAN HEAT INDEX CALCULATION</h3>
+                <div className="text-xs text-slate-300 leading-relaxed space-y-2">
                   <p>
                     Heat Index (HI) measures perceived temperature derived from combined dry-bulb temperature (T) and relative humidity (RH).
                   </p>
-                  <div className="p-3 bg-slate-50 border border-slate-200 rounded font-mono text-[11px]">
+                  <div className="p-3 bg-slate-950 border border-slate-800 rounded font-mono text-[11px] text-emerald-400">
                     HI = -42.379 + 2.049*T + 10.143*RH - 0.224*T*RH - ...
                   </div>
-                  <p>
-                    Current Observed Ambient Temp: <strong>{risk.weather_snapshot.temp}°C</strong><br />
-                    Current Relative Humidity: <strong>{risk.weather_snapshot.humidity}%</strong><br />
-                    Resulting Apparent Temperature: <strong>{risk.weather_snapshot.apparent_temp}°C</strong>
+                  <p className="text-slate-400">
+                    Current Observed Ambient Temp: <strong className="text-slate-200">{risk.weather_snapshot.temp}°C</strong><br />
+                    Current Relative Humidity: <strong className="text-slate-200">{risk.weather_snapshot.humidity}%</strong><br />
+                    Resulting Apparent Temperature: <strong className="text-slate-200">{risk.weather_snapshot.apparent_temp}°C</strong>
                   </p>
                 </div>
               </div>
 
-              <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-xs space-y-4">
-                <h3 className="text-sm font-bold text-slate-900 border-b pb-2">CONTEXTUAL WORKLOAD & RECOVERY</h3>
-                <div className="text-xs text-slate-600 leading-relaxed space-y-2">
+              <div className="bg-slate-900 p-6 rounded-xl border border-slate-800 shadow-xs space-y-4">
+                <h3 className="text-sm font-bold text-slate-100 border-b border-slate-800 pb-2">CONTEXTUAL WORKLOAD & RECOVERY</h3>
+                <div className="text-xs text-slate-300 leading-relaxed space-y-2">
                   <p>
                     Physical workload increases internal metabolic heat generation, magnifying environmental risk.
                   </p>
-                  <ul className="list-disc pl-4 space-y-1 font-mono text-[11px]">
-                    <li>Activity Level: {risk.context_snapshot.activity.toUpperCase()}</li>
-                    <li>Exposure Duration: {risk.context_snapshot.duration.toUpperCase()}</li>
-                    <li>Cooling Access: {risk.context_snapshot.cooling.toUpperCase()}</li>
-                    <li>Age Group: {risk.context_snapshot.age_group.toUpperCase()}</li>
+                  <ul className="list-disc pl-4 space-y-1 font-mono text-[11px] text-slate-400">
+                    <li>Activity Level: <span className="text-slate-200">{risk.context_snapshot.activity.toUpperCase()}</span></li>
+                    <li>Exposure Duration: <span className="text-slate-200">{risk.context_snapshot.duration.toUpperCase()}</span></li>
+                    <li>Cooling Access: <span className="text-slate-200">{risk.context_snapshot.cooling.toUpperCase()}</span></li>
+                    <li>Age Group: <span className="text-slate-200">{risk.context_snapshot.age_group.toUpperCase()}</span></li>
                   </ul>
-                  <div className="p-3 bg-emerald-50 border border-emerald-200 rounded text-emerald-900 font-semibold text-xs mt-2">
+                  <div className="p-3 bg-emerald-950/60 border border-emerald-800/80 rounded text-emerald-300 font-semibold text-xs mt-2">
                     Evaluated Risk Score: {risk.risk_score} / 100 ({risk.risk_level})
                   </div>
                 </div>
@@ -90,68 +90,68 @@ export default function RiskPage() {
 
           {/* Directional XAI Attribution Breakdown */}
           {risk?.explanation && (
-            <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-xs space-y-4">
-              <div className="flex items-center gap-2 text-slate-900">
-                <BarChart className="w-5 h-5 text-emerald-600" />
+            <div className="bg-slate-900 p-6 rounded-xl border border-slate-800 shadow-xs space-y-4">
+              <div className="flex items-center gap-2 text-slate-100">
+                <BarChart className="w-5 h-5 text-emerald-400" />
                 <h2 className="text-sm font-bold">DIRECTIONAL EXPLAINABLE AI (XAI) ATTRIBUTION</h2>
               </div>
-              <p className="text-xs text-slate-600 leading-relaxed font-mono">
+              <p className="text-xs text-slate-300 leading-relaxed font-mono">
                 {risk.explanation.human_readable_summary}
               </p>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-                <div className="p-4 bg-amber-50/60 border border-amber-200 rounded-lg space-y-2">
-                  <h4 className="text-xs font-bold text-amber-900 flex items-center gap-1.5">
+                <div className="p-4 bg-amber-950/40 border border-amber-800/60 rounded-lg space-y-2">
+                  <h4 className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-full bg-amber-500"></span>
                     <span>RISK ESCALATORS (+)</span>
                   </h4>
                   <div className="space-y-1.5">
                     {risk.explanation.escalating_factors.map((f, i) => (
-                      <div key={i} className="text-xs flex justify-between items-center text-slate-700">
+                      <div key={i} className="text-xs flex justify-between items-center text-slate-300">
                         <span>{f.name}</span>
-                        <span className="font-mono font-semibold text-amber-700">+{f.weight_percent}%</span>
+                        <span className="font-mono font-semibold text-amber-400">+{f.weight_percent}%</span>
                       </div>
                     ))}
                   </div>
                 </div>
 
-                <div className="p-4 bg-emerald-50/60 border border-emerald-200 rounded-lg space-y-2">
-                  <h4 className="text-xs font-bold text-emerald-900 flex items-center gap-1.5">
+                <div className="p-4 bg-emerald-950/40 border border-emerald-800/60 rounded-lg space-y-2">
+                  <h4 className="text-xs font-bold text-emerald-300 flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
                     <span>RISK MITIGATORS (-)</span>
                   </h4>
                   <div className="space-y-1.5">
                     {risk.explanation.mitigating_factors.length > 0 ? (
                       risk.explanation.mitigating_factors.map((f, i) => (
-                        <div key={i} className="text-xs flex justify-between items-center text-slate-700">
+                        <div key={i} className="text-xs flex justify-between items-center text-slate-300">
                           <span>{f.name}</span>
-                          <span className="font-mono font-semibold text-emerald-700">-{f.weight_percent}%</span>
+                          <span className="font-mono font-semibold text-emerald-400">-{f.weight_percent}%</span>
                         </div>
                       ))
                     ) : (
-                      <p className="text-xs text-slate-500 italic">No significant mitigating factors detected.</p>
+                      <p className="text-xs text-slate-400 italic">No significant mitigating factors detected.</p>
                     )}
                   </div>
                 </div>
               </div>
 
-              <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs space-y-1">
-                <div className="font-bold text-slate-800">Operational Decision Support Recommendation:</div>
-                <div className="text-slate-600">{risk.explanation.recommended_action}</div>
+              <div className="p-3 bg-slate-950 border border-slate-800 rounded-lg text-xs space-y-1">
+                <div className="font-bold text-slate-200">Operational Decision Support Recommendation:</div>
+                <div className="text-slate-400">{risk.explanation.recommended_action}</div>
               </div>
             </div>
           )}
 
           {/* Model Transparency & Disclaimer Card */}
-          <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-xs space-y-3">
-            <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-              <ShieldCheck className="w-4 h-4 text-emerald-700" />
+          <div className="bg-slate-900 p-6 rounded-xl border border-slate-800 shadow-xs space-y-3">
+            <h3 className="text-sm font-bold text-slate-100 flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4 text-emerald-400" />
               <span>MODEL TRANSPARENCY & DATA GOVERNANCE</span>
             </h3>
-            <p className="text-xs text-slate-600 leading-relaxed">
-              Model Version: <strong>{risk?.model_version || 'HeatShield-ML v1.3.0'}</strong> | Data Source: <strong>{risk?.data_source || 'Open-Meteo API'}</strong>
+            <p className="text-xs text-slate-300 leading-relaxed">
+              Model Version: <strong className="text-slate-100">{risk?.model_version || 'Rule-Based Heat Risk Engine v1.3'}</strong> | Data Source: <strong className="text-slate-100">{risk?.data_source || 'Open-Meteo API'}</strong>
             </p>
-            <p className="text-xs text-slate-500 font-mono">
+            <p className="text-xs text-slate-400 font-mono">
               Limitation: Local microclimates (e.g., radiant heat from unshaded asphalt, direct sunlight exposure) may cause localized temperatures to exceed regional meteorological readings.
             </p>
           </div>

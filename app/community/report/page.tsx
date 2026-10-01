@@ -88,39 +88,39 @@ export default function ReportPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-100 text-slate-900 font-sans flex flex-col">
+    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans flex flex-col">
       <Navbar onToggleMobileSidebar={() => setMobileSidebarOpen(!mobileSidebarOpen)} />
 
       <div className="flex-1 flex">
         <Sidebar mobileOpen={mobileSidebarOpen} onCloseMobile={() => setMobileSidebarOpen(false)} />
 
         <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-3xl mx-auto w-full space-y-6">
-          <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-xs">
-            <h1 className="text-xl font-bold text-slate-900">SUBMIT COMMUNITY HEAT REPORT</h1>
-            <p className="text-xs text-slate-500 font-mono mt-0.5">
+          <div className="bg-slate-900 p-6 rounded-xl border border-slate-800 shadow-xs">
+            <h1 className="text-xl font-bold text-slate-100">SUBMIT COMMUNITY HEAT REPORT</h1>
+            <p className="text-xs text-slate-400 font-mono mt-0.5">
               Report public water access issues, missing shade canopies, or extreme asphalt heat hazards
             </p>
           </div>
 
           {submitted ? (
-            <div className="bg-white p-8 rounded-xl border border-emerald-300 shadow-xs text-center space-y-3">
-              <CheckCircle2 className="w-12 h-12 text-emerald-600 mx-auto" />
-              <h2 className="text-lg font-bold text-slate-900">Report Successfully Submitted!</h2>
-              <p className="text-xs text-slate-600 font-mono">Status: SUBMITTED → UNDER REVIEW</p>
+            <div className="bg-slate-900 p-8 rounded-xl border border-emerald-800/80 shadow-xs text-center space-y-3">
+              <CheckCircle2 className="w-12 h-12 text-emerald-400 mx-auto" />
+              <h2 className="text-lg font-bold text-slate-100">Report Successfully Submitted!</h2>
+              <p className="text-xs text-slate-400 font-mono">Status: SUBMITTED → UNDER REVIEW</p>
               <p className="text-xs text-slate-500">Redirecting to Interactive Community Map...</p>
             </div>
           ) : (
-            <form onSubmit={handleSubmit} className="bg-white p-6 rounded-xl border border-slate-200 shadow-xs space-y-6">
+            <form onSubmit={handleSubmit} className="bg-slate-900 p-6 rounded-xl border border-slate-800 shadow-xs space-y-6">
               {error && (
-                <div className="p-4 bg-rose-50 border border-rose-300 rounded-xl flex items-center gap-2 text-rose-900 text-xs font-mono">
-                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                <div className="p-4 bg-rose-950/40 border border-rose-800/60 rounded-xl flex items-center gap-2 text-rose-300 text-xs font-mono">
+                  <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
                   <span>{error}</span>
                 </div>
               )}
 
               {/* Category */}
               <div>
-                <label className="block text-xs font-bold font-mono text-slate-700 uppercase mb-2">
+                <label className="block text-xs font-bold font-mono text-slate-300 uppercase mb-2">
                   Issue Category *
                 </label>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -140,8 +140,8 @@ export default function ReportPage() {
                       onClick={() => setCategory(opt.id as CommunityCategory)}
                       className={`p-3 rounded-lg text-xs font-semibold text-left border transition ${
                         category === opt.id
-                          ? 'bg-slate-900 text-white border-slate-900'
-                          : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                          ? 'bg-emerald-600 text-white border-emerald-500 shadow-xs'
+                          : 'bg-slate-950 text-slate-300 border-slate-800 hover:bg-slate-800'
                       }`}
                     >
                       {opt.label}
@@ -153,10 +153,10 @@ export default function ReportPage() {
               {/* Description */}
               <div>
                 <div className="flex justify-between items-center mb-1">
-                  <label className="block text-xs font-bold font-mono text-slate-700 uppercase">
+                  <label className="block text-xs font-bold font-mono text-slate-300 uppercase">
                     Issue Description *
                   </label>
-                  <span className="text-[10px] font-mono text-slate-400">{description.length}/1000</span>
+                  <span className="text-[10px] font-mono text-slate-500">{description.length}/1000</span>
                 </div>
                 <textarea
                   rows={4}
@@ -165,27 +165,27 @@ export default function ReportPage() {
                   placeholder="Describe the heat safety observation (e.g., broken water fountain near metro exit, bus stop shelter removed)..."
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  className="w-full bg-slate-50 text-slate-900 text-xs rounded-lg border border-slate-300 p-3 focus:outline-none focus:border-emerald-600 font-sans"
+                  className="w-full bg-slate-950 text-slate-100 text-xs rounded-lg border border-slate-800 p-3 focus:outline-none focus:border-emerald-500 font-sans"
                 />
               </div>
 
               {/* Severity Selection */}
               <div>
-                <label className="block text-xs font-bold font-mono text-slate-700 uppercase mb-2">
+                <label className="block text-xs font-bold font-mono text-slate-300 uppercase mb-2">
                   Observed Severity Level
                 </label>
                 <div className="flex gap-2">
                   {[
-                    { id: 'info', label: 'Info / Minor', style: 'border-blue-300 text-blue-800 bg-blue-50' },
-                    { id: 'warning', label: 'Warning / Moderate', style: 'border-amber-300 text-amber-800 bg-amber-50' },
-                    { id: 'critical', label: 'Critical / Urgent', style: 'border-rose-300 text-rose-800 bg-rose-50' },
+                    { id: 'info', label: 'Info / Minor', style: 'border-blue-700 text-blue-300 bg-blue-950/60' },
+                    { id: 'warning', label: 'Warning / Moderate', style: 'border-amber-700 text-amber-300 bg-amber-950/60' },
+                    { id: 'critical', label: 'Critical / Urgent', style: 'border-rose-700 text-rose-300 bg-rose-950/60' },
                   ].map((sev) => (
                     <button
                       key={sev.id}
                       type="button"
                       onClick={() => setSeverity(sev.id as ReportSeverity)}
                       className={`px-3 py-2 rounded-lg text-xs font-bold font-mono border flex-1 transition ${
-                        severity === sev.id ? 'ring-2 ring-slate-900 ' + sev.style : 'bg-slate-50 text-slate-600 border-slate-200'
+                        severity === sev.id ? 'ring-2 ring-emerald-500 ' + sev.style : 'bg-slate-950 text-slate-400 border-slate-800 hover:bg-slate-800'
                       }`}
                     >
                       {sev.label}
@@ -195,8 +195,8 @@ export default function ReportPage() {
               </div>
 
               {/* Location Mode Toggle */}
-              <div className="space-y-3 border-t border-slate-200 pt-4">
-                <label className="block text-xs font-bold font-mono text-slate-700 uppercase">
+              <div className="space-y-3 border-t border-slate-800 pt-4">
+                <label className="block text-xs font-bold font-mono text-slate-300 uppercase">
                   Location Attachment
                 </label>
                 <div className="flex gap-2">
@@ -205,8 +205,8 @@ export default function ReportPage() {
                     onClick={() => setLocationMode('profile')}
                     className={`px-3 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5 border transition ${
                       locationMode === 'profile'
-                        ? 'bg-slate-900 text-white border-slate-900'
-                        : 'bg-slate-50 text-slate-700 border-slate-200'
+                        ? 'bg-emerald-600 text-white border-emerald-500'
+                        : 'bg-slate-950 text-slate-300 border-slate-800 hover:bg-slate-800'
                     }`}
                   >
                     <Navigation className="w-3.5 h-3.5" />
@@ -218,8 +218,8 @@ export default function ReportPage() {
                     onClick={() => setLocationMode('manual')}
                     className={`px-3 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5 border transition ${
                       locationMode === 'manual'
-                        ? 'bg-slate-900 text-white border-slate-900'
-                        : 'bg-slate-50 text-slate-700 border-slate-200'
+                        ? 'bg-emerald-600 text-white border-emerald-500'
+                        : 'bg-slate-950 text-slate-300 border-slate-800 hover:bg-slate-800'
                     }`}
                   >
                     <MapPin className="w-3.5 h-3.5" />
@@ -228,10 +228,10 @@ export default function ReportPage() {
                 </div>
 
                 {locationMode === 'profile' ? (
-                  <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-between text-xs font-mono text-slate-600">
+                  <div className="p-3 bg-slate-950 border border-slate-800 rounded-lg flex items-center justify-between text-xs font-mono text-slate-400">
                     <div className="flex items-center gap-2">
-                      <MapPin className="w-4 h-4 text-emerald-600" />
-                      <span>{profile.location?.name || 'Chennai Central'}</span>
+                      <MapPin className="w-4 h-4 text-emerald-400" />
+                      <span className="text-slate-200">{profile.location?.name || 'Chennai Central'}</span>
                     </div>
                     <span>
                       ({(profile.location?.latitude || 13.0827).toFixed(3)}°,{' '}
@@ -239,38 +239,38 @@ export default function ReportPage() {
                     </span>
                   </div>
                 ) : (
-                  <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-3 text-xs font-mono">
+                  <div className="p-4 bg-slate-950 border border-slate-800 rounded-xl space-y-3 text-xs font-mono">
                     <div>
-                      <label className="block text-slate-600 mb-1">Location Name / Landmark *</label>
+                      <label className="block text-slate-400 mb-1">Location Name / Landmark *</label>
                       <input
                         type="text"
                         placeholder="e.g. Park Town Bus Station"
                         value={manualName}
                         onChange={(e) => setManualName(e.target.value)}
-                        className="w-full bg-white text-slate-900 p-2.5 rounded-lg border border-slate-300 focus:outline-none"
+                        className="w-full bg-slate-900 text-slate-100 p-2.5 rounded-lg border border-slate-800 focus:outline-none focus:border-emerald-500"
                       />
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                       <div>
-                        <label className="block text-slate-600 mb-1">Latitude (-90 to 90) *</label>
+                        <label className="block text-slate-400 mb-1">Latitude (-90 to 90) *</label>
                         <input
                           type="number"
                           step="any"
                           placeholder="e.g. 13.0815"
                           value={manualLat}
                           onChange={(e) => setManualLat(e.target.value)}
-                          className="w-full bg-white text-slate-900 p-2.5 rounded-lg border border-slate-300 focus:outline-none"
+                          className="w-full bg-slate-900 text-slate-100 p-2.5 rounded-lg border border-slate-800 focus:outline-none focus:border-emerald-500"
                         />
                       </div>
                       <div>
-                        <label className="block text-slate-600 mb-1">Longitude (-180 to 180) *</label>
+                        <label className="block text-slate-400 mb-1">Longitude (-180 to 180) *</label>
                         <input
                           type="number"
                           step="any"
                           placeholder="e.g. 80.2725"
                           value={manualLng}
                           onChange={(e) => setManualLng(e.target.value)}
-                          className="w-full bg-white text-slate-900 p-2.5 rounded-lg border border-slate-300 focus:outline-none"
+                          className="w-full bg-slate-900 text-slate-100 p-2.5 rounded-lg border border-slate-800 focus:outline-none focus:border-emerald-500"
                         />
                       </div>
                     </div>
@@ -279,9 +279,9 @@ export default function ReportPage() {
               </div>
 
               {/* Privacy Warning */}
-              <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-[11px] font-mono text-amber-900 flex items-start gap-2">
-                <ShieldAlert className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                <span>
+              <div className="p-3 bg-amber-950/40 border border-amber-800/60 rounded-lg text-[11px] font-mono text-amber-200 flex items-start gap-2">
+                <ShieldAlert className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                <span className="text-slate-300">
                   Privacy Disclosure: Reports will be publicly visible to other community members on the Interactive Map. Do not include private home addresses, medical details, or personally identifying info.
                 </span>
               </div>
@@ -289,7 +289,7 @@ export default function ReportPage() {
               <button
                 type="submit"
                 disabled={submitting}
-                className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-400 text-white font-semibold text-xs rounded-xl shadow flex items-center justify-center gap-2 transition"
+                className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-800 disabled:text-slate-500 text-white font-semibold text-xs rounded-xl shadow flex items-center justify-center gap-2 transition"
               >
                 <Send className="w-4 h-4" />
                 <span>{submitting ? 'Submitting Report...' : 'Submit Report to Community Registry'}</span>
