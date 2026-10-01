@@ -232,27 +232,37 @@ export function FirebaseAuthProvider({ children }: { children: ReactNode }) {
     password: string
   ): Promise<{ success: boolean; error?: string }> => {
     if (!isFirebaseConfigured || !firebaseAuth) {
+      console.warn('[AUTH 1] Firebase Authentication is not configured.');
       return { success: false, error: 'Firebase Authentication is not configured.' };
     }
     setActionLoading(true);
     setError(null);
     try {
-      // 1. Authenticate with Firebase credentials
+      // 1. signInWithEmailAndPassword
+      console.log('[AUTH 1] Initiating signInWithEmailAndPassword for email:', email);
       const { user } = await signInWithEmailAndPassword(firebaseAuth, email, password);
+      console.log('[AUTH 1] signInWithEmailAndPassword succeeded for uid:', user.uid);
 
-      // 2. Retrieve fresh ID token
+      // 2. getIdToken(true)
+      console.log('[AUTH 2] Calling user.getIdToken(true)...');
       let token: string | null = null;
       try {
         token = await user.getIdToken(true /* force fresh token */);
-      } catch {
+      } catch (tokenErr: any) {
+        console.error('[AUTH 2] getIdToken threw error:', tokenErr?.message);
         token = null;
       }
+      console.log('[AUTH 2] getIdToken result:', {
+        hasToken: Boolean(token),
+        tokenLength: token?.length,
+        tokenParts: token ? token.split('.').length : 0,
+      });
       if (!token) {
         throw new Error('Failed to retrieve authentication token from Firebase.');
       }
 
-      // 3. Await server session synchronization before navigating
-      // Reliable with credentials: 'include' so Set-Cookie is written before middleware checks /dashboard
+      // 3. POST /api/auth/session
+      console.log('[AUTH 3] Sending POST /api/auth/session with credentials: include, token preview:', token.slice(0, 15) + '...');
       const sessionRes = await fetch('/api/auth/session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -260,28 +270,44 @@ export function FirebaseAuthProvider({ children }: { children: ReactNode }) {
         credentials: 'include',
       });
 
-      // 4. Verify successful server session response
-      if (!sessionRes.ok) {
-        const errJson = await sessionRes.json().catch(() => null);
-        throw new Error(errJson?.error || `Server session establishment failed (${sessionRes.status}).`);
+      // 4. session response status
+      console.log('[AUTH 4] session response status:', sessionRes.status, sessionRes.statusText, 'ok:', sessionRes.ok);
+
+      // 5. session response body
+      const rawBodyText = await sessionRes.text().catch((err: any) => `Error reading response text: ${err?.message}`);
+      console.log('[AUTH 5] session response body raw:', rawBodyText);
+      let sessionData: any = null;
+      try {
+        sessionData = JSON.parse(rawBodyText);
+      } catch (parseErr: any) {
+        console.error('[AUTH 5] Failed to parse session response body:', parseErr?.message);
       }
 
-      const sessionData = await sessionRes.json().catch(() => null);
-      if (!sessionData?.authenticated) {
-        throw new Error('Server session validation rejected.');
+      // 6. sessionData.authenticated value
+      console.log('[AUTH 6] sessionData.authenticated value:', sessionData?.authenticated, 'full data:', sessionData);
+      if (!sessionRes.ok || !sessionData?.authenticated) {
+        const errorMsg = sessionData?.error || `Server session establishment failed (${sessionRes.status}).`;
+        console.error('[AUTH 6] Server session rejected:', errorMsg);
+        throw new Error(errorMsg);
       }
 
-      // 5. Update client state only after server session is verified
+      // 7. setFirebaseUser
+      console.log('[AUTH 7] Calling setFirebaseUser with user:', user.uid);
       setFirebaseUser(user);
+
+      // 8. setLoading(false)
+      console.log('[AUTH 8] Calling setLoading(false) and synchronizing client state tokens');
       setIdToken(token);
       setSessionCookie(token);
       syncAppProfile(user);
       saveUserProfile({ last_login_at: new Date().toISOString() } as any);
       setLoading(false);
+      console.log('[AUTH 8] State transition complete: authenticated=true, loading=false');
 
       return { success: true };
     } catch (err) {
       const msg = normalizeAuthError(err);
+      console.error('[AUTH ERROR] signIn failed:', msg, err);
       setError(msg);
       return { success: false, error: msg };
     } finally {
@@ -295,31 +321,41 @@ export function FirebaseAuthProvider({ children }: { children: ReactNode }) {
     displayName?: string
   ): Promise<{ success: boolean; error?: string }> => {
     if (!isFirebaseConfigured || !firebaseAuth) {
+      console.warn('[AUTH 1] Firebase Authentication is not configured.');
       return { success: false, error: 'Firebase Authentication is not configured.' };
     }
     setActionLoading(true);
     setError(null);
     try {
-      // 1. Create account with Firebase credentials
+      // 1. createUserWithEmailAndPassword
+      console.log('[AUTH 1] Initiating createUserWithEmailAndPassword for email:', email);
       const { user } = await createUserWithEmailAndPassword(firebaseAuth, email, password);
+      console.log('[AUTH 1] createUserWithEmailAndPassword succeeded for uid:', user.uid);
       if (displayName) {
         await updateProfile(user, { displayName });
       }
-      // Send verification email (non-blocking)
       sendEmailVerification(user).catch(() => {});
 
-      // 2. Retrieve fresh ID token
+      // 2. getIdToken(true)
+      console.log('[AUTH 2] Calling user.getIdToken(true) for new user...');
       let token: string | null = null;
       try {
         token = await user.getIdToken(true /* force fresh token */);
-      } catch {
+      } catch (tokenErr: any) {
+        console.error('[AUTH 2] getIdToken threw error:', tokenErr?.message);
         token = null;
       }
+      console.log('[AUTH 2] getIdToken result for new user:', {
+        hasToken: Boolean(token),
+        tokenLength: token?.length,
+        tokenParts: token ? token.split('.').length : 0,
+      });
       if (!token) {
         throw new Error('Failed to retrieve authentication token from Firebase.');
       }
 
-      // 3. Await server session synchronization before navigating
+      // 3. POST /api/auth/session
+      console.log('[AUTH 3] Sending POST /api/auth/session with credentials: include, token preview:', token.slice(0, 15) + '...');
       const sessionRes = await fetch('/api/auth/session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -327,28 +363,44 @@ export function FirebaseAuthProvider({ children }: { children: ReactNode }) {
         credentials: 'include',
       });
 
-      // 4. Verify successful server session response
-      if (!sessionRes.ok) {
-        const errJson = await sessionRes.json().catch(() => null);
-        throw new Error(errJson?.error || `Server session establishment failed (${sessionRes.status}).`);
+      // 4. session response status
+      console.log('[AUTH 4] session response status for new user:', sessionRes.status, sessionRes.statusText, 'ok:', sessionRes.ok);
+
+      // 5. session response body
+      const rawBodyText = await sessionRes.text().catch((err: any) => `Error reading response text: ${err?.message}`);
+      console.log('[AUTH 5] session response body raw for new user:', rawBodyText);
+      let sessionData: any = null;
+      try {
+        sessionData = JSON.parse(rawBodyText);
+      } catch (parseErr: any) {
+        console.error('[AUTH 5] Failed to parse session response body:', parseErr?.message);
       }
 
-      const sessionData = await sessionRes.json().catch(() => null);
-      if (!sessionData?.authenticated) {
-        throw new Error('Server session validation rejected.');
+      // 6. sessionData.authenticated value
+      console.log('[AUTH 6] sessionData.authenticated value for new user:', sessionData?.authenticated, 'full data:', sessionData);
+      if (!sessionRes.ok || !sessionData?.authenticated) {
+        const errorMsg = sessionData?.error || `Server session establishment failed (${sessionRes.status}).`;
+        console.error('[AUTH 6] Server session rejected for new user:', errorMsg);
+        throw new Error(errorMsg);
       }
 
-      // 5. Update client state only after server session is verified
+      // 7. setFirebaseUser
+      console.log('[AUTH 7] Calling setFirebaseUser with new user:', user.uid);
       setFirebaseUser(user);
+
+      // 8. setLoading(false)
+      console.log('[AUTH 8] Calling setLoading(false) and synchronizing client state tokens for new user');
       setIdToken(token);
       setSessionCookie(token);
       syncAppProfile(user);
       saveUserProfile({ last_login_at: new Date().toISOString() } as any);
       setLoading(false);
+      console.log('[AUTH 8] State transition complete for new user: authenticated=true, loading=false');
 
       return { success: true };
     } catch (err) {
       const msg = normalizeAuthError(err);
+      console.error('[AUTH ERROR] signUp failed:', msg, err);
       setError(msg);
       return { success: false, error: msg };
     } finally {

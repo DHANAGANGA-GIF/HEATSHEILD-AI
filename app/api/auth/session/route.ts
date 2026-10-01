@@ -64,9 +64,18 @@ export async function POST(request: Request) {
       );
     }
 
+    console.log('[AUTH-SERVER] POST /api/auth/session received request. idToken length:', idToken?.length);
+
     // 3. Cryptographically verify the token on the server
     const verified = await verifyFirebaseToken(idToken);
+    console.log('[AUTH-SERVER] verifyFirebaseToken returned:', {
+      success: Boolean(verified?.uid),
+      uid: verified?.uid,
+      email: verified?.email,
+    });
+
     if (!verified || !verified.uid) {
+      console.warn('[AUTH-SERVER] Token verification FAILED in verifyFirebaseToken.');
       return NextResponse.json(
         { authenticated: false, error: 'Token verification failed. Please sign in again.' },
         { status: 401 }
@@ -91,6 +100,7 @@ export async function POST(request: Request) {
       maxAge: 86400, // 24 hours
     });
 
+    console.log('[AUTH-SERVER] POST /api/auth/session returning 200 with Set-Cookie hs_session, secure:', isHttps);
     return response;
   } catch (err: any) {
     console.error('[HeatShield Auth Session POST] Error:', err?.message);

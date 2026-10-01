@@ -115,12 +115,37 @@ function hasAuthSignal(request: NextRequest): boolean {
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  const isRelevant = pathname.startsWith('/dashboard') || pathname === '/login' || pathname === '/onboarding';
+  if (isRelevant) {
+    const sessionCookie = request.cookies.get('hs_session');
+    const allCookieNames = request.cookies.getAll().map((c) => c.name);
+    const authSignal = hasAuthSignal(request);
+
+    console.log('[AUTH 11] middleware handling route:', {
+      pathname,
+      url: request.url,
+      method: request.method,
+    });
+
+    console.log('[AUTH 12] whether middleware sees hs_session:', {
+      pathname,
+      hasHsSessionCookie: Boolean(sessionCookie),
+      hsSessionPreview: sessionCookie?.value ? sessionCookie.value.slice(0, 15) + '...' : null,
+      hsSessionLength: sessionCookie?.value?.length,
+      allCookieNames,
+      authSignal,
+    });
+  }
+
   // If already authenticated and visiting /login, redirect to intended destination or /dashboard
   if (pathname === '/login' && hasAuthSignal(request)) {
     const redirectParam = request.nextUrl.searchParams.get('redirect');
     const destination = (redirectParam && redirectParam.startsWith('/') && !redirectParam.startsWith('//') && !redirectParam.includes(':') && !redirectParam.includes('\\'))
       ? redirectParam
       : '/dashboard';
+    if (isRelevant) {
+      console.log('[AUTH 12] middleware on /login: user has auth signal, redirecting to destination:', destination);
+    }
     return NextResponse.redirect(new URL(destination, request.url));
   }
 
@@ -137,6 +162,9 @@ export function middleware(request: NextRequest) {
   // For protected paths: check for auth signal
   if (isProtectedPath(pathname)) {
     if (!hasAuthSignal(request)) {
+      if (isRelevant) {
+        console.warn('[AUTH 12] middleware REDIRECTING to /login. Reason: hasAuthSignal is FALSE for protected path:', pathname);
+      }
       // Redirect to login, preserving the intended destination
       const loginUrl = new URL('/login', request.url);
       loginUrl.searchParams.set('redirect', pathname);
