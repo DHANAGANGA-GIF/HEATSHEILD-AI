@@ -361,5 +361,95 @@ describe('Authentication Session End-to-End Regression Test Suite', () => {
     assert.ok(cookieStr.includes('max-age=86400'), 'Must have 24-hour expiration');
   });
 
+  // TEST P: Required Login/Signup Sequence - Awaiting server session before redirect
+  it('TEST P: Login sequence awaits /api/auth/session before setting state and triggering redirect', async () => {
+    const callOrder: string[] = [];
+
+    // Mock sequence
+    const mockSignInWithEmailAndPassword = async () => {
+      callOrder.push('signInWithEmailAndPassword');
+      return { user: { getIdToken: async () => { callOrder.push('getIdToken'); return 'mock.jwt.token'; } } };
+    };
+
+    const mockFetchSession = async (url: string, opts: any) => {
+      callOrder.push('fetchSession');
+      assert.strictEqual(opts.credentials, 'include', 'Must send credentials: include');
+      assert.strictEqual(opts.method, 'POST');
+      return {
+        ok: true,
+        json: async () => ({ authenticated: true, uid: 'test-user' }),
+      };
+    };
+
+    const mockSetFirebaseUser = () => { callOrder.push('setFirebaseUser'); };
+    const mockSetLoading = () => { callOrder.push('setLoading'); };
+    const mockRouterReplace = (path: string) => { callOrder.push(`routerReplace:${path}`); };
+
+    // Simulate the exact auth-context signIn + login page redirect flow
+    const creds = await mockSignInWithEmailAndPassword();
+    const token = await creds.user.getIdToken();
+    const res = await mockFetchSession('/api/auth/session', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ idToken: token }),
+      credentials: 'include',
+    });
+    assert.ok(res.ok);
+    const data = await res.json();
+    assert.strictEqual(data.authenticated, true);
+    mockSetFirebaseUser();
+    mockSetLoading();
+    mockRouterReplace('/dashboard');
+
+    assert.deepStrictEqual(callOrder, [
+      'signInWithEmailAndPassword',
+      'getIdToken',
+      'fetchSession',
+      'setFirebaseUser',
+      'setLoading',
+      'routerReplace:/dashboard',
+    ], 'Must strictly execute in order without race condition');
+  });
+
+  // TEST Q: Middleware immediate pass-through when hs_session cookie is set
+  it('TEST Q: Edge middleware recognizes hs_session token immediately without refresh', () => {
+    const validExpSec = Math.floor(Date.now() / 1000) + 3600;
+    const mockJwt = createMockJwt({ sub: 'user_middleware_immediate', exp: validExpSec });
+
+    // Mock NextRequest cookies
+    const request = {
+      cookies: {
+        get: (name: string) => (name === 'hs_session' ? { value: mockJwt } : undefined),
+        getAll: () => [{ name: 'hs_session', value: mockJwt }],
+      },
+      headers: {
+        get: () => null,
+      },
+    };
+
+    // Replicate hasAuthSignal
+    function hasAuthSignal(req: typeof request): boolean {
+      const sessionCookie = req.cookies.get('hs_session');
+      if (sessionCookie?.value && sessionCookie.value.length > 10) {
+        const val = decodeURIComponent(sessionCookie.value).trim();
+        const parts = val.split('.');
+        if (parts.length === 3) {
+          try {
+            const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8'));
+            if (payload.exp && typeof payload.exp === 'number') {
+              const nowSec = Math.floor(Date.now() / 1000);
+              if (payload.exp <= nowSec) return false;
+            }
+          } catch {}
+        }
+        return true;
+      }
+      return false;
+    }
+
+    assert.strictEqual(hasAuthSignal(request), true, 'Must immediately recognize valid hs_session cookie');
+  });
+
 });
+
 

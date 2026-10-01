@@ -74,12 +74,12 @@ function LoginContent() {
     router.replace(destination);
   }, [searchParams, router]);
 
-  // Redirect if already authenticated
+  // Redirect if already authenticated on initial page load (guarded against active login/signup submission)
   useEffect(() => {
-    if (!authLoading && isAuthenticated && !isRedirectingRef.current) {
+    if (!authLoading && isAuthenticated && !loading && !actionLoading && !isRedirectingRef.current) {
       performRedirect();
     }
-  }, [isAuthenticated, authLoading, performRedirect]);
+  }, [isAuthenticated, authLoading, loading, actionLoading, performRedirect]);
 
   // ── Firebase Email Auth ──────────────────────────────────────────────────
   const handleFirebaseAuth = async (e: React.FormEvent) => {

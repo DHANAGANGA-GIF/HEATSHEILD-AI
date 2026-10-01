@@ -237,7 +237,10 @@ export function FirebaseAuthProvider({ children }: { children: ReactNode }) {
     setActionLoading(true);
     setError(null);
     try {
+      // 1. Authenticate with Firebase credentials
       const { user } = await signInWithEmailAndPassword(firebaseAuth, email, password);
+
+      // 2. Retrieve fresh ID token
       let token: string | null = null;
       try {
         token = await user.getIdToken(true /* force fresh token */);
@@ -248,24 +251,33 @@ export function FirebaseAuthProvider({ children }: { children: ReactNode }) {
         throw new Error('Failed to retrieve authentication token from Firebase.');
       }
 
-      // Eagerly hydrate client state BEFORE the redirect so isAuthenticated=true
-      // is available the moment the dashboard mounts — no waiting for onAuthStateChanged.
+      // 3. Await server session synchronization before navigating
+      // Reliable with credentials: 'include' so Set-Cookie is written before middleware checks /dashboard
+      const sessionRes = await fetch('/api/auth/session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idToken: token }),
+        credentials: 'include',
+      });
+
+      // 4. Verify successful server session response
+      if (!sessionRes.ok) {
+        const errJson = await sessionRes.json().catch(() => null);
+        throw new Error(errJson?.error || `Server session establishment failed (${sessionRes.status}).`);
+      }
+
+      const sessionData = await sessionRes.json().catch(() => null);
+      if (!sessionData?.authenticated) {
+        throw new Error('Server session validation rejected.');
+      }
+
+      // 5. Update client state only after server session is verified
       setFirebaseUser(user);
       setIdToken(token);
       setSessionCookie(token);
       syncAppProfile(user);
       saveUserProfile({ last_login_at: new Date().toISOString() } as any);
-      // Mark auth as resolved so authLoading=false on the next page
       setLoading(false);
-
-      // Fire-and-forget: synchronise the server-side session cookie in the background.
-      // Do NOT await — this must not block the redirect.
-      fetch('/api/auth/session', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ idToken: token }),
-        credentials: 'include',
-      }).catch(() => {});
 
       return { success: true };
     } catch (err) {
@@ -288,39 +300,52 @@ export function FirebaseAuthProvider({ children }: { children: ReactNode }) {
     setActionLoading(true);
     setError(null);
     try {
+      // 1. Create account with Firebase credentials
       const { user } = await createUserWithEmailAndPassword(firebaseAuth, email, password);
       if (displayName) {
         await updateProfile(user, { displayName });
       }
       // Send verification email (non-blocking)
       sendEmailVerification(user).catch(() => {});
+
+      // 2. Retrieve fresh ID token
       let token: string | null = null;
       try {
         token = await user.getIdToken(true /* force fresh token */);
       } catch {
         token = null;
       }
-      if (token) {
-        // Eagerly set user and token before redirect
-        setFirebaseUser(user);
-        setIdToken(token);
-        setSessionCookie(token);
-        syncAppProfile(user);
-        saveUserProfile({ last_login_at: new Date().toISOString() } as any);
-        setLoading(false);
-
-        // Fire-and-forget server session sync
-        fetch('/api/auth/session', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ idToken: token }),
-          credentials: 'include',
-        }).catch(() => {});
-      } else {
-        setFirebaseUser(user);
-        syncAppProfile(user);
-        setLoading(false);
+      if (!token) {
+        throw new Error('Failed to retrieve authentication token from Firebase.');
       }
+
+      // 3. Await server session synchronization before navigating
+      const sessionRes = await fetch('/api/auth/session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idToken: token }),
+        credentials: 'include',
+      });
+
+      // 4. Verify successful server session response
+      if (!sessionRes.ok) {
+        const errJson = await sessionRes.json().catch(() => null);
+        throw new Error(errJson?.error || `Server session establishment failed (${sessionRes.status}).`);
+      }
+
+      const sessionData = await sessionRes.json().catch(() => null);
+      if (!sessionData?.authenticated) {
+        throw new Error('Server session validation rejected.');
+      }
+
+      // 5. Update client state only after server session is verified
+      setFirebaseUser(user);
+      setIdToken(token);
+      setSessionCookie(token);
+      syncAppProfile(user);
+      saveUserProfile({ last_login_at: new Date().toISOString() } as any);
+      setLoading(false);
+
       return { success: true };
     } catch (err) {
       const msg = normalizeAuthError(err);
