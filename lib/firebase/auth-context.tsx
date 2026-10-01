@@ -247,26 +247,26 @@ export function FirebaseAuthProvider({ children }: { children: ReactNode }) {
       if (!token) {
         throw new Error('Failed to retrieve authentication token from Firebase.');
       }
+
+      // Eagerly hydrate client state BEFORE the redirect so isAuthenticated=true
+      // is available the moment the dashboard mounts — no waiting for onAuthStateChanged.
+      setFirebaseUser(user);
       setIdToken(token);
       setSessionCookie(token);
-
-      // Establish authoritative server session cookie before completing sign-in
-      try {
-        const sessionRes = await fetch('/api/auth/session', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ idToken: token }),
-          credentials: 'include',
-        });
-        if (!sessionRes.ok) {
-          console.warn('[HeatShield] Server session establishment returned status:', sessionRes.status);
-        }
-      } catch (sessionErr) {
-        console.warn('[HeatShield] Server session fetch error:', sessionErr);
-      }
-
       syncAppProfile(user);
       saveUserProfile({ last_login_at: new Date().toISOString() } as any);
+      // Mark auth as resolved so authLoading=false on the next page
+      setLoading(false);
+
+      // Fire-and-forget: synchronise the server-side session cookie in the background.
+      // Do NOT await — this must not block the redirect.
+      fetch('/api/auth/session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idToken: token }),
+        credentials: 'include',
+      }).catch(() => {});
+
       return { success: true };
     } catch (err) {
       const msg = normalizeAuthError(err);

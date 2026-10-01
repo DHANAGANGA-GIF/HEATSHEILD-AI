@@ -67,13 +67,11 @@ function LoginContent() {
       currentProfile.onboarded !== false
     );
 
-    // Hard navigation guarantees fresh request headers with hs_session cookie
-    // and completely eliminates Next.js App Router client-side router cache staleness
-    if (typeof window !== 'undefined') {
-      window.location.replace(destination);
-    } else {
-      router.replace(destination);
-    }
+    // Use client-side SPA navigation — the hs_session cookie is already written
+    // to document.cookie synchronously by setSessionCookie() before this call,
+    // so the middleware will see it on the next server request.
+    // router.replace() gives instant navigation without a full page reload/re-bootstrap.
+    router.replace(destination);
   }, [searchParams, router]);
 
   // Redirect if already authenticated
