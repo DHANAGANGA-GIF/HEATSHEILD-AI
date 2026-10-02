@@ -1,132 +1,379 @@
 'use client';
 
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { LucideIcon, TrendingUp, Users, Activity, PieChart } from 'lucide-react';
-import { useState, useEffect } from 'react';
+export const dynamic = 'force-dynamic';
 
-interface AnalyticsDataPoint {
-  name: string;
-  activeUsers: number;
-  heatAlerts: number;
+import React, { useState, useEffect, useCallback } from 'react';
+import { Navbar } from '@/components/Navbar';
+import { Sidebar } from '@/components/Sidebar';
+import { fetchWeatherData } from '@/lib/weather-api';
+import { evaluateHeatRisk } from '@/lib/risk-engine';
+import { getUserProfile } from '@/lib/store';
+import { scoreForecast, ForecastContext } from '@/lib/forecast-engine';
+import { HourlyForecastRisk, WeatherData } from '@/lib/types';
+import {
+  BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, ReferenceLine, Legend, Area, AreaChart
+} from 'recharts';
+import {
+  TrendingUp, TrendingDown, Thermometer, Droplets, Wind,
+  BarChart2, RefreshCw, MapPin, AlertTriangle, Activity, Flame
+} from 'lucide-react';
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface ChartPoint {
+  time: string;
   riskScore: number;
+  temperature: number;
+  apparentTemp: number;
+  humidity: number;
+  windSpeed: number;
+  riskLevel: string;
 }
 
+const RISK_COLOR: Record<string, string> = {
+  EXTREME: '#f43f5e',
+  HIGH: '#f97316',
+  MODERATE: '#f59e0b',
+  LOW: '#10b981',
+};
+
+// ─── Custom Tooltip ───────────────────────────────────────────────────────────
+
+function CustomTooltip({ active, payload, label }: any) {
+  if (!active || !payload?.length) return null;
+  const d = payload[0]?.payload as ChartPoint;
+  if (!d) return null;
+  return (
+    <div className="bg-slate-900 border border-slate-700 rounded-lg p-3 text-xs font-mono shadow-xl min-w-[160px]">
+      <div className="text-slate-400 mb-2 font-bold">{label}</div>
+      <div className="space-y-1">
+        <div className="flex justify-between gap-4">
+          <span className="text-slate-400">Risk Score</span>
+          <span className="font-bold" style={{ color: RISK_COLOR[d.riskLevel] || '#10b981' }}>{d.riskScore}</span>
+        </div>
+        <div className="flex justify-between gap-4">
+          <span className="text-slate-400">Tier</span>
+          <span className="font-bold" style={{ color: RISK_COLOR[d.riskLevel] || '#10b981' }}>{d.riskLevel}</span>
+        </div>
+        <div className="border-t border-slate-800 pt-1 mt-1 space-y-1">
+          <div className="flex justify-between gap-4">
+            <span className="text-slate-400">Air Temp</span>
+            <span className="text-amber-400">{d.temperature}°C</span>
+          </div>
+          <div className="flex justify-between gap-4">
+            <span className="text-slate-400">Feels Like</span>
+            <span className="text-orange-400">{d.apparentTemp}°C</span>
+          </div>
+          <div className="flex justify-between gap-4">
+            <span className="text-slate-400">Humidity</span>
+            <span className="text-blue-400">{d.humidity}%</span>
+          </div>
+          <div className="flex justify-between gap-4">
+            <span className="text-slate-400">Wind</span>
+            <span className="text-slate-300">{d.windSpeed} km/h</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Stat Card ────────────────────────────────────────────────────────────────
+
+function StatCard({ icon: Icon, label, value, sub, color = 'emerald' }: {
+  icon: React.ElementType;
+  label: string;
+  value: string | number;
+  sub?: string;
+  color?: 'emerald' | 'amber' | 'rose' | 'blue' | 'orange';
+}) {
+  const colors = {
+    emerald: 'text-emerald-400 bg-emerald-950/50 border-emerald-800/50',
+    amber: 'text-amber-400 bg-amber-950/50 border-amber-800/50',
+    rose: 'text-rose-400 bg-rose-950/50 border-rose-800/50',
+    blue: 'text-blue-400 bg-blue-950/50 border-blue-800/50',
+    orange: 'text-orange-400 bg-orange-950/50 border-orange-800/50',
+  };
+  return (
+    <div className={`rounded-xl border p-4 flex items-center gap-3 ${colors[color]}`}>
+      <div className="shrink-0">
+        <Icon className="w-5 h-5" />
+      </div>
+      <div>
+        <div className="text-[10px] font-mono uppercase tracking-wider opacity-70">{label}</div>
+        <div className="text-xl font-extrabold font-mono leading-tight">{value}</div>
+        {sub && <div className="text-[10px] opacity-60 font-mono mt-0.5">{sub}</div>}
+      </div>
+    </div>
+  );
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
+
 export default function AnalyticsPage() {
-  const [data, setData] = useState<AnalyticsDataPoint[]>([]);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [weather, setWeather] = useState<WeatherData | null>(null);
+  const [chartData, setChartData] = useState<ChartPoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [lastUpdated, setLastUpdated] = useState<string | null>(null);
 
-  useEffect(() => {
-    // Simulate fetching data
-    const fetchData = async () => {
-      try {
-        // In a real app, you would fetch from an API
-        // For now, we'll use mock data
-        const mockData = [
-          { name: 'Jan', activeUsers: 4000, heatAlerts: 2400, riskScore: 80 },
-          { name: 'Feb', activeUsers: 3000, heatAlerts: 1398, riskScore: 65 },
-          { name: 'Mar', activeUsers: 2000, heatAlerts: 9800, riskScore: 72 },
-          { name: 'Apr', activeUsers: 2780, heatAlerts: 3908, riskScore: 56 },
-          { name: 'May', activeUsers: 1890, heatAlerts: 4800, riskScore: 55 },
-          { name: 'Jun', activeUsers: 2390, heatAlerts: 3800, riskScore: 61 },
-          { name: 'Jul', activeUsers: 3490, heatAlerts: 4300, riskScore: 78 },
-        ];
-        setData(mockData);
-        setLoading(false);
-      } catch (err) {
-        setError('Failed to load analytics data');
-        setLoading(false);
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const p = getUserProfile();
+      const loc = p.location || { name: 'Chennai', latitude: 13.0827, longitude: 80.2707 };
+      const ctx: ForecastContext = {
+        activity: p.activity_level,
+        duration: p.exposure_duration,
+        cooling: p.cooling_access,
+        age_group: p.age_group,
+      };
+
+      const w = await fetchWeatherData(loc.latitude, loc.longitude, loc.name);
+      setWeather(w);
+
+      if (w.hourly_forecast && w.hourly_forecast.length > 0) {
+        const scored: HourlyForecastRisk[] = scoreForecast(w, w.hourly_forecast.slice(0, 24), ctx, !!w.is_cached);
+        const points: ChartPoint[] = scored.map((item) => ({
+          time: new Date(item.forecast.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          riskScore: item.risk_score,
+          temperature: item.forecast.temperature,
+          apparentTemp: item.forecast.apparent_temperature,
+          humidity: item.forecast.relative_humidity,
+          windSpeed: item.forecast.wind_speed,
+          riskLevel: item.risk_level,
+        }));
+        setChartData(points);
       }
-    };
-
-    fetchData();
+      setLastUpdated(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+    } catch (err: any) {
+      setError('Unable to load analytics data from Open-Meteo. Check your connection.');
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 p-6">
-        <h1 className="text-3xl font-bold text-gray-900 mb-6">Analytics Dashboard</h1>
-        <div className="animate-pulse flex space-x-4">
-          <div className="h-8 w-48 bg-gray-200 rounded"></div>
-          <div className="h-8 w-64 bg-gray-200 rounded"></div>
-          <div className="h-8 w-40 bg-gray-200 rounded"></div>
-        </div>
-      </div>
-    );
-  }
+  useEffect(() => { loadData(); }, [loadData]);
 
-  if (error) {
-    return (
-      <div className="min-h-screen bg-gray-50 p-6">
-        <h1 className="text-3xl font-bold text-gray-900 mb-6">Analytics Dashboard</h1>
-        <p className="text-red-500">{error}</p>
-      </div>
-    );
-  }
+  // Derived stats
+  const maxScore = chartData.length ? Math.max(...chartData.map((d) => d.riskScore)) : 0;
+  const avgScore = chartData.length ? Math.round(chartData.reduce((a, c) => a + c.riskScore, 0) / chartData.length) : 0;
+  const maxTemp = chartData.length ? Math.max(...chartData.map((d) => d.apparentTemp)) : 0;
+  const avgHumidity = chartData.length ? Math.round(chartData.reduce((a, c) => a + c.humidity, 0) / chartData.length) : 0;
+  const extremeCount = chartData.filter((d) => d.riskLevel === 'EXTREME' || d.riskLevel === 'HIGH').length;
+  const peakHour = chartData.find((d) => d.riskScore === maxScore);
+
+  const dataStatus = !weather ? 'UNAVAILABLE' : weather.is_cached ? 'CACHED' : 'LIVE';
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
-      <h1 className="text-3xl font-bold text-gray-900 mb-6">Analytics Dashboard</h1>
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4 mb-6">
-        <div className="bg-white rounded-lg shadow p-4">
-          <div className="flex items-center">
-            <div className="text-indigo-500 p-3 rounded bg-indigo-50">
-              <TrendingUp className="h-5 w-5" />
-            </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-500">Active Users</p>
-              <p className="text-2xl font-bold text-gray-900">{data[0]?.activeUsers?.toLocaleString()}</p>
-            </div>
-          </div>
-        </div>
-        <div className="bg-white rounded-lg shadow p-4">
-          <div className="flex items-center">
-            <div className="text-red-500 p-3 rounded bg-red-50">
-              <Activity className="h-5 w-5" />
-            </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-500">Heat Alerts</p>
-              <p className="text-2xl font-bold text-gray-900">{data[0]?.heatAlerts?.toLocaleString()}</p>
-            </div>
-          </div>
-        </div>
-        <div className="bg-white rounded-lg shadow p-4">
-          <div className="flex items-center">
-            <div className="text-yellow-500 p-3 rounded bg-yellow-50">
-              <Users className="h-5 w-5" />
-            </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-500">Communities</p>
-              <p className="text-2xl font-bold text-gray-900">128</p>
-            </div>
-          </div>
-        </div>
-        <div className="bg-white rounded-lg shadow p-4">
-          <div className="flex items-center">
-            <div className="text-green-500 p-3 rounded bg-green-50">
-              <PieChart className="h-5 w-5" />
-            </div>
-            <div className="ml-4">
-              <p className="text-sm font-medium text-gray-500">Average Risk Score</p>
-              <p className="text-2xl font-bold text-gray-900">{Math.round(data.reduce((sum, d) => sum + d.riskScore, 0) / data.length)}</p>
-            </div>
-          </div>
-        </div>
-      </div>
+    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans flex flex-col">
+      <Navbar onToggleMobileSidebar={() => setMobileSidebarOpen(!mobileSidebarOpen)} />
 
-      <div className="bg-white rounded-lg shadow p-6">
-        <h2 className="text-xl font-semibold text-gray-900 mb-4">Monthly Trends</h2>
-        <ResponsiveContainer width="100%" height={300}>
-          <BarChart data={data} margin={{ top: 20, right: 30, left: 0, bottom: 5 }}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="name" />
-            <YAxis />
-            <Tooltip />
-            <Legend />
-            <Bar dataKey="activeUsers" name="Active Users" barSize="20" fill="#4f46e5" />
-            <Bar dataKey="heatAlerts" name="Heat Alerts" barSize="20" fill="#ef4444" />
-          </BarChart>
-        </ResponsiveContainer>
+      <div className="flex-1 flex">
+        <Sidebar mobileOpen={mobileSidebarOpen} onCloseMobile={() => setMobileSidebarOpen(false)} />
+
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full space-y-6">
+          {/* Header */}
+          <div className="bg-slate-900 p-5 rounded-xl border border-slate-800 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2.5">
+                <BarChart2 className="w-5 h-5 text-emerald-400" />
+                <h1 className="text-xl font-bold text-slate-100">HEAT RISK ANALYTICS</h1>
+              </div>
+              <div className="flex items-center gap-2 mt-0.5 text-xs text-slate-400 font-mono">
+                <MapPin className="w-3.5 h-3.5 text-slate-500" />
+                <span>24-Hour Environmental Telemetry — {weather?.location?.name || 'Loading...'}</span>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className={`text-[11px] font-mono font-bold px-2.5 py-1 rounded border ${
+                dataStatus === 'LIVE' ? 'bg-emerald-950/60 text-emerald-400 border-emerald-800/60'
+                : dataStatus === 'CACHED' ? 'bg-amber-950/60 text-amber-400 border-amber-800/60'
+                : 'bg-rose-950/60 text-rose-400 border-rose-800/60'
+              }`}>
+                DATA: {dataStatus}
+              </span>
+              {lastUpdated && (
+                <span className="text-[11px] font-mono text-slate-400 hidden sm:inline">
+                  Updated: {lastUpdated}
+                </span>
+              )}
+              <button
+                onClick={loadData}
+                disabled={loading}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg border border-slate-700 transition disabled:opacity-50"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+                Refresh
+              </button>
+            </div>
+          </div>
+
+          {error && (
+            <div className="p-4 bg-rose-950/40 border border-rose-800/60 rounded-xl flex items-start gap-2.5 text-xs text-rose-200">
+              <AlertTriangle className="w-4 h-4 shrink-0 text-rose-400 mt-0.5" />
+              <span>{error}</span>
+            </div>
+          )}
+
+          {loading ? (
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              {[...Array(4)].map((_, i) => (
+                <div key={i} className="bg-slate-900 border border-slate-800 rounded-xl p-4 h-24 animate-pulse" />
+              ))}
+            </div>
+          ) : (
+            <>
+              {/* Stat Cards */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+                <StatCard
+                  icon={Flame}
+                  label="Peak Risk Score"
+                  value={maxScore}
+                  sub={peakHour ? `at ${peakHour.time}` : undefined}
+                  color={maxScore >= 80 ? 'rose' : maxScore >= 60 ? 'orange' : maxScore >= 40 ? 'amber' : 'emerald'}
+                />
+                <StatCard
+                  icon={Activity}
+                  label="Avg Risk Score"
+                  value={avgScore}
+                  sub="24-hour window"
+                  color={avgScore >= 60 ? 'orange' : avgScore >= 40 ? 'amber' : 'emerald'}
+                />
+                <StatCard
+                  icon={Thermometer}
+                  label="Peak Feels Like"
+                  value={`${maxTemp}°C`}
+                  sub="Apparent Temp"
+                  color="amber"
+                />
+                <StatCard
+                  icon={AlertTriangle}
+                  label="Elevated Hours"
+                  value={extremeCount}
+                  sub="HIGH or EXTREME"
+                  color={extremeCount > 4 ? 'rose' : extremeCount > 0 ? 'orange' : 'emerald'}
+                />
+              </div>
+
+              {/* Risk Score Timeline Chart */}
+              {chartData.length > 0 && (
+                <>
+                  <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h2 className="text-xs font-bold font-mono text-slate-400 uppercase">HEAT RISK SCORE TRAJECTORY</h2>
+                      <span className="text-[11px] font-mono text-slate-500">24-hour forecast · Open-Meteo</span>
+                    </div>
+                    <ResponsiveContainer width="100%" height={240}>
+                      <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                        <defs>
+                          <linearGradient id="riskGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
+                            <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                        <XAxis
+                          dataKey="time"
+                          tick={{ fill: '#64748b', fontSize: 10, fontFamily: 'monospace' }}
+                          tickLine={false}
+                          axisLine={{ stroke: '#1e293b' }}
+                          interval={Math.floor(chartData.length / 6)}
+                        />
+                        <YAxis
+                          domain={[0, 100]}
+                          tick={{ fill: '#64748b', fontSize: 10, fontFamily: 'monospace' }}
+                          tickLine={false}
+                          axisLine={false}
+                        />
+                        <Tooltip content={<CustomTooltip />} />
+                        <ReferenceLine y={40} stroke="#f59e0b" strokeDasharray="3 3" label={{ value: 'MODERATE', fill: '#f59e0b', fontSize: 9, fontFamily: 'monospace' }} />
+                        <ReferenceLine y={65} stroke="#f97316" strokeDasharray="3 3" label={{ value: 'HIGH', fill: '#f97316', fontSize: 9, fontFamily: 'monospace' }} />
+                        <ReferenceLine y={80} stroke="#f43f5e" strokeDasharray="3 3" label={{ value: 'EXTREME', fill: '#f43f5e', fontSize: 9, fontFamily: 'monospace' }} />
+                        <Area
+                          type="monotone"
+                          dataKey="riskScore"
+                          name="Risk Score"
+                          stroke="#10b981"
+                          strokeWidth={2}
+                          fill="url(#riskGrad)"
+                          dot={false}
+                          activeDot={{ r: 4, fill: '#10b981' }}
+                        />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+
+                  {/* Temperature & Humidity Charts */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    {/* Temperature chart */}
+                    <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
+                      <div className="flex items-center gap-2">
+                        <Thermometer className="w-4 h-4 text-amber-400" />
+                        <h2 className="text-xs font-bold font-mono text-slate-400 uppercase">TEMPERATURE FORECAST</h2>
+                      </div>
+                      <ResponsiveContainer width="100%" height={180}>
+                        <LineChart data={chartData} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                          <XAxis
+                            dataKey="time"
+                            tick={{ fill: '#64748b', fontSize: 9, fontFamily: 'monospace' }}
+                            tickLine={false}
+                            axisLine={{ stroke: '#1e293b' }}
+                            interval={Math.floor(chartData.length / 4)}
+                          />
+                          <YAxis tick={{ fill: '#64748b', fontSize: 9, fontFamily: 'monospace' }} tickLine={false} axisLine={false} />
+                          <Tooltip content={<CustomTooltip />} />
+                          <Legend formatter={(v) => <span className="text-[10px] font-mono text-slate-400">{v}</span>} />
+                          <Line type="monotone" dataKey="temperature" name="Air Temp (°C)" stroke="#f59e0b" strokeWidth={2} dot={false} />
+                          <Line type="monotone" dataKey="apparentTemp" name="Feels Like (°C)" stroke="#f97316" strokeWidth={2} dot={false} strokeDasharray="4 2" />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+
+                    {/* Humidity chart */}
+                    <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 space-y-4">
+                      <div className="flex items-center gap-2">
+                        <Droplets className="w-4 h-4 text-blue-400" />
+                        <h2 className="text-xs font-bold font-mono text-slate-400 uppercase">HUMIDITY & WIND</h2>
+                      </div>
+                      <ResponsiveContainer width="100%" height={180}>
+                        <BarChart data={chartData} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                          <XAxis
+                            dataKey="time"
+                            tick={{ fill: '#64748b', fontSize: 9, fontFamily: 'monospace' }}
+                            tickLine={false}
+                            axisLine={{ stroke: '#1e293b' }}
+                            interval={Math.floor(chartData.length / 4)}
+                          />
+                          <YAxis tick={{ fill: '#64748b', fontSize: 9, fontFamily: 'monospace' }} tickLine={false} axisLine={false} />
+                          <Tooltip content={<CustomTooltip />} />
+                          <Legend formatter={(v) => <span className="text-[10px] font-mono text-slate-400">{v}</span>} />
+                          <Bar dataKey="humidity" name="Humidity (%)" fill="#3b82f6" opacity={0.7} radius={[2, 2, 0, 0]} />
+                          <Bar dataKey="windSpeed" name="Wind (km/h)" fill="#6366f1" opacity={0.7} radius={[2, 2, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+
+                  {/* Data Quality Notice */}
+                  <div className="p-3 bg-blue-950/30 border border-blue-800/50 rounded-xl flex items-start gap-2.5 text-xs text-blue-200">
+                    <Activity className="w-4 h-4 shrink-0 text-blue-400 mt-0.5" />
+                    <span>
+                      <strong>DATA SOURCE:</strong> All analytics values are derived from live Open-Meteo API forecast data.
+                      Risk scores are computed by the deterministic Steadman heat index engine in real time.
+                      No data is simulated or hardcoded. Avg humidity this window: <strong className="text-blue-300">{avgHumidity}%</strong>
+                    </span>
+                  </div>
+                </>
+              )}
+            </>
+          )}
+        </main>
       </div>
     </div>
   );

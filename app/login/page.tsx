@@ -57,10 +57,7 @@ function LoginContent() {
   const isRedirectingRef = React.useRef(false);
 
   const performRedirect = React.useCallback((targetUrl?: string) => {
-    if (isRedirectingRef.current) {
-      console.log('[AUTH 9] performRedirect skipped: isRedirectingRef is already true');
-      return;
-    }
+    if (isRedirectingRef.current) return;
     isRedirectingRef.current = true;
 
     const currentProfile = getUserProfile();
@@ -70,29 +67,12 @@ function LoginContent() {
       currentProfile.onboarded !== false
     );
 
-    console.log('[AUTH 9] router.replace(destination) executing:', {
-      destination,
-      targetUrl,
-      redirectParam: searchParams?.get('redirect'),
-      userRole: currentProfile.role,
-      onboarded: currentProfile.onboarded,
-    });
-
     router.replace(destination);
   }, [searchParams, router]);
 
-  // Redirect if already authenticated on initial page load (guarded against active login/signup submission)
+  // Redirect if already authenticated on initial page load
   useEffect(() => {
-    console.log('[AUTH 10] login page redirect useEffect evaluated:', {
-      authLoading,
-      isAuthenticated,
-      loading,
-      actionLoading,
-      isRedirecting: isRedirectingRef.current,
-    });
-
     if (!authLoading && isAuthenticated && !loading && !actionLoading && !isRedirectingRef.current) {
-      console.log('[AUTH 10] login page redirect useEffect TRIGGERING performRedirect');
       performRedirect();
     }
   }, [isAuthenticated, authLoading, loading, actionLoading, performRedirect]);
@@ -116,7 +96,6 @@ function LoginContent() {
 
     if (authMode === 'signup') {
       const result = await signUp(email, password, name || email.split('@')[0]);
-      console.log('[AUTH] signUp result:', result);
       if (!result.success) {
         isRedirectingRef.current = false;
         setErrorMsg(result.error || 'Sign-up failed.');
@@ -127,7 +106,6 @@ function LoginContent() {
       performRedirect('/onboarding');
     } else {
       const result = await signIn(email, password);
-      console.log('[AUTH] signIn result:', result);
       if (!result.success) {
         isRedirectingRef.current = false;
         setErrorMsg(result.error || 'Sign-in failed.');
@@ -151,7 +129,6 @@ function LoginContent() {
   // ── Supabase Fallback Email Auth (when Firebase not configured) ──────────
   const handleSupabaseAuth = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.warn('[AUTH] handleSupabaseAuth executed! isFirebaseConfigured is:', isFirebaseConfigured);
     if (!email || !password) {
       setErrorMsg('Please provide both email and password.');
       return;

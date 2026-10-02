@@ -33,10 +33,10 @@ function riskBorder(level: RiskLevel) {
 
 function riskBg(level: RiskLevel) {
   const cls: Record<RiskLevel, string> = {
-    EXTREME: 'bg-rose-50',
-    HIGH: 'bg-orange-50',
-    MODERATE: 'bg-amber-50',
-    LOW: 'bg-emerald-50',
+    EXTREME: 'bg-rose-950/30',
+    HIGH: 'bg-orange-950/30',
+    MODERATE: 'bg-amber-950/30',
+    LOW: 'bg-emerald-950/30',
   };
   return cls[level];
 }

@@ -23,7 +23,8 @@ import {
   X,
   BookOpen,
   FileCheck,
-  Cpu
+  Cpu,
+  BarChart2
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -41,6 +42,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, onCloseMobile }) =
         { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
         { label: 'Risk Analysis', href: '/risk', icon: Flame },
         { label: 'Risk Timeline', href: '/timeline', icon: Clock },
+        { label: 'Analytics', href: '/analytics', icon: BarChart2 },
         { label: 'Ask AI Assistant', href: '/assistant', icon: MessageSquare },
         { label: 'What-If Simulator', href: '/simulator', icon: Sliders },
         { label: 'Saved Locations', href: '/locations', icon: Bookmark },
