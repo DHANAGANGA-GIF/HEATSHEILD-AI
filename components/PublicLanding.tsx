@@ -632,6 +632,7 @@ export default function PublicLanding() {
                   <input
                     id="city-search"
                     type="search"
+                    role="combobox"
                     value={searchQuery}
                     onChange={handleQueryChange}
                     placeholder="Type a city or town name…"
@@ -1216,7 +1217,7 @@ export default function PublicLanding() {
           </div>
 
           <p className="mt-6 text-center text-xs text-slate-600 font-mono max-w-xl mx-auto">
-            These thresholds apply to HeatShield AI's 0–100 risk score. They are not an official medical classification.
+            These thresholds apply to HeatShield AI&apos;s 0–100 risk score. They are not an official medical classification.
             For official heat advisories, follow your national meteorological authority (e.g. IMD for India).
           </p>
         </div>
