@@ -150,15 +150,14 @@ export default function LandingPage() {
           </div>
 
           {/* Desktop Nav Links */}
-          <div className="hidden lg:flex items-center gap-6 text-xs font-medium text-slate-300">
+          <div className="hidden lg:flex items-center gap-5 text-xs font-medium text-slate-300">
             <a href="#check-risk" className="hover:text-emerald-400 transition">Check Risk</a>
             <a href="#how-it-works" className="hover:text-emerald-400 transition">How It Works</a>
+            <Link href="/methodology" className="hover:text-emerald-400 text-emerald-400/90 font-semibold transition">Methodology</Link>
+            <Link href="/evidence" className="hover:text-emerald-400 text-emerald-400/90 font-semibold transition">Evidence</Link>
+            <Link href="/system" className="hover:text-emerald-400 text-emerald-400/90 font-semibold transition">System</Link>
             <a href="#risk-levels" className="hover:text-emerald-400 transition">Risk Levels</a>
-            <a href="#why-this-risk" className="hover:text-emerald-400 transition">Why This Risk?</a>
             <a href="#guidance" className="hover:text-emerald-400 transition">Safety Guidance</a>
-            <a href="#product-proof" className="hover:text-emerald-400 transition">Product Proof</a>
-            <a href="#technology" className="hover:text-emerald-400 transition">Technology</a>
-            <a href="#limitations" className="hover:text-emerald-400 transition">Future Scope</a>
             <a href="#faq" className="hover:text-emerald-400 transition">FAQ</a>
           </div>
 
@@ -1024,7 +1023,10 @@ export default function LandingPage() {
             <span>&mdash; College Engineering Project</span>
           </div>
 
-          <div className="flex items-center gap-6 font-sans">
+          <div className="flex flex-wrap items-center gap-4 sm:gap-6 font-sans">
+            <Link href="/methodology" className="text-emerald-400 hover:text-emerald-300">Methodology &amp; Math</Link>
+            <Link href="/evidence" className="text-emerald-400 hover:text-emerald-300">Evidence &amp; QA</Link>
+            <Link href="/system" className="text-emerald-400 hover:text-emerald-300">System Architecture</Link>
             <Link href="/privacy" className="hover:text-slate-300">Privacy Policy</Link>
             <Link href="/terms" className="hover:text-slate-300">Terms &amp; Disclaimer</Link>
             <Link href="/dashboard" className="hover:text-slate-300">Dashboard</Link>

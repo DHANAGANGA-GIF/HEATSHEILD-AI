@@ -19,7 +19,7 @@ import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { LocationSource } from '@/lib/constants';
 import { LocationData, RiskAssessment, TechMode, WeatherData, UserProfile } from '@/lib/types';
 import Link from 'next/link';
-import { Clock, Sliders, MessageSquare, ArrowRight, ChevronDown, ChevronUp, Radio } from 'lucide-react';
+import { Clock, Sliders, MessageSquare, ArrowRight, ChevronDown, ChevronUp, Radio, BookOpen, FileCheck, Cpu } from 'lucide-react';
 import { RealtimeLiveLocationTracker } from '@/components/RealtimeLiveLocationTracker';
 import { RealtimeBroadcastCommandCenter } from '@/components/RealtimeBroadcastCommandCenter';
 import { useAuth } from '@/lib/firebase/auth-context';
@@ -321,6 +321,42 @@ export default function DashboardPage() {
                   </div>
                   <p className="text-xs text-slate-400">View water points, shade reports, and cooling centers.</p>
                 </Link>
+              </div>
+
+              {/* Academic & System Verification Row (v2.0) */}
+              <div className="p-4 bg-slate-900/90 rounded-xl border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <div className="text-xs font-bold text-slate-200 font-mono flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                    <span>CSE-AIML 2ND REVIEW • TECHNICAL VERIFICATION ARTIFACTS</span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    Inspect the mathematical derivations, 326/326 automated test reports, and live subsystem telemetry.
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Link
+                    href="/methodology"
+                    className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-xs font-semibold transition flex items-center gap-1.5"
+                  >
+                    <BookOpen className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Methodology &amp; Math</span>
+                  </Link>
+                  <Link
+                    href="/evidence"
+                    className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-xs font-semibold transition flex items-center gap-1.5"
+                  >
+                    <FileCheck className="w-3.5 h-3.5 text-cyan-400" />
+                    <span>Evidence &amp; QA</span>
+                  </Link>
+                  <Link
+                    href="/system"
+                    className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-xs font-semibold transition flex items-center gap-1.5"
+                  >
+                    <Cpu className="w-3.5 h-3.5 text-purple-400" />
+                    <span>System Telemetry</span>
+                  </Link>
+                </div>
               </div>
             </>
           )}

@@ -20,7 +20,10 @@ import {
   Bookmark,
   Settings,
   HelpCircle,
-  X
+  X,
+  BookOpen,
+  FileCheck,
+  Cpu
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -41,6 +44,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, onCloseMobile }) =
         { label: 'Ask AI Assistant', href: '/assistant', icon: MessageSquare },
         { label: 'What-If Simulator', href: '/simulator', icon: Sliders },
         { label: 'Saved Locations', href: '/locations', icon: Bookmark },
+      ],
+    },
+    {
+      title: 'ACADEMIC & SYSTEM (V2.0)',
+      items: [
+        { label: 'Methodology & Math', href: '/methodology', icon: BookOpen },
+        { label: 'Evidence & Verification', href: '/evidence', icon: FileCheck },
+        { label: 'System Architecture', href: '/system', icon: Cpu },
       ],
     },
     {

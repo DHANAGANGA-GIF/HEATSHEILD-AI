@@ -10,7 +10,8 @@ import { fetchWeatherData } from '@/lib/weather-api';
 import { evaluateHeatRisk } from '@/lib/risk-engine';
 import { getUserProfile } from '@/lib/store';
 import { RiskAssessment, WeatherData } from '@/lib/types';
-import { Flame, ShieldCheck, Info, BarChart } from 'lucide-react';
+import Link from 'next/link';
+import { Flame, ShieldCheck, Info, BarChart, ArrowRight, BookOpen, FileCheck } from 'lucide-react';
 
 export default function RiskPage() {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
@@ -154,6 +155,36 @@ export default function RiskPage() {
             <p className="text-xs text-slate-400 font-mono">
               Limitation: Local microclimates (e.g., radiant heat from unshaded asphalt, direct sunlight exposure) may cause localized temperatures to exceed regional meteorological readings.
             </p>
+          </div>
+
+          {/* Links to Full Methodology & Evidence */}
+          <div className="p-5 bg-slate-900 rounded-xl border border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div>
+              <div className="text-xs font-bold text-white uppercase font-mono tracking-wider">
+                CSE-AIML Academic Review Resources
+              </div>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Explore the formal mathematical derivations, interactive lab, and verification test matrices.
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              <Link
+                href="/methodology"
+                className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-semibold shadow-xs transition flex items-center gap-1.5"
+              >
+                <BookOpen className="w-3.5 h-3.5" />
+                <span>Full Methodology &amp; Math</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
+              <Link
+                href="/evidence"
+                className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded-lg text-xs font-semibold transition flex items-center gap-1.5"
+              >
+                <FileCheck className="w-3.5 h-3.5" />
+                <span>Verification Evidence</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
+            </div>
           </div>
         </main>
       </div>

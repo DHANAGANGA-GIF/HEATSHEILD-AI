@@ -43,6 +43,9 @@ const PUBLIC_PATHS = [
   '/privacy',
   '/terms',
   '/',
+  '/methodology',
+  '/evidence',
+  '/system',
   '/api/send-email',   // Protected at route level with token verification
   '/api/auth',
   '/api/broadcast',
