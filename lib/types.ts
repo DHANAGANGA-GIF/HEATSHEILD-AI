@@ -32,9 +32,15 @@ export interface UserProfile {
   hourly_heat_alerts_enabled?: boolean;
   email_alerts_enabled?: boolean;
   email_frequency?: EmailFrequency;
-  minimum_risk_level?: MinimumRiskLevel;
   email_verified?: boolean;
   sms_phone?: string;
+  timezone?: string;
+  alert_threshold?: 'moderate' | 'high' | 'extreme';
+  /** Minimum risk level for automated alert dispatch (default: 'high') */
+  minimum_risk_level?: MinimumRiskLevel;
+  forecast_alerts_enabled?: boolean;
+  daily_summary_enabled?: boolean;
+  gmail_connected?: boolean;
 }
 
 export type EmailFrequency = 'hourly' | 'every_3_hours' | 'risk_change_only';

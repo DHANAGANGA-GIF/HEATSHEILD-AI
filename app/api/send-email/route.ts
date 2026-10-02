@@ -4,7 +4,9 @@ import { fetchWeatherData, reverseGeocode, getWeatherConditionText } from '@/lib
 import { generatePersonalizedGuidance, MEDICAL_SAFETY_DISCLAIMER } from '@/lib/guidance-engine';
 import { createEnvironmentalSnapshot, validateCoordinates, formatDataAge } from '@/lib/snapshot';
 import { verifyFirebaseToken, extractBearerToken, resolveAuthSession } from '@/lib/firebase/admin';
-import { SmartAlert, UserProfile } from '@/lib/types';
+import { SmartAlert, UserProfile, Language } from '@/lib/types';
+import { getPrecautions } from '@/lib/precaution-engine';
+import { checkAlertCooldown, recordAlertDispatch } from '@/lib/alert-manager';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,6 +19,7 @@ export async function POST(request: Request) {
       recipientName,
       clientLocation,
       userProfile,
+      isTest,
     } = body as {
       // NOTE: `to`, `targetEmail`, `email`, `userId`, `uid` are intentionally NOT accepted.
       // The recipient is derived exclusively from the verified Firebase ID token.
@@ -30,7 +33,8 @@ export async function POST(request: Request) {
         location_source?: 'LIVE_GPS' | 'SAVED_LOCATION' | 'MANUAL_LOCATION' | 'UNAVAILABLE';
         gps_accuracy?: number;
       };
-      userProfile?: Partial<UserProfile>;
+      userProfile?: Partial<UserProfile> & { timezone?: string };
+      isTest?: boolean;
     };
 
     // ── Step 1: MANDATORY session verification ─────────────────────────
@@ -139,6 +143,62 @@ export async function POST(request: Request) {
       );
     }
 
+    // ── Step 4.5: Check Alert Cooldown & Deduplication ───────────────────────
+    const cooldownCheck = await checkAlertCooldown({
+      userId: firebaseUid,
+      recipientEmail,
+      alertType: 'HEAT_RISK_ADVISORY',
+      riskScore: snapshot.risk_score,
+      riskLevel: snapshot.risk_level as any,
+      cooldownMinutes: 60,
+      isTest: Boolean(isTest),
+    });
+
+    if (!cooldownCheck.allowed && !isTest) {
+      return NextResponse.json(
+        {
+          success: false,
+          skipped: true,
+          error: cooldownCheck.reason,
+          cooldownActive: true,
+          lastDispatchedAt: cooldownCheck.lastDispatchedAt,
+        },
+        { status: 200 }
+      );
+    }
+
+    // ── Step 4.6: Dynamic Contextual Precaution Engine ────────────────────────
+    const userLang: Language = (userProfile?.language as Language) || 'en';
+    const userTimezone = userProfile?.timezone || 'Asia/Kolkata';
+
+    const precautionData = getPrecautions({
+      temperature: snapshot.temperature,
+      humidity: snapshot.relative_humidity,
+      apparentTemperature: snapshot.apparent_temperature,
+      windSpeed: snapshot.wind_speed,
+      activity: userProfile?.activity_level as any,
+      exposure: userProfile?.exposure as any,
+      cooling: userProfile?.cooling_access as any,
+      riskScore: snapshot.risk_score,
+      riskLevel: snapshot.risk_level as any,
+      forecast: weather.hourly_forecast?.map((h) => ({
+        time: h.time,
+        temperature: h.temperature,
+        apparentTemperature: h.apparent_temperature,
+        humidity: h.relative_humidity,
+        riskScore: h.risk_score,
+        riskLevel: h.risk_level,
+      })),
+      language: userLang,
+    });
+
+    const activePrecautions =
+      precautionData.priority && precautionData.priority.length >= 3
+        ? precautionData.priority
+        : snapshot.precautions;
+
+    const upcomingRiskWarning = precautionData.upcoming[0] || undefined;
+
     // ── Step 5: Build alert payload FROM the snapshot (single source of truth) ─
     const locationStatusLabel =
       locSource === 'LIVE_GPS'
@@ -162,7 +222,7 @@ export async function POST(request: Request) {
       id: snapshot.notification_id,
       rule_id: 'CURRENT_EXTREME',
       priority: alertPriority,
-      title: `HeatShield AI Alert: ${snapshot.risk_level} Risk in ${locName}`,
+      title: isTest ? `[TEST EMAIL] HeatShield AI Alert: ${snapshot.risk_level} in ${locName}` : `HeatShield AI Alert: ${snapshot.risk_level} Risk in ${locName}`,
       message: `Real-time thermal assessment for ${locName}: ${snapshot.temperature}°C (feels like ${snapshot.apparent_temperature}°C), ${snapshot.relative_humidity}% humidity, ${snapshot.weather_condition}. Heat Risk Index: ${snapshot.risk_score}/100 (${snapshot.risk_level}).`,
       affected_period: snapshot.snapshot_created_at,
       affected_period_label: 'Immediate',
@@ -175,14 +235,14 @@ export async function POST(request: Request) {
         risk_level: snapshot.risk_level,
       },
       recommended_action:
-        snapshot.precautions[0] || 'Take regular hydration and cooling breaks.',
+        activePrecautions[0] || 'Take regular hydration and cooling breaks.',
       source_status: snapshot.data_quality,
       timestamp: snapshot.snapshot_created_at,
       dismissed: false,
       read: false,
       dedup_key: `email_${recipientEmail}_${snapshot.notification_id}`,
       location_name: locName,
-      precautions: snapshot.precautions,
+      precautions: activePrecautions,
       medical_disclaimer: MEDICAL_SAFETY_DISCLAIMER,
       why_generated: triggerReason,
     };
@@ -200,6 +260,25 @@ export async function POST(request: Request) {
       weatherObservedAt: snapshot.observation_timestamp,
       dataQualityStatus: snapshot.data_quality,
       riskCalculatedAt: snapshot.snapshot_created_at,
+      language: userLang,
+      timezone: userTimezone,
+      upcomingRisk: upcomingRiskWarning,
+      customSubject: isTest ? `[TEST EMAIL] HeatShield AI — ${snapshot.risk_level} (${snapshot.risk_score}/100) [${locName}]` : undefined,
+    });
+
+    // Record dispatch in alert audit log
+    await recordAlertDispatch({
+      userId: firebaseUid,
+      recipientEmail,
+      alertType: isTest ? 'TEST_ADVISORY' : 'HEAT_RISK_ADVISORY',
+      locationName: snapshot.location_name,
+      riskScore: snapshot.risk_score,
+      riskLevel: snapshot.risk_level,
+      weatherSnapshot: snapshot,
+      language: userLang,
+      deliveryStatus: result.success ? 'SENT' : 'FAILED',
+      providerMessageId: result.id,
+      errorMessage: result.error,
     });
 
     if (!result.success) {
