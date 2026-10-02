@@ -92,15 +92,16 @@ export async function POST(request: Request) {
 
     const isHttps = request.url.startsWith('https:') || process.env.NODE_ENV === 'production';
 
+    // 7-day persistent session cookie (604,800 seconds)
     response.cookies.set('hs_session', idToken, {
       path: '/',
       httpOnly: false, // Accessible to client-side scripts for sync/diagnostics
       secure: isHttps,
       sameSite: 'lax',
-      maxAge: 86400, // 24 hours
+      maxAge: 7 * 86400, // 7 days persistent session
     });
 
-    console.log('[AUTH-SERVER] POST /api/auth/session returning 200 with Set-Cookie hs_session, secure:', isHttps);
+    console.log('[AUTH-SERVER] POST /api/auth/session returning 200 with Set-Cookie hs_session (7-day persistence), secure:', isHttps);
     return response;
   } catch (err: any) {
     console.error('[HeatShield Auth Session POST] Error:', err?.message);

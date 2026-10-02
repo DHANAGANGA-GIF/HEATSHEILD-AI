@@ -30,6 +30,9 @@ export interface SendEmailOptions {
   modelVersion?: string;
   replyTo?: string;
   from?: string;
+  language?: 'en' | 'te' | 'ta' | 'hi';
+  timezone?: string;
+  upcomingRisk?: string;
 }
 
 export type GmailErrorCode =

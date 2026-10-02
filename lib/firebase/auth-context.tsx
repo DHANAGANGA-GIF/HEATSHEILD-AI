@@ -61,6 +61,8 @@ export interface AuthState {
   isAdmin: boolean;
   /** Firebase ID token — refreshed automatically */
   idToken: string | null;
+  /** Explicit authentication initialization state machine */
+  authStatus: 'INITIALIZING' | 'AUTHENTICATED' | 'UNAUTHENTICATED' | 'ERROR';
 }
 
 export interface AuthActions {
@@ -114,7 +116,8 @@ function isAdminRole(role?: string): boolean {
 export function FirebaseAuthProvider({ children }: { children: ReactNode }) {
   const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
   const [appProfile, setAppProfile] = useState<UserProfile | null>(null);
-  const [loading, setLoading] = useState<boolean>(isFirebaseConfigured); // Only show loading if Firebase is active
+  const [authStatus, setAuthStatus] = useState<'INITIALIZING' | 'AUTHENTICATED' | 'UNAUTHENTICATED' | 'ERROR'>('INITIALIZING');
+  const [loading, setLoading] = useState<boolean>(true); // Always starts in loading/initializing state
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [idToken, setIdToken] = useState<string | null>(null);
@@ -153,10 +156,37 @@ export function FirebaseAuthProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  // ── Firebase auth state listener ──────────────────────────────────────────
+  // ── Firebase auth state listener & Persistent Session Restoration ──────────
   useEffect(() => {
     if (!isFirebaseConfigured || !firebaseAuth) {
-      setLoading(false);
+      // Check server session fallback if Firebase is not active
+      fetch('/api/auth/session', { credentials: 'include' })
+        .then((res) => res.json())
+        .then((session) => {
+          if (session?.authenticated && session.uid) {
+            const stored = getUserProfile();
+            const restored: UserProfile = {
+              ...stored,
+              id: session.uid,
+              firebase_uid: session.uid,
+              email: session.email || stored.email || '',
+              name: session.name || stored.name || (session.email ? session.email.split('@')[0] : 'User'),
+              authenticated: true,
+              onboarded: stored.onboarded ?? true,
+            };
+            saveUserProfile(restored);
+            setAppProfile(restored);
+            setAuthStatus('AUTHENTICATED');
+          } else {
+            setAuthStatus('UNAUTHENTICATED');
+          }
+        })
+        .catch(() => {
+          setAuthStatus('UNAUTHENTICATED');
+        })
+        .finally(() => {
+          setLoading(false);
+        });
       return;
     }
 
@@ -166,35 +196,76 @@ export function FirebaseAuthProvider({ children }: { children: ReactNode }) {
     const unsubscribe = onAuthStateChanged(
       firebaseAuth,
       async (user) => {
-        setFirebaseUser(user);
-        syncAppProfile(user);
-
         if (user) {
+          setFirebaseUser(user);
+          syncAppProfile(user);
+
           try {
             const token = await user.getIdToken(false /* retrieve existing or refreshed */);
             setIdToken(token || null);
             if (token) {
               setSessionCookie(token);
-              // Ensure server session cookie is synchronized
-              fetch('/api/auth/session', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ idToken: token }),
-                credentials: 'include',
-              }).catch(() => {});
+              // Authoritatively synchronize server session cookie before completing init
+              try {
+                await fetch('/api/auth/session', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ idToken: token }),
+                  credentials: 'include',
+                });
+              } catch (sessSyncErr) {
+                console.warn('[HeatShield] Server session sync warning (non-fatal):', sessSyncErr);
+              }
             }
             saveUserProfile({ last_login_at: new Date().toISOString() } as any);
           } catch {
             setIdToken(null);
           }
+          setAuthStatus('AUTHENTICATED');
+          setLoading(false);
         } else {
-          setIdToken(null);
-        }
+          // Firebase user not yet found in local memory — verify server session before declaring unauthenticated
+          try {
+            const res = await fetch('/api/auth/session', {
+              method: 'GET',
+              credentials: 'include',
+            });
+            if (res.ok) {
+              const session = await res.json();
+              if (session && session.authenticated && session.uid) {
+                // Server session is valid! Restore application user
+                const stored = getUserProfile();
+                const restored: UserProfile = {
+                  ...stored,
+                  id: session.uid,
+                  firebase_uid: session.uid,
+                  email: session.email || stored.email || '',
+                  name: session.name || stored.name || (session.email ? session.email.split('@')[0] : 'User'),
+                  authenticated: true,
+                  onboarded: stored.onboarded ?? true,
+                };
+                saveUserProfile(restored);
+                setAppProfile(restored);
+                setAuthStatus('AUTHENTICATED');
+                setLoading(false);
+                return;
+              }
+            }
+          } catch (sessionCheckErr) {
+            console.warn('[HeatShield] Server session check error:', sessionCheckErr);
+          }
 
-        setLoading(false);
+          setFirebaseUser(null);
+          setAppProfile(null);
+          setIdToken(null);
+          setAuthStatus('UNAUTHENTICATED');
+          setLoading(false);
+        }
       },
       (err) => {
         console.warn('[HeatShield] Firebase auth state error:', err);
+        setError(normalizeAuthError(err));
+        setAuthStatus('ERROR');
         setLoading(false);
       }
     );
@@ -280,6 +351,7 @@ export function FirebaseAuthProvider({ children }: { children: ReactNode }) {
       setSessionCookie(token);
       syncAppProfile(user);
       saveUserProfile({ last_login_at: new Date().toISOString() } as any);
+      setAuthStatus('AUTHENTICATED');
       setLoading(false);
 
       return { success: true };
@@ -351,6 +423,7 @@ export function FirebaseAuthProvider({ children }: { children: ReactNode }) {
       setSessionCookie(token);
       syncAppProfile(user);
       saveUserProfile({ last_login_at: new Date().toISOString() } as any);
+      setAuthStatus('AUTHENTICATED');
       setLoading(false);
 
       return { success: true };
@@ -386,6 +459,8 @@ export function FirebaseAuthProvider({ children }: { children: ReactNode }) {
       setFirebaseUser(null);
       setAppProfile(null);
       setIdToken(null);
+      setAuthStatus('UNAUTHENTICATED');
+      setLoading(false);
       // 5. Clear localStorage profile and cached location/weather
       clearUserProfile();
       if (typeof window !== 'undefined') {
@@ -487,6 +562,7 @@ export function FirebaseAuthProvider({ children }: { children: ReactNode }) {
     isAuthenticated,
     isAdmin,
     idToken,
+    authStatus,
     signIn,
     signUp,
     signOut,

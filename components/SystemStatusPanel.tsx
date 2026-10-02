@@ -36,7 +36,6 @@ interface SystemStatusPanelProps {
   className?: string;
 }
 
-// Visual config per status value
 function statusConfig(value: SystemStatusValue | string) {
   switch (value) {
     case 'LIVE':
@@ -45,10 +44,10 @@ function statusConfig(value: SystemStatusValue | string) {
     case 'GPS':
     case 'AUTHENTICATED':
       return {
-        dot: 'bg-emerald-500 animate-pulse',
-        text: 'text-emerald-700',
-        bg: 'bg-emerald-50',
-        border: 'border-emerald-200',
+        dot: 'bg-emerald-400 animate-pulse',
+        text: 'text-emerald-400',
+        bg: 'bg-emerald-950/60',
+        border: 'border-emerald-800/60',
       };
     case 'CACHED':
     case 'FALLBACK':
@@ -56,16 +55,16 @@ function statusConfig(value: SystemStatusValue | string) {
     case 'CAMPUS':
       return {
         dot: 'bg-amber-400',
-        text: 'text-amber-700',
-        bg: 'bg-amber-50',
-        border: 'border-amber-200',
+        text: 'text-amber-400',
+        bg: 'bg-amber-950/60',
+        border: 'border-amber-800/60',
       };
     case 'LOADING':
       return {
         dot: 'bg-blue-400 animate-pulse',
-        text: 'text-blue-700',
-        bg: 'bg-blue-50',
-        border: 'border-blue-200',
+        text: 'text-blue-400',
+        bg: 'bg-blue-950/60',
+        border: 'border-blue-800/60',
       };
     case 'DISABLED':
     case 'SIGNED OUT':
@@ -73,9 +72,9 @@ function statusConfig(value: SystemStatusValue | string) {
     default:
       return {
         dot: 'bg-slate-400',
-        text: 'text-slate-500',
-        bg: 'bg-slate-50',
-        border: 'border-slate-200',
+        text: 'text-slate-400',
+        bg: 'bg-slate-800/60',
+        border: 'border-slate-700/60',
       };
   }
 }

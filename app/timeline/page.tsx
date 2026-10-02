@@ -41,19 +41,30 @@ function riskBg(level: RiskLevel) {
   return cls[level];
 }
 
-function formatTime(iso: string) {
+import { getPrecautions } from '@/lib/precaution-engine';
+import { t } from '@/lib/i18n';
+
+function formatTime(iso: string, tz?: string) {
   try {
-    return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return new Date(iso).toLocaleTimeString([], {
+      timeZone: tz || 'Asia/Kolkata',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
   } catch {
     return iso;
   }
 }
 
-function formatDateTime(iso: string) {
+function formatDateTime(iso: string, tz?: string) {
   try {
     return new Date(iso).toLocaleString([], {
-      weekday: 'short', month: 'short', day: 'numeric',
-      hour: '2-digit', minute: '2-digit',
+      timeZone: tz || 'Asia/Kolkata',
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
     });
   } catch {
     return iso;
@@ -75,6 +86,11 @@ export default function TimelinePage() {
   const [trend, setTrend] = useState<ForecastTrend | null>(null);
   const [loading, setLoading] = useState(true);
   const [showTable, setShowTable] = useState(false);
+  const [selectedItem, setSelectedItem] = useState<HourlyForecastRisk | null>(null);
+
+  const profile = getUserProfile();
+  const userTimezone = profile.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Kolkata';
+  const userLang = profile.language || 'en';
 
   const loadTimelineData = () => {
     const p = getUserProfile();
@@ -270,10 +286,80 @@ export default function TimelinePage() {
                           <span>{item.forecast.temperature}°C</span>
                           <TrendIcon dir={item.trend_direction} />
                         </div>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedItem(selectedItem?.forecast.time === item.forecast.time ? null : item)}
+                          className="w-full text-[9px] font-bold py-1 rounded bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800 hover:border-slate-700 transition"
+                        >
+                          {t('why', userLang)}
+                        </button>
                       </div>
                     );
                   })}
                 </div>
+
+                {/* Selected Hour Risk Diagnostics Panel */}
+                {selectedItem && (() => {
+                  const diag = getPrecautions({
+                    temperature: selectedItem.forecast.temperature,
+                    humidity: selectedItem.forecast.relative_humidity,
+                    apparentTemperature: selectedItem.forecast.apparent_temperature,
+                    windSpeed: selectedItem.forecast.wind_speed,
+                    riskScore: selectedItem.risk_score,
+                    riskLevel: selectedItem.risk_level as any,
+                    language: userLang,
+                  });
+                  return (
+                    <div className="p-4 rounded-xl border border-emerald-800/80 bg-slate-950 space-y-3 font-mono text-left animate-in fade-in duration-200">
+                      <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                        <span className="text-xs font-bold text-emerald-400">
+                          DIAGNOSTIC EXPLANATION — {formatTime(selectedItem.forecast.time, userTimezone)} ({selectedItem.risk_level} • {selectedItem.risk_score}/100)
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedItem(null)}
+                          className="text-slate-400 hover:text-white text-xs px-2 py-0.5 rounded hover:bg-slate-800"
+                        >
+                          ✕ Close
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                        <div className="p-2 bg-slate-900 rounded border border-slate-800">
+                          <span className="text-slate-500 text-[10px] block">Air Temp</span>
+                          <span className="text-amber-400 font-bold">{selectedItem.forecast.temperature}°C</span>
+                        </div>
+                        <div className="p-2 bg-slate-900 rounded border border-slate-800">
+                          <span className="text-slate-500 text-[10px] block">Feels Like</span>
+                          <span className="text-orange-400 font-bold">{selectedItem.forecast.apparent_temperature}°C</span>
+                        </div>
+                        <div className="p-2 bg-slate-900 rounded border border-slate-800">
+                          <span className="text-slate-500 text-[10px] block">Humidity</span>
+                          <span className="text-blue-400 font-bold">{selectedItem.forecast.relative_humidity}%</span>
+                        </div>
+                        <div className="p-2 bg-slate-900 rounded border border-slate-800">
+                          <span className="text-slate-500 text-[10px] block">Wind</span>
+                          <span className="text-slate-300 font-bold">{selectedItem.forecast.wind_speed} km/h</span>
+                        </div>
+                      </div>
+                      <div className="text-xs text-slate-300 font-sans space-y-1">
+                        <div className="font-bold text-slate-400 text-[11px] font-mono uppercase">Environmental Risk Triggers:</div>
+                        <ul className="list-disc pl-4 space-y-0.5">
+                          {diag.reasons.map((r, i) => (
+                            <li key={i}>{r}</li>
+                          ))}
+                        </ul>
+                      </div>
+                      <div className="text-xs text-slate-200 font-sans space-y-1 pt-2 border-t border-slate-800">
+                        <div className="font-bold text-emerald-400 text-[11px] font-mono uppercase">Recommended Preventive Guidance:</div>
+                        <ul className="list-disc pl-4 space-y-0.5">
+                          {diag.priority.map((p, i) => (
+                            <li key={i}>{p}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {/* Data label legend */}
                 <div className="flex items-center gap-4 text-[11px] font-mono text-slate-400 pt-1">

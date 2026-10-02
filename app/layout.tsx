@@ -8,8 +8,8 @@ import { FirebaseAuthProvider } from '@/lib/firebase/auth-context';
 export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
-  title: 'HEATSHIELD AI — Real-Time Heat Risk Decision Support',
-  description: 'Real-time, context-aware heat-risk decision support for people, schools, worksites, and communities.',
+  title: 'HeatShield AI V2.1 — Persistent Authentication + Multilingual Real-Time Heat Safety',
+  description: 'AI-Based Heat Risk Awareness and Preventive Guidance System with persistent sessions, verified multilingual translations (EN, TE, TA, HI), and real-time open meteorological telemetry.',
 };
 
 export default function RootLayout({

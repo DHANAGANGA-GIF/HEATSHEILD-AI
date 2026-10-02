@@ -54,7 +54,8 @@ const PUBLIC_PATHS = [
   '/api/admin',
   '/api/email/google/connect',    // Gmail OAuth initiation — no auth needed
   '/api/email/google/callback',   // Gmail OAuth callback — receives Google redirect
-  '/api/email/status',            // Public status check
+  '/api/email/google/status',     // Gmail OAuth status check — returns connected/disconnected state
+  '/api/email/status',            // Public email delivery status check
   '/api/email/test',              // Test send endpoint
   '/api/cron',                    // Vercel cron — authenticated via CRON_SECRET
 ];
@@ -92,11 +93,14 @@ function hasAuthSignal(request: NextRequest): boolean {
     if (parts.length === 3) {
       try {
         const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
-        if (payload.exp && typeof payload.exp === 'number') {
-          const nowSec = Math.floor(Date.now() / 1000);
-          if (payload.exp <= nowSec) {
-            return false; // Expired token
-          }
+        const nowSec = Math.floor(Date.now() / 1000);
+        // Persistent session window: 7 days (604,800s)
+        // Firebase ID tokens expire after 1 hour, but the persistent session allows client-side SDK
+        // to restore and auto-refresh the token on page load.
+        const issuedSec = typeof payload.auth_time === 'number' ? payload.auth_time : (typeof payload.iat === 'number' ? payload.iat : (payload.exp ? payload.exp - 3600 : 0));
+        const MAX_SESSION_AGE_SEC = 7 * 24 * 3600; // 7 days
+        if (issuedSec > 0 && (nowSec - issuedSec) > MAX_SESSION_AGE_SEC) {
+          return false; // Genuinely expired session (> 7 days)
         }
       } catch {
         // Non-blocking fallback

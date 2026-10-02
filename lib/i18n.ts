@@ -51,6 +51,25 @@ export const TRANSLATIONS: Record<Language, Record<string, string>> = {
     refresh: 'Refresh Data',
     select_location: 'Select Location',
     approximate_location: 'Use Approximate Location',
+    language: 'Language',
+    analytics: 'Analytics',
+    profile: 'Profile',
+    notifications: 'Notifications',
+    email_alerts: 'Email Alerts',
+    gmail_connected: 'Gmail Connected',
+    connect_gmail: 'Connect Gmail',
+    disconnect_gmail: 'Disconnect Gmail',
+    test_email: 'Send Test Email',
+    alert_threshold: 'Alert Threshold',
+    forecast_alerts: 'Forecast Peak Alerts',
+    daily_summary: 'Daily Summary',
+    timezone: 'Timezone',
+    privacy: 'Privacy & Consent',
+    why: 'Why?',
+    session_restored: 'Session restored',
+    sign_in: 'Sign In',
+    save_settings: 'Save Settings',
+    settings_saved: 'Settings saved successfully',
   },
   te: {
     app_title: 'హీట్‌షీల్డ్ AI',
@@ -102,6 +121,25 @@ export const TRANSLATIONS: Record<Language, Record<string, string>> = {
     refresh: 'రిఫ్రెష్',
     select_location: 'ప్రాంతాన్ని ఎంచుకోండి',
     approximate_location: 'సుమారు స్థానాన్ని ఉపయోగించండి',
+    language: 'భాష',
+    analytics: 'విశ్లేషణలు',
+    profile: 'ప్రొఫైల్',
+    notifications: 'నోటిఫికేషన్‌లు',
+    email_alerts: 'ఇమెయిల్ హెచ్చరికలు',
+    gmail_connected: 'Gmail కనెక్ట్ చేయబడింది',
+    connect_gmail: 'Gmail కనెక్ట్ చేయండి',
+    disconnect_gmail: 'Gmail డిస్‌కనెక్ట్ చేయండి',
+    test_email: 'పరీక్ష ఇమెయిల్ పంపండి',
+    alert_threshold: 'హెచ్చరిక పరిమితి',
+    forecast_alerts: 'ఫోర్‌కాస్ట్ గరిష్ట హెచ్చరికలు',
+    daily_summary: 'రోజువారీ సారాంశం',
+    timezone: 'సమయ మండలం',
+    privacy: 'గోప్యత మరియు సమ్మతి',
+    why: 'ఎందుకు?',
+    session_restored: 'సెషన్ పునరుద్ధరించబడింది',
+    sign_in: 'సైన్ ఇన్',
+    save_settings: 'సెట్టింగ్‌లను సేవ్ చేయండి',
+    settings_saved: 'సెట్టింగ్‌లు సేవ్ చేయబడ్డాయి',
   },
   ta: {
     app_title: 'ஹீட்ஷீல்டு AI',
@@ -153,6 +191,25 @@ export const TRANSLATIONS: Record<Language, Record<string, string>> = {
     refresh: 'புதுப்பிக்கவும்',
     select_location: 'இடத்தைத் தேர்ந்தெடுக்கவும்',
     approximate_location: 'தோராயமான இருப்பிடத்தைப் பயன்படுத்தவும்',
+    language: 'மொழி',
+    analytics: 'பகுப்பாய்வு',
+    profile: 'சுயவிவரம்',
+    notifications: 'அறிவிப்புகள்',
+    email_alerts: 'மின்னஞ்சல் எச்சரிக்கைகள்',
+    gmail_connected: 'Gmail இணைக்கப்பட்டது',
+    connect_gmail: 'Gmail ஐ இணைக்கவும்',
+    disconnect_gmail: 'Gmail ஐ துண்டிக்கவும்',
+    test_email: 'சோதனை மின்னஞ்சலை அனுப்பு',
+    alert_threshold: 'எச்சரிக்கை வரம்பு',
+    forecast_alerts: 'முன்னறிவிப்பு உச்ச எச்சரிக்கைகள்',
+    daily_summary: 'தினசரி சுருக்கம்',
+    timezone: 'நேர மண்டலம்',
+    privacy: 'தனியுரிமை மற்றும் ஒப்புதல்',
+    why: 'ஏன்?',
+    session_restored: 'அமர்வு மீட்டமைக்கப்பட்டது',
+    sign_in: 'உள்நுழையவும்',
+    save_settings: 'அமைப்புகளைச் சேமிக்கவும்',
+    settings_saved: 'அமைப்புகள் சேமிக்கப்பட்டன',
   },
   hi: {
     app_title: 'हीटशील्ड AI',
@@ -204,9 +261,52 @@ export const TRANSLATIONS: Record<Language, Record<string, string>> = {
     refresh: 'ताज़ा करें',
     select_location: 'स्थान चुनें',
     approximate_location: 'अनुमानित स्थान का उपयोग करें',
+    language: 'भाषा',
+    analytics: 'एनालिटिक्स',
+    profile: 'प्रोफाइल',
+    notifications: 'सूचनाएं',
+    email_alerts: 'ईमेल अलर्ट',
+    gmail_connected: 'Gmail कनेक्टेड',
+    connect_gmail: 'Gmail कनेक्ट करें',
+    disconnect_gmail: 'Gmail डिस्कनेक्ट करें',
+    test_email: 'टेस्ट ईमेल भेजें',
+    alert_threshold: 'अलर्ट सीमा',
+    forecast_alerts: 'पूर्वानुमान पीक अलर्ट',
+    daily_summary: 'दैनिक सारांश',
+    timezone: 'समय क्षेत्र',
+    privacy: 'गोपनीयता और सहमति',
+    why: 'क्यों?',
+    session_restored: 'सत्र पुनर्स्थापित',
+    sign_in: 'साइन इन',
+    save_settings: 'सेटिंग्स सहेजें',
+    settings_saved: 'सेटिंग्स सफलतापूर्वक सहेजी गईं',
   },
 };
 
 export function t(key: string, lang: Language = 'en'): string {
   return TRANSLATIONS[lang]?.[key] || TRANSLATIONS['en']?.[key] || key;
+}
+
+export function getLanguageName(lang: Language): string {
+  switch (lang) {
+    case 'te':
+      return 'తెలుగు (Telugu)';
+    case 'ta':
+      return 'தமிழ் (Tamil)';
+    case 'hi':
+      return 'हिन्दी (Hindi)';
+    default:
+      return 'English';
+  }
+}
+
+export function getLanguageFlag(lang: Language): string {
+  switch (lang) {
+    case 'te':
+    case 'ta':
+    case 'hi':
+      return '🇮🇳';
+    default:
+      return '🇬🇧';
+  }
 }

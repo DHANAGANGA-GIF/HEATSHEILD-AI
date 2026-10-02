@@ -49,7 +49,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, onCloseMobile }) =
       ],
     },
     {
-      title: 'ACADEMIC & SYSTEM (V2.0)',
+      title: 'ACADEMIC & SYSTEM (V2.1)',
       items: [
         { label: 'Methodology & Math', href: '/methodology', icon: BookOpen },
         { label: 'Evidence & Verification', href: '/evidence', icon: FileCheck },

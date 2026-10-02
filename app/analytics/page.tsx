@@ -109,7 +109,7 @@ function StatCard({ icon: Icon, label, value, sub, color = 'emerald' }: {
   );
 }
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
+import { getPrecautions } from '@/lib/precaution-engine';
 
 export default function AnalyticsPage() {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
@@ -118,6 +118,11 @@ export default function AnalyticsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
+  const [selectedPoint, setSelectedPoint] = useState<ChartPoint | null>(null);
+
+  const profile = getUserProfile();
+  const userTimezone = profile.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Kolkata';
+  const userLang = profile.language || 'en';
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -138,7 +143,11 @@ export default function AnalyticsPage() {
       if (w.hourly_forecast && w.hourly_forecast.length > 0) {
         const scored: HourlyForecastRisk[] = scoreForecast(w, w.hourly_forecast.slice(0, 24), ctx, !!w.is_cached);
         const points: ChartPoint[] = scored.map((item) => ({
-          time: new Date(item.forecast.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          time: new Date(item.forecast.time).toLocaleTimeString([], {
+            timeZone: userTimezone,
+            hour: '2-digit',
+            minute: '2-digit',
+          }),
           riskScore: item.risk_score,
           temperature: item.forecast.temperature,
           apparentTemp: item.forecast.apparent_temperature,
@@ -147,14 +156,17 @@ export default function AnalyticsPage() {
           riskLevel: item.risk_level,
         }));
         setChartData(points);
+        if (points.length > 0 && !selectedPoint) {
+          setSelectedPoint(points[0]);
+        }
       }
-      setLastUpdated(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+      setLastUpdated(new Date().toLocaleTimeString([], { timeZone: userTimezone, hour: '2-digit', minute: '2-digit' }));
     } catch (err: any) {
       setError('Unable to load analytics data from Open-Meteo. Check your connection.');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [userTimezone]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
@@ -268,7 +280,15 @@ export default function AnalyticsPage() {
                       <span className="text-[11px] font-mono text-slate-500">24-hour forecast · Open-Meteo</span>
                     </div>
                     <ResponsiveContainer width="100%" height={240}>
-                      <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                      <AreaChart
+                        data={chartData}
+                        margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
+                        onClick={(e) => {
+                          if (e && e.activePayload && e.activePayload[0]) {
+                            setSelectedPoint(e.activePayload[0].payload as ChartPoint);
+                          }
+                        }}
+                      >
                         <defs>
                           <linearGradient id="riskGrad" x1="0" y1="0" x2="0" y2="1">
                             <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
@@ -301,11 +321,86 @@ export default function AnalyticsPage() {
                           strokeWidth={2}
                           fill="url(#riskGrad)"
                           dot={false}
-                          activeDot={{ r: 4, fill: '#10b981' }}
+                          activeDot={{ r: 5, fill: '#10b981', cursor: 'pointer' }}
                         />
                       </AreaChart>
                     </ResponsiveContainer>
                   </div>
+
+                  {/* Selected Forecast Point Risk Details */}
+                  {selectedPoint && (() => {
+                    const diag = getPrecautions({
+                      temperature: selectedPoint.temperature,
+                      humidity: selectedPoint.humidity,
+                      apparentTemperature: selectedPoint.apparentTemp,
+                      windSpeed: selectedPoint.windSpeed,
+                      riskScore: selectedPoint.riskScore,
+                      riskLevel: selectedPoint.riskLevel as any,
+                      language: userLang,
+                    });
+                    return (
+                      <div className="bg-slate-900 border border-emerald-800/80 rounded-xl p-5 space-y-4">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <Activity className="w-4 h-4 text-emerald-400" />
+                            <span className="text-xs font-bold font-mono text-emerald-400 uppercase">
+                              HOURLY RISK DIAGNOSTICS &amp; PRECAUTIONS ({selectedPoint.time})
+                            </span>
+                          </div>
+                          <span
+                            className={`text-xs font-mono font-bold px-2.5 py-0.5 rounded uppercase ${
+                              selectedPoint.riskLevel === 'EXTREME'
+                                ? 'bg-rose-950 text-rose-400 border border-rose-800'
+                                : selectedPoint.riskLevel === 'HIGH'
+                                ? 'bg-orange-950 text-orange-400 border border-orange-800'
+                                : selectedPoint.riskLevel === 'MODERATE'
+                                ? 'bg-amber-950 text-amber-400 border border-amber-800'
+                                : 'bg-emerald-950 text-emerald-400 border border-emerald-800'
+                            }`}
+                          >
+                            {selectedPoint.riskLevel} • {selectedPoint.riskScore}/100
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs font-mono">
+                          <div className="p-2.5 bg-slate-950 rounded-lg border border-slate-800">
+                            <span className="text-[10px] text-slate-500 block">Air Temp</span>
+                            <span className="text-amber-400 font-bold text-sm">{selectedPoint.temperature}°C</span>
+                          </div>
+                          <div className="p-2.5 bg-slate-950 rounded-lg border border-slate-800">
+                            <span className="text-[10px] text-slate-500 block">Feels Like</span>
+                            <span className="text-orange-400 font-bold text-sm">{selectedPoint.apparentTemp}°C</span>
+                          </div>
+                          <div className="p-2.5 bg-slate-950 rounded-lg border border-slate-800">
+                            <span className="text-[10px] text-slate-500 block">Humidity</span>
+                            <span className="text-blue-400 font-bold text-sm">{selectedPoint.humidity}%</span>
+                          </div>
+                          <div className="p-2.5 bg-slate-950 rounded-lg border border-slate-800">
+                            <span className="text-[10px] text-slate-500 block">Wind</span>
+                            <span className="text-slate-300 font-bold text-sm">{selectedPoint.windSpeed} km/h</span>
+                          </div>
+                        </div>
+
+                        <div className="pt-2 border-t border-slate-800 space-y-1.5">
+                          <div className="text-[11px] font-bold font-mono text-slate-400 uppercase">Specific Environmental Triggers:</div>
+                          <ul className="text-xs text-slate-300 space-y-1 pl-4 list-disc">
+                            {diag.reasons.map((r, i) => (
+                              <li key={i}>{r}</li>
+                            ))}
+                          </ul>
+                        </div>
+
+                        <div className="pt-2 border-t border-slate-800 space-y-1.5">
+                          <div className="text-[11px] font-bold font-mono text-emerald-400 uppercase">Recommended Actions for this Window:</div>
+                          <ul className="text-xs text-slate-200 space-y-1 pl-4 list-disc">
+                            {diag.priority.map((p, i) => (
+                              <li key={i}>{p}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      </div>
+                    );
+                  })()}
 
                   {/* Temperature & Humidity Charts */}
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

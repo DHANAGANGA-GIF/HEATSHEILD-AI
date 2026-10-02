@@ -132,7 +132,7 @@ export function setSessionCookie(token: string): void {
       return;
     }
     const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
-    document.cookie = `hs_session=${encodeURIComponent(trimmed)}; path=/; max-age=86400; SameSite=Lax${isHttps ? '; Secure' : ''}`;
+    document.cookie = `hs_session=${encodeURIComponent(trimmed)}; path=/; max-age=604800; SameSite=Lax${isHttps ? '; Secure' : ''}`;
   }
 }
 
