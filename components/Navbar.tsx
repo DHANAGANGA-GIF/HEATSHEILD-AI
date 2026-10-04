@@ -55,7 +55,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   };
 
   const handleLanguageChange = (lang: Language) => {
-    saveUserProfile({ language: lang });
+    saveUserProfile({ language: lang, preferred_language: lang });
     window.location.reload();
   };
 
@@ -170,7 +170,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               className="flex items-center gap-2 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold rounded-lg transition"
             >
               <LogIn className="w-4 h-4" />
-              <span className="hidden sm:inline">Sign In</span>
+              <span className="hidden sm:inline">{t('sign_in', userLanguage)}</span>
             </Link>
           )}
 
@@ -260,9 +260,9 @@ export const Navbar: React.FC<NavbarProps> = ({
                       className="w-full flex items-center gap-2.5 px-4 py-2 text-sm text-red-400 hover:text-red-300 hover:bg-red-950/30 transition disabled:opacity-50"
                     >
                       {signOutLoading || actionLoading ? (
-                        <><Loader2 className="w-4 h-4 animate-spin" />Signing out...</>
+                        <><Loader2 className="w-4 h-4 animate-spin" />{t('authenticating', userLanguage)}</>
                       ) : (
-                        <><LogOut className="w-4 h-4" />Sign Out</>
+                        <><LogOut className="w-4 h-4" />{t('logout', userLanguage)}</>
                       )}
                     </button>
                   </div>

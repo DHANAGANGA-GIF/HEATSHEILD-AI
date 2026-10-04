@@ -1,7 +1,8 @@
 'use client';
 
 import React from 'react';
-import { RiskLevel } from '@/lib/types';
+import { Language, RiskLevel } from '@/lib/types';
+import { t } from '@/lib/i18n';
 import { AlertTriangle, ShieldCheck, Flame, AlertOctagon } from 'lucide-react';
 
 interface HeatGaugeProps {
@@ -9,6 +10,7 @@ interface HeatGaugeProps {
   level: RiskLevel;
   lastUpdated?: string;
   dataQuality?: string;
+  lang?: Language;
 }
 
 export const HeatGauge: React.FC<HeatGaugeProps> = ({
@@ -16,6 +18,7 @@ export const HeatGauge: React.FC<HeatGaugeProps> = ({
   level,
   lastUpdated,
   dataQuality = 'Good',
+  lang = 'en',
 }) => {
   const getLevelDetails = (l: RiskLevel) => {
     switch (l) {
@@ -25,8 +28,8 @@ export const HeatGauge: React.FC<HeatGaugeProps> = ({
           badgeColor: 'bg-emerald-600 text-white',
           barColor: 'bg-emerald-500',
           icon: ShieldCheck,
-          label: 'LOW RISK',
-          desc: 'Conditions are within normal safety thresholds for typical outdoor activities.',
+          label: t('low', lang),
+          desc: t('risk_level_low_desc', lang),
         };
       case 'MODERATE':
         return {
@@ -34,8 +37,8 @@ export const HeatGauge: React.FC<HeatGaugeProps> = ({
           badgeColor: 'bg-amber-600 text-white',
           barColor: 'bg-amber-500',
           icon: AlertTriangle,
-          label: 'MODERATE RISK',
-          desc: 'Elevated heat stress. Prolonged exposure or strenuous exercise may lead to fatigue.',
+          label: t('moderate', lang),
+          desc: t('risk_level_moderate_desc', lang),
         };
       case 'HIGH':
         return {
@@ -43,8 +46,8 @@ export const HeatGauge: React.FC<HeatGaugeProps> = ({
           badgeColor: 'bg-orange-600 text-white',
           barColor: 'bg-orange-600',
           icon: Flame,
-          label: 'HIGH RISK',
-          desc: 'High thermal strain. Heat cramps and heat exhaustion possible with physical exposure.',
+          label: t('high', lang),
+          desc: t('risk_level_high_desc', lang),
         };
       case 'EXTREME':
         return {
@@ -52,8 +55,8 @@ export const HeatGauge: React.FC<HeatGaugeProps> = ({
           badgeColor: 'bg-rose-700 text-white',
           barColor: 'bg-rose-600',
           icon: AlertOctagon,
-          label: 'EXTREME RISK',
-          desc: 'Critical heat stress hazard. Avoid unnecessary outdoor physical exposure.',
+          label: t('extreme', lang),
+          desc: t('risk_level_extreme_desc', lang),
         };
     }
   };
@@ -68,11 +71,11 @@ export const HeatGauge: React.FC<HeatGaugeProps> = ({
           <div className="flex items-center gap-2">
             <IconComponent className="w-6 h-6" />
             <h2 className="text-xs font-semibold tracking-wider uppercase opacity-80">
-              HEAT RISK ASSESSMENT
+              {t('heat_risk_score', lang)}
             </h2>
           </div>
           <p className="text-xs mt-0.5 opacity-75">
-            Real-Time Environmental & Contextual Thermal Stress
+            {t('rule_engine_title', lang)}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -99,11 +102,11 @@ export const HeatGauge: React.FC<HeatGaugeProps> = ({
         {/* Progress Indicator */}
         <div className="md:col-span-7 space-y-2">
           <div className="flex justify-between text-xs font-mono font-medium opacity-80">
-            <span>0 (Low)</span>
+            <span>0 ({t('low', lang)})</span>
             <span>35</span>
             <span>60</span>
             <span>80</span>
-            <span>100 (Extreme)</span>
+            <span>100 ({t('extreme', lang)})</span>
           </div>
           <div className="w-full h-3 bg-black/10 rounded-full overflow-hidden p-0.5">
             <div
@@ -119,8 +122,8 @@ export const HeatGauge: React.FC<HeatGaugeProps> = ({
 
       {lastUpdated && (
         <div className="mt-4 pt-3 border-t border-black/5 flex items-center justify-between text-[11px] opacity-75 font-mono">
-          <span>Data Timestamp: {lastUpdated}</span>
-          <span>Engine: Rule-Based Heat Risk Engine</span>
+          <span>{t('updated_local_time', lang)}: {lastUpdated}</span>
+          <span>{t('rule_engine_title', lang)}</span>
         </div>
       )}
     </div>

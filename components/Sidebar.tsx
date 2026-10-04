@@ -26,59 +26,65 @@ import {
   Cpu,
   BarChart2
 } from 'lucide-react';
+import { getUserProfile } from '@/lib/store';
+import { t } from '@/lib/i18n';
+import { Language } from '@/lib/types';
 
 interface SidebarProps {
   mobileOpen?: boolean;
   onCloseMobile?: () => void;
+  lang?: Language;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, onCloseMobile }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, onCloseMobile, lang: langProp }) => {
   const pathname = usePathname();
+  // Resolve language: prop → stored profile → default 'en'
+  const lang: Language = langProp || getUserProfile().language || 'en';
 
   const navGroups = [
     {
       title: 'CORE PLATFORM',
       items: [
-        { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-        { label: 'Risk Analysis', href: '/risk', icon: Flame },
+        { label: t('dashboard', lang), href: '/dashboard', icon: LayoutDashboard },
+        { label: t('risk', lang), href: '/risk', icon: Flame },
         { label: 'Risk Timeline', href: '/timeline', icon: Clock },
-        { label: 'Analytics', href: '/analytics', icon: BarChart2 },
-        { label: 'Ask AI Assistant', href: '/assistant', icon: MessageSquare },
-        { label: 'What-If Simulator', href: '/simulator', icon: Sliders },
+        { label: t('analytics', lang), href: '/analytics', icon: BarChart2 },
+        { label: t('assistant', lang), href: '/assistant', icon: MessageSquare },
+        { label: t('what_if_simulator', lang), href: '/simulator', icon: Sliders },
         { label: 'Saved Locations', href: '/locations', icon: Bookmark },
       ],
     },
     {
       title: 'ACADEMIC & SYSTEM (V2.1)',
       items: [
-        { label: 'Methodology & Math', href: '/methodology', icon: BookOpen },
-        { label: 'Evidence & Verification', href: '/evidence', icon: FileCheck },
+        { label: t('methodology', lang), href: '/methodology', icon: BookOpen },
+        { label: t('evidence', lang), href: '/evidence', icon: FileCheck },
         { label: 'System Architecture', href: '/system', icon: Cpu },
       ],
     },
     {
       title: 'COMMUNITY & MAP',
       items: [
-        { label: 'Community Hub', href: '/community', icon: Users },
-        { label: 'Community Map', href: '/community/map', icon: MapPin },
+        { label: t('community', lang), href: '/community', icon: Users },
+        { label: t('community_map', lang), href: '/community/map', icon: MapPin },
         { label: 'Report Issue', href: '/community/report', icon: AlertCircle },
       ],
     },
     {
       title: 'ORGANIZATIONS',
       items: [
-        { label: 'School Dashboard', href: '/school', icon: GraduationCap },
-        { label: 'Worksite Safety', href: '/worksite', icon: Briefcase },
-        { label: 'NGO Portal', href: '/ngo', icon: HeartHandshake },
+        { label: t('school', lang), href: '/school', icon: GraduationCap },
+        { label: t('worksite', lang), href: '/worksite', icon: Briefcase },
+        { label: t('ngo', lang), href: '/ngo', icon: HeartHandshake },
       ],
     },
     {
       title: 'MANAGEMENT & UTILS',
       items: [
-        { label: 'Admin Console', href: '/admin', icon: ShieldCheck },
-        { label: 'Reports & Exports', href: '/reports', icon: FileText },
-        { label: 'Settings', href: '/settings', icon: Settings },
-        { label: 'Help & Safety', href: '/help', icon: HelpCircle },
+        { label: t('admin', lang), href: '/admin', icon: ShieldCheck },
+        { label: t('reports', lang), href: '/reports', icon: FileText },
+        { label: t('settings', lang), href: '/settings', icon: Settings },
+        { label: t('help', lang), href: '/help', icon: HelpCircle },
       ],
     },
   ];

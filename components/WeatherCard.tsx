@@ -1,16 +1,18 @@
 'use client';
 
 import React from 'react';
-import { WeatherData } from '@/lib/types';
-import { Thermometer, Droplets, Wind, Gauge, CloudSun, MapPin } from 'lucide-react';
+import { Language, WeatherData } from '@/lib/types';
+import { t } from '@/lib/i18n';
+import { Thermometer, Droplets, Wind, Gauge, MapPin } from 'lucide-react';
 
 interface WeatherCardProps {
   weather: WeatherData;
   onRefresh?: () => void;
   isLoading?: boolean;
+  lang?: Language;
 }
 
-export const WeatherCard: React.FC<WeatherCardProps> = ({ weather, onRefresh, isLoading }) => {
+export const WeatherCard: React.FC<WeatherCardProps> = ({ weather, onRefresh, isLoading, lang = 'en' }) => {
   return (
     <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
       <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-5">
@@ -30,7 +32,7 @@ export const WeatherCard: React.FC<WeatherCardProps> = ({ weather, onRefresh, is
         <div className="flex items-center gap-3">
           {weather.is_cached && (
             <span className="text-[11px] font-mono px-2.5 py-1 bg-amber-50 text-amber-800 border border-amber-200 rounded">
-              Cached: {weather.cache_timestamp || 'Offline'}
+              {t('cached', lang)}: {weather.cache_timestamp || 'Offline'}
             </span>
           )}
           <button
@@ -38,7 +40,7 @@ export const WeatherCard: React.FC<WeatherCardProps> = ({ weather, onRefresh, is
             disabled={isLoading}
             className="text-xs font-medium px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded transition"
           >
-            {isLoading ? 'Updating...' : 'Refresh'}
+            {isLoading ? t('refreshing', lang) : t('refresh', lang)}
           </button>
         </div>
       </div>
@@ -48,13 +50,13 @@ export const WeatherCard: React.FC<WeatherCardProps> = ({ weather, onRefresh, is
         <div className="p-3.5 bg-slate-50 rounded-lg border border-slate-100">
           <div className="flex items-center gap-1.5 text-xs text-slate-500 mb-1">
             <Thermometer className="w-3.5 h-3.5 text-amber-600" />
-            <span>Temperature</span>
+            <span>{t('temperature', lang)}</span>
           </div>
           <div className="text-2xl font-bold text-slate-900 font-mono">
             {weather.temperature}°C
           </div>
           <span className="text-[11px] text-slate-500 font-sans">
-            Apparent: {weather.apparent_temperature}°C
+            {t('apparent_temperature', lang)}: {weather.apparent_temperature}°C
           </span>
         </div>
 
@@ -62,7 +64,7 @@ export const WeatherCard: React.FC<WeatherCardProps> = ({ weather, onRefresh, is
         <div className="p-3.5 bg-slate-50 rounded-lg border border-slate-100">
           <div className="flex items-center gap-1.5 text-xs text-slate-500 mb-1">
             <Droplets className="w-3.5 h-3.5 text-blue-600" />
-            <span>Humidity</span>
+            <span>{t('humidity', lang)}</span>
           </div>
           <div className="text-2xl font-bold text-slate-900 font-mono">
             {weather.relative_humidity}%
@@ -76,7 +78,7 @@ export const WeatherCard: React.FC<WeatherCardProps> = ({ weather, onRefresh, is
         <div className="p-3.5 bg-slate-50 rounded-lg border border-slate-100">
           <div className="flex items-center gap-1.5 text-xs text-slate-500 mb-1">
             <Wind className="w-3.5 h-3.5 text-teal-600" />
-            <span>Wind Speed</span>
+            <span>{t('wind', lang)}</span>
           </div>
           <div className="text-2xl font-bold text-slate-900 font-mono">
             {weather.wind_speed} <span className="text-xs font-normal">km/h</span>
@@ -90,7 +92,7 @@ export const WeatherCard: React.FC<WeatherCardProps> = ({ weather, onRefresh, is
         <div className="p-3.5 bg-slate-50 rounded-lg border border-slate-100">
           <div className="flex items-center gap-1.5 text-xs text-slate-500 mb-1">
             <Gauge className="w-3.5 h-3.5 text-purple-600" />
-            <span>Pressure</span>
+            <span>{t('pressure', lang)}</span>
           </div>
           <div className="text-2xl font-bold text-slate-900 font-mono">
             {weather.pressure} <span className="text-xs font-normal">hPa</span>

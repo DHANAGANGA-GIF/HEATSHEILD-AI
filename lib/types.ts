@@ -18,6 +18,7 @@ export interface UserProfile {
   exposure_duration: ExposureDuration;
   cooling_access: CoolingAccess;
   language: Language;
+  preferred_language?: Language;
   location?: LocationData;
   role: 'user' | 'school' | 'worksite' | 'ngo' | 'admin' | 'super_admin';
   organization_id?: string;
@@ -40,6 +41,8 @@ export interface UserProfile {
   minimum_risk_level?: MinimumRiskLevel;
   forecast_alerts_enabled?: boolean;
   daily_summary_enabled?: boolean;
+  quiet_hours?: { enabled: boolean; start: string; end: string };
+  last_notification_at?: string;
   gmail_connected?: boolean;
 }
 
@@ -151,6 +154,20 @@ export interface SafetyGuidance {
   technical_text: string;
   simple_text: string;
   priority: 'low' | 'medium' | 'high' | 'urgent';
+}
+
+/** Structured Precaution for Explainable, Contextual Prevention Guidance */
+export interface Precaution {
+  id: string;
+  severity: 'low' | 'moderate' | 'high' | 'urgent';
+  category: 'Exposure' | 'Activity' | 'Cooling' | 'Timing' | 'Environment' | 'Travel' | 'Vulnerability' | 'Emergency' | 'Forecast';
+  trigger: string;
+  title: string;
+  message: string;
+  action: string;
+  reason: string;
+  validUntil?: string;
+  priority: number;
 }
 
 export type CommunityCategory =
@@ -397,6 +414,8 @@ export interface RecipientNotificationProfile {
   user_id?: string;
   email: string;
   display_name?: string;
+  preferred_language?: Language;
+  timezone?: string;
   /** Age is ONLY included if voluntarily provided by the user. Never guessed. */
   age?: number;
   location_name: string;
@@ -426,6 +445,7 @@ export interface NotificationLog {
   recipient_email: string;
   alert_type: string;
   risk_level: RiskLevel;
+  language?: Language;
   location_name: string;
   latitude?: number;
   longitude?: number;

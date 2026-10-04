@@ -17,7 +17,8 @@ import { evaluateHeatRisk } from '@/lib/risk-engine';
 import { getUserProfile, saveUserProfile } from '@/lib/store';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { LocationSource } from '@/lib/constants';
-import { LocationData, RiskAssessment, TechMode, WeatherData, UserProfile } from '@/lib/types';
+import { Language, LocationData, RiskAssessment, TechMode, WeatherData, UserProfile } from '@/lib/types';
+import { t } from '@/lib/i18n';
 import Link from 'next/link';
 import { Clock, Sliders, MessageSquare, ArrowRight, ChevronDown, ChevronUp, Radio, BookOpen, FileCheck, Cpu } from 'lucide-react';
 import { RealtimeLiveLocationTracker } from '@/components/RealtimeLiveLocationTracker';
@@ -111,6 +112,9 @@ export default function DashboardPage() {
 
   const currentLocation = profile.location || { name: 'Chennai', latitude: 13.0827, longitude: 80.2707 };
 
+  // Determine active language from profile (preferred_language wins, then language)
+  const lang: Language = (appProfile?.preferred_language || appProfile?.language || profile.preferred_language || profile.language || 'en') as Language;
+
   // Derive display identity from authenticated user
   const displayUserName = firebaseUser?.displayName || appProfile?.name || (firebaseUser?.email ? firebaseUser.email.split('@')[0] : 'User');
   const displayUserEmail = firebaseUser?.email || appProfile?.email || '';
@@ -164,6 +168,7 @@ export default function DashboardPage() {
         <Sidebar
           mobileOpen={mobileSidebarOpen}
           onCloseMobile={() => setMobileSidebarOpen(false)}
+          lang={lang}
         />
 
         <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full space-y-5">
@@ -171,10 +176,10 @@ export default function DashboardPage() {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-900 p-5 rounded-xl border border-slate-800">
             <div>
               <h1 className="text-sm font-bold text-white font-mono uppercase tracking-wider">
-                OPERATIONAL HEAT RISK DASHBOARD
+                {t('operational_dashboard', lang)}
               </h1>
               <p className="text-xs text-slate-400 mt-0.5 font-mono">
-                Contextual Heat Strain Assessment for <span className="font-semibold text-slate-200">{displayUserName}</span> {displayUserEmail ? <span className="text-slate-500">({displayUserEmail})</span> : null} • <span className="text-emerald-400 font-bold">{displayRole} MODE</span>
+                {t('contextual_assessment_for', lang)} <span className="font-semibold text-slate-200">{displayUserName}</span> {displayUserEmail ? <span className="text-slate-500">({displayUserEmail})</span> : null} • <span className="text-emerald-400 font-bold">{displayRole} {t('mode', lang)}</span>
               </p>
             </div>
 
@@ -184,14 +189,14 @@ export default function DashboardPage() {
                 className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-lg border border-slate-700 transition flex items-center gap-1.5"
               >
                 <Clock className="w-3.5 h-3.5" />
-                <span>Forecast Timeline</span>
+                <span>{t('forecast_timeline', lang)}</span>
               </Link>
               <button
                 onClick={() => setShowAssistant(!showAssistant)}
                 className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-lg shadow-sm transition flex items-center gap-1.5"
               >
                 <MessageSquare className="w-3.5 h-3.5" />
-                <span>{showAssistant ? 'Hide Assistant' : 'Ask AI Assistant'}</span>
+                <span>{showAssistant ? t('hide_assistant', lang) : t('ask_assistant', lang)}</span>
                 {showAssistant ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
               </button>
             </div>
@@ -206,6 +211,7 @@ export default function DashboardPage() {
             onChangeLocation={() => setShowLocationSelector(true)}
             onRefresh={loadDashboardData}
             isLoading={loading}
+            lang={lang}
           />
 
           {/* System Status Panel */}
@@ -233,18 +239,18 @@ export default function DashboardPage() {
           {/* Loading State */}
           {loading && !weather ? (
             <div className="p-12 bg-slate-900 rounded-xl border border-slate-800 text-center font-mono text-xs text-slate-400 animate-pulse">
-              Retrieving environmental data for {currentLocation.name}...
+              {t('refreshing', lang)} {currentLocation.name}...
             </div>
           ) : !weather || !risk ? (
             /* Unavailable State */
             <div className="p-10 bg-slate-900 rounded-xl border border-slate-800 text-center space-y-3">
-              <p className="text-sm font-semibold text-slate-200">We couldn&apos;t retrieve current weather data.</p>
+              <p className="text-sm font-semibold text-slate-200">{t('unavailable', lang)}</p>
               <p className="text-xs text-slate-400">Risk assessment is temporarily unavailable because current environmental data could not be retrieved.</p>
               <button
                 onClick={loadDashboardData}
                 className="mt-2 px-4 py-2 text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition"
               >
-                Try Again
+                {t('try_again', lang)}
               </button>
             </div>
           ) : (
@@ -262,6 +268,7 @@ export default function DashboardPage() {
                 level={risk.risk_level}
                 lastUpdated={new Date(weather.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 dataQuality={risk.data_quality}
+                lang={lang}
               />
 
               {/* Weather & XAI Contributing Factors */}
@@ -270,11 +277,13 @@ export default function DashboardPage() {
                   weather={weather}
                   onRefresh={loadDashboardData}
                   isLoading={loading}
+                  lang={lang}
                 />
                 <RiskDrivers
                   factors={risk.factors}
                   mode={techMode}
                   onToggleMode={setTechMode}
+                  lang={lang}
                 />
               </div>
 
@@ -282,6 +291,7 @@ export default function DashboardPage() {
               <GuidanceList
                 guidance={risk.recommendations}
                 mode={techMode}
+                lang={lang}
               />
 
               {/* REAL-TIME MULTI-USER BROADCAST COMMAND CENTER */}
@@ -294,7 +304,7 @@ export default function DashboardPage() {
                   className="p-4 bg-slate-900 rounded-xl border border-slate-800 hover:border-emerald-500 transition shadow-xs group"
                 >
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-bold font-mono text-emerald-400">FORECAST TIMELINE</span>
+                    <span className="text-xs font-bold font-mono text-emerald-400">{t('timeline', lang).toUpperCase()}</span>
                     <Clock className="w-4 h-4 text-slate-500 group-hover:text-emerald-400" />
                   </div>
                   <p className="text-xs text-slate-400">See when heat risk peaks over the next 24–48 hours.</p>
@@ -305,7 +315,7 @@ export default function DashboardPage() {
                   className="p-4 bg-slate-900 rounded-xl border border-slate-800 hover:border-emerald-500 transition shadow-xs group"
                 >
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-bold font-mono text-emerald-400">WHAT-IF SIMULATOR</span>
+                    <span className="text-xs font-bold font-mono text-emerald-400">{t('what_if_simulator', lang).toUpperCase()}</span>
                     <Sliders className="w-4 h-4 text-slate-500 group-hover:text-emerald-400" />
                   </div>
                   <p className="text-xs text-slate-400">Test how changing activity or cooling affects your risk.</p>
@@ -316,7 +326,7 @@ export default function DashboardPage() {
                   className="p-4 bg-slate-900 rounded-xl border border-slate-800 hover:border-emerald-500 transition shadow-xs group"
                 >
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-bold font-mono text-emerald-400">COMMUNITY MAP</span>
+                    <span className="text-xs font-bold font-mono text-emerald-400">{t('community_map', lang).toUpperCase()}</span>
                     <ArrowRight className="w-4 h-4 text-slate-500 group-hover:text-emerald-400" />
                   </div>
                   <p className="text-xs text-slate-400">View water points, shade reports, and cooling centers.</p>

@@ -1,16 +1,18 @@
 'use client';
 
 import React from 'react';
-import { RiskFactor, TechMode } from '@/lib/types';
+import { Language, RiskFactor, TechMode } from '@/lib/types';
+import { t } from '@/lib/i18n';
 import { BarChart3, Thermometer, Droplets, Activity, Clock, ShieldCheck, Wind, HelpCircle } from 'lucide-react';
 
 interface RiskDriversProps {
   factors: RiskFactor[];
   mode: TechMode;
   onToggleMode: (mode: TechMode) => void;
+  lang?: Language;
 }
 
-export const RiskDrivers: React.FC<RiskDriversProps> = ({ factors, mode, onToggleMode }) => {
+export const RiskDrivers: React.FC<RiskDriversProps> = ({ factors, mode, onToggleMode, lang = 'en' }) => {
   const getFactorIcon = (category: string, name: string) => {
     const lowerName = name.toLowerCase();
     if (lowerName.includes('wind') || lowerName.includes('convect')) return <Wind className="w-4 h-4 text-emerald-600" />;
@@ -25,7 +27,7 @@ export const RiskDrivers: React.FC<RiskDriversProps> = ({ factors, mode, onToggl
     if (direction === 'mitigating') {
       return (
         <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded border border-emerald-300 bg-emerald-50 text-emerald-800">
-          COOLING RELIEF (-)
+          {t('cooling_factor', lang)} (-)
         </span>
       );
     }
@@ -39,19 +41,19 @@ export const RiskDrivers: React.FC<RiskDriversProps> = ({ factors, mode, onToggl
       case 'high':
         return (
           <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded border border-orange-300 bg-orange-50 text-orange-800">
-            HIGH (+)
+            {t('high', lang)} (+)
           </span>
         );
       case 'moderate':
         return (
           <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded border border-amber-300 bg-amber-50 text-amber-800">
-            MODERATE
+            {t('moderate', lang)}
           </span>
         );
       default:
         return (
           <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded border border-slate-300 bg-slate-100 text-slate-700">
-            LOW
+            {t('low', lang)}
           </span>
         );
     }
@@ -64,11 +66,11 @@ export const RiskDrivers: React.FC<RiskDriversProps> = ({ factors, mode, onToggl
           <div className="flex items-center gap-2">
             <BarChart3 className="w-5 h-5 text-emerald-700" />
             <h3 className="text-base font-bold text-slate-900">
-              WHY IS MY RISK AT THIS LEVEL?
+              {t('why_risk_level', lang)}
             </h3>
           </div>
           <p className="text-xs text-slate-500 mt-0.5">
-            Key environmental and personal factors influencing your heat-risk calculation
+            {t('calculation_breakdown', lang)}
           </p>
         </div>
 
@@ -82,7 +84,7 @@ export const RiskDrivers: React.FC<RiskDriversProps> = ({ factors, mode, onToggl
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            Technical
+            {t('technical', lang)}
           </button>
           <button
             onClick={() => onToggleMode('simple')}
@@ -92,7 +94,7 @@ export const RiskDrivers: React.FC<RiskDriversProps> = ({ factors, mode, onToggl
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            Simple
+            {t('simple', lang)}
           </button>
         </div>
       </div>
@@ -101,7 +103,7 @@ export const RiskDrivers: React.FC<RiskDriversProps> = ({ factors, mode, onToggl
       <div className="p-3.5 rounded-lg bg-emerald-50/60 border border-emerald-200/80 text-xs text-emerald-950 flex items-start gap-2.5">
         <HelpCircle className="w-4 h-4 text-emerald-700 shrink-0 mt-0.5" />
         <div>
-          <span className="font-semibold">Assessment Breakdown: </span>
+          <span className="font-semibold">{t('why_this_risk', lang)}: </span>
           <span>These environmental and contextual factors combine to determine your current heat-risk level and actionable safety guidance.</span>
         </div>
       </div>

@@ -1,15 +1,17 @@
 'use client';
 
 import React from 'react';
-import { SafetyGuidance, TechMode } from '@/lib/types';
+import { Language, SafetyGuidance, TechMode } from '@/lib/types';
+import { t } from '@/lib/i18n';
 import { ShieldCheck, Droplet, Sun, Clock, Heart } from 'lucide-react';
 
 interface GuidanceListProps {
   guidance: SafetyGuidance[];
   mode: TechMode;
+  lang?: Language;
 }
 
-export const GuidanceList: React.FC<GuidanceListProps> = ({ guidance, mode }) => {
+export const GuidanceList: React.FC<GuidanceListProps> = ({ guidance, mode, lang = 'en' }) => {
   const getIcon = (category: string) => {
     switch (category) {
       case 'hydration': return Droplet;
@@ -25,7 +27,7 @@ export const GuidanceList: React.FC<GuidanceListProps> = ({ guidance, mode }) =>
     <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
       <div className="pb-4 border-b border-slate-100 mb-4">
         <h3 className="text-base font-semibold text-slate-900">
-          RECOMMENDED PREVENTIVE ACTIONS
+          {t('recommended_actions', lang)}
         </h3>
         <p className="text-xs text-slate-500 mt-0.5">
           Contextually calibrated heat safety protocols for current risk level
@@ -78,7 +80,7 @@ export const GuidanceList: React.FC<GuidanceListProps> = ({ guidance, mode }) =>
 
       <div className="mt-4 pt-3 border-t border-slate-100 text-[11px] text-slate-500 flex items-center justify-between font-mono">
         <span>Source: HeatShield AI Protocol Engine</span>
-        <span>Not a medical diagnosis</span>
+        <span>{t('medical_disclaimer', lang)}</span>
       </div>
     </div>
   );

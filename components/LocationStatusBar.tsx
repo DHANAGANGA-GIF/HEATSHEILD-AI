@@ -2,8 +2,9 @@
 
 import React from 'react';
 import { MapPin, Navigation, RefreshCw } from 'lucide-react';
-import { LocationData } from '@/lib/types';
+import { Language, LocationData } from '@/lib/types';
 import { LocationSource } from '@/lib/constants';
+import { t } from '@/lib/i18n';
 
 interface LocationStatusBarProps {
   location: LocationData;
@@ -14,6 +15,7 @@ interface LocationStatusBarProps {
   onRefresh?: () => void;
   isLoading?: boolean;
   className?: string;
+  lang?: Language;
 }
 
 const SOURCE_CONFIG: Record<LocationSource, { label: string; color: string; dotColor: string }> = {
@@ -40,6 +42,7 @@ export const LocationStatusBar: React.FC<LocationStatusBarProps> = ({
   onRefresh,
   isLoading = false,
   className = '',
+  lang = 'en' as Language,
 }) => {
   const src = SOURCE_CONFIG[locationSource];
   const status = STATUS_CONFIG[dataStatus] ?? STATUS_CONFIG['UNAVAILABLE'];
@@ -103,7 +106,7 @@ export const LocationStatusBar: React.FC<LocationStatusBarProps> = ({
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-600 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg transition disabled:opacity-50"
           >
             <RefreshCw className={`w-3 h-3 ${isLoading ? 'animate-spin' : ''}`} />
-            <span className="hidden sm:inline">{isLoading ? 'Updating...' : 'Refresh'}</span>
+            <span className="hidden sm:inline">{isLoading ? t('refreshing', lang) : t('refresh', lang)}</span>
           </button>
         )}
         {onChangeLocation && (
@@ -113,7 +116,7 @@ export const LocationStatusBar: React.FC<LocationStatusBarProps> = ({
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition"
           >
             <Navigation className="w-3 h-3" />
-            <span>Change</span>
+            <span>{t('select_location', lang)}</span>
           </button>
         )}
       </div>
