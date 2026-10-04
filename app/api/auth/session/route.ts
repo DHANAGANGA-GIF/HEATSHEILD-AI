@@ -64,9 +64,39 @@ export async function POST(request: Request) {
       );
     }
 
+    // 3. CSRF & Cross-Site Origin Validation
+    const origin = request.headers.get('origin');
+    const host = request.headers.get('host') || new URL(request.url).host;
+    if (origin) {
+      try {
+        const originHost = new URL(origin).host;
+        if (originHost !== host) {
+          console.warn('[AUTH-SERVER] CSRF attempt blocked: origin host mismatch:', { originHost, host });
+          return NextResponse.json(
+            { authenticated: false, error: 'Cross-origin session creation forbidden.' },
+            { status: 403 }
+          );
+        }
+      } catch {
+        return NextResponse.json(
+          { authenticated: false, error: 'Invalid origin header.' },
+          { status: 403 }
+        );
+      }
+    }
+
+    const secFetchSite = request.headers.get('sec-fetch-site');
+    if (secFetchSite === 'cross-site') {
+      console.warn('[AUTH-SERVER] Cross-site request blocked via Sec-Fetch-Site');
+      return NextResponse.json(
+        { authenticated: false, error: 'Cross-site request forbidden.' },
+        { status: 403 }
+      );
+    }
+
     console.log('[AUTH-SERVER] POST /api/auth/session received request. idToken length:', idToken?.length);
 
-    // 3. Cryptographically verify the token on the server
+    // 4. Cryptographically verify the token on the server
     const verified = await verifyFirebaseToken(idToken);
     console.log('[AUTH-SERVER] verifyFirebaseToken returned:', {
       success: Boolean(verified?.uid),
@@ -82,7 +112,7 @@ export async function POST(request: Request) {
       );
     }
 
-    // 4. Return success and attach authoritative hs_session cookie
+    // 5. Return success and attach authoritative httpOnly hs_session cookie
     const response = NextResponse.json({
       authenticated: true,
       uid: verified.uid,
@@ -92,16 +122,16 @@ export async function POST(request: Request) {
 
     const isHttps = request.url.startsWith('https:') || process.env.NODE_ENV === 'production';
 
-    // 7-day persistent session cookie (604,800 seconds)
+    // 7-day persistent session cookie (604,800 seconds) — strictly httpOnly
     response.cookies.set('hs_session', idToken, {
       path: '/',
-      httpOnly: false, // Accessible to client-side scripts for sync/diagnostics
+      httpOnly: true, // Secure: inaccessible to client-side JavaScript (XSS prevention)
       secure: isHttps,
       sameSite: 'lax',
       maxAge: 7 * 86400, // 7 days persistent session
     });
 
-    console.log('[AUTH-SERVER] POST /api/auth/session returning 200 with Set-Cookie hs_session (7-day persistence), secure:', isHttps);
+    console.log('[AUTH-SERVER] POST /api/auth/session returning 200 with Set-Cookie hs_session (httpOnly: true, 7-day persistence), secure:', isHttps);
     return response;
   } catch (err: any) {
     console.error('[HeatShield Auth Session POST] Error:', err?.message);
@@ -127,7 +157,7 @@ export async function DELETE(request: Request) {
 
   response.cookies.set('hs_session', '', {
     path: '/',
-    httpOnly: false,
+    httpOnly: true,
     secure: isHttps,
     sameSite: 'lax',
     maxAge: 0,
@@ -135,3 +165,4 @@ export async function DELETE(request: Request) {
 
   return response;
 }
+

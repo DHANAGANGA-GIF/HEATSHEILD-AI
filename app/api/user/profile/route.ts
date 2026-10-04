@@ -38,6 +38,7 @@ export async function GET(request: Request) {
       alert_threshold: 'high',
       forecast_alerts_enabled: true,
       daily_summary_enabled: false,
+      quiet_hours: { enabled: false, start: '22:00', end: '07:00' },
       gmail_connected: isGmailConnected,
     };
 
@@ -55,6 +56,8 @@ export async function GET(request: Request) {
             name: data.full_name || profileData.name,
             language: (data.preferred_language as Language) || profileData.language,
             email_alerts_enabled: data.hourly_heat_alerts_enabled ?? profileData.email_alerts_enabled,
+            timezone: data.timezone || profileData.timezone,
+            quiet_hours: data.quiet_hours || profileData.quiet_hours,
             age_group: data.age_group || 'adult',
             exposure: data.exposure || 'occasional',
             activity_level: data.activity_level || 'moderate',
@@ -79,7 +82,7 @@ export async function GET(request: Request) {
 /**
  * PUT /api/user/profile
  *
- * Updates persistent user preferences (language, timezone, notifications, etc.)
+ * Updates persistent user preferences (language, timezone, quiet hours, notifications, etc.)
  */
 export async function PUT(request: Request) {
   try {
@@ -99,6 +102,11 @@ export async function PUT(request: Request) {
     const timezone = typeof body.timezone === 'string' ? body.timezone.trim() : undefined;
     const emailAlertsEnabled = typeof body.email_alerts_enabled === 'boolean' ? body.email_alerts_enabled : undefined;
     const alertThreshold = body.alert_threshold || 'high';
+    const quietHours = body.quiet_hours && typeof body.quiet_hours === 'object' ? {
+      enabled: Boolean(body.quiet_hours.enabled),
+      start: typeof body.quiet_hours.start === 'string' ? body.quiet_hours.start : '22:00',
+      end: typeof body.quiet_hours.end === 'string' ? body.quiet_hours.end : '07:00',
+    } : undefined;
 
     if (isSupabaseConfigured && supabase) {
       try {
@@ -108,6 +116,8 @@ export async function PUT(request: Request) {
         };
         if (fullName !== undefined) updatePayload.full_name = fullName;
         if (emailAlertsEnabled !== undefined) updatePayload.hourly_heat_alerts_enabled = emailAlertsEnabled;
+        if (timezone !== undefined) updatePayload.timezone = timezone;
+        if (quietHours !== undefined) updatePayload.quiet_hours = quietHours;
 
         await supabase
           .from('profiles')
@@ -127,6 +137,7 @@ export async function PUT(request: Request) {
         timezone,
         email_alerts_enabled: emailAlertsEnabled,
         alert_threshold: alertThreshold,
+        quiet_hours: quietHours,
       },
     });
   } catch (err: any) {

@@ -59,12 +59,8 @@ export async function getFreshAuthToken(): Promise<string | null> {
     }
   }
 
-  // 3. Fallback to valid hs_session cookie if it contains a verified JWT shape
-  const cookieToken = getSessionCookie();
-  if (cookieToken && cookieToken.split('.').length === 3) {
-    return cookieToken;
-  }
-
+  // 3. Fallback: If no in-memory token is available, authenticatedFetch sends
+  // credentials: 'include', allowing the httpOnly hs_session cookie to authenticate the request.
   return null;
 }
 

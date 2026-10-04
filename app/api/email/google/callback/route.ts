@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { google } from 'googleapis';
 import { saveGmailRefreshToken } from '@/lib/email-providers/token-store';
+import { verifyOAuthState } from '@/lib/email-providers/oauth-state';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,6 +13,7 @@ export const dynamic = 'force-dynamic';
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const code = url.searchParams.get('code');
+  const state = url.searchParams.get('state');
   const error = url.searchParams.get('error');
 
   if (error) {
@@ -30,6 +32,34 @@ export async function GET(request: Request) {
       { status: 400, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
     );
   }
+
+  // 1. Cryptographically validate single-use, short-lived OAuth state
+  if (!state) {
+    return NextResponse.json(
+      { success: false, error: 'Forbidden: Missing OAuth state parameter.' },
+      { status: 403 }
+    );
+  }
+
+  const verifiedState = verifyOAuthState(state);
+  if (!verifiedState.valid || !verifiedState.uid) {
+    return new Response(
+      `<!DOCTYPE html>
+      <html>
+        <head><title>HeatShield AI — Invalid OAuth State</title></head>
+        <body style="font-family: sans-serif; background: #0b1324; color: #f8fafc; padding: 40px; text-align: center;">
+          <div style="max-width: 500px; margin: 0 auto; background: #131c2e; padding: 30px; border-radius: 12px; border: 1px solid #dc2626;">
+            <h2 style="color: #ef4444;">Invalid, Expired, or Replayed OAuth State</h2>
+            <p style="color: #94a3b8; font-size: 14px;">${verifiedState.error || 'The authorization request state could not be validated.'}</p>
+            <a href="/settings" style="display: inline-block; margin-top: 20px; padding: 10px 20px; background: #3b82f6; color: white; text-decoration: none; border-radius: 6px;">Return to Settings</a>
+          </div>
+        </body>
+      </html>`,
+      { status: 403, headers: { 'Content-Type': 'text/html; charset=utf-8' } }
+    );
+  }
+
+  const boundUserId = verifiedState.uid;
 
   if (!code) {
     return NextResponse.json(
@@ -79,9 +109,9 @@ export async function GET(request: Request) {
       // If prompt: consent was not forced or token already granted without revoke
       console.warn('[HeatShield OAuth] No refresh_token returned by Google. Access token granted.');
     } else {
-      await saveGmailRefreshToken(tokens.refresh_token, authorizedAccountEmail);
-      console.log('[HeatShield OAuth] Encrypted Gmail OAuth refresh token securely persisted.' +
-        (authorizedAccountEmail ? ` Authorized account: ${authorizedAccountEmail}` : ''));
+      await saveGmailRefreshToken(tokens.refresh_token, authorizedAccountEmail, boundUserId);
+      console.log('[HeatShield OAuth] Encrypted Gmail OAuth refresh token securely persisted for user ' + boundUserId +
+        (authorizedAccountEmail ? ` (Authorized account: ${authorizedAccountEmail})` : ''));
     }
 
     return new Response(

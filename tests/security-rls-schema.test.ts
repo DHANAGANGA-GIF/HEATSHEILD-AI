@@ -1,4 +1,4 @@
-﻿import { describe, it } from "node:test";
+import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "fs";
 import { join } from "path";
@@ -86,6 +86,25 @@ describe("Supabase RLS Schema Security", () => {
     assert.ok(
       schema.includes("REFERENCES auth.users(id) ON DELETE CASCADE"),
       "profiles must cascade delete from auth.users"
+    );
+  });
+
+  it("enables RLS and user isolation on heat_risk_dispatch_log", () => {
+    assert.ok(
+      schema.includes("ALTER TABLE public.heat_risk_dispatch_log ENABLE ROW LEVEL SECURITY"),
+      "heat_risk_dispatch_log must have RLS enabled"
+    );
+    assert.ok(
+      schema.includes('"Users read own dispatch logs"') && schema.includes("auth.uid() = user_id"),
+      "heat_risk_dispatch_log must have user-isolated read policy"
+    );
+    assert.ok(
+      schema.includes('"Admins read all dispatch logs"') && schema.includes("profiles.role IN ('admin', 'super_admin')"),
+      "heat_risk_dispatch_log must have admin-only broad read policy"
+    );
+    assert.ok(
+      !schema.includes('"Public read dispatch logs"'),
+      "heat_risk_dispatch_log must never allow public read access"
     );
   });
 });

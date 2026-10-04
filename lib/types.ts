@@ -432,6 +432,7 @@ export interface RecipientNotificationProfile {
   email_verified?: boolean;
   critical_alerts_enabled: boolean;
   forecast_alerts_enabled?: boolean;
+  quiet_hours?: { enabled: boolean; start: string; end: string };
   last_notification_at?: string;
   sms_phone?: string;
   created_at: string;

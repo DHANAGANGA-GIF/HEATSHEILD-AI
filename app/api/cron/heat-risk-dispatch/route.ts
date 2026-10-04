@@ -107,6 +107,9 @@ async function fetchEligibleSubscribers(): Promise<RecipientNotificationProfile[
                 user_id: p.id,
                 email: emailLower,
                 display_name: p.full_name || emailLower.split('@')[0],
+                preferred_language: p.preferred_language || 'en',
+                timezone: p.timezone || 'Asia/Kolkata',
+                quiet_hours: p.quiet_hours || undefined,
                 location_name: 'Saved Monitored Location',
                 latitude: 13.0827,
                 longitude: 80.2707,
@@ -143,6 +146,48 @@ async function fetchEligibleSubscribers(): Promise<RecipientNotificationProfile[
   }
 
   return subscribers;
+}
+
+/**
+ * Checks whether the current instant falls within the user's configured quiet hours,
+ * evaluating time in the user's specific local timezone.
+ */
+export function isWithinQuietHours(
+  quietHours?: { enabled: boolean; start: string; end: string },
+  timezone?: string
+): boolean {
+  if (!quietHours || !quietHours.enabled) return false;
+  if (!quietHours.start || !quietHours.end) return false;
+
+  try {
+    const tz = timezone || 'Asia/Kolkata';
+    const now = new Date();
+    const formatter = new Intl.DateTimeFormat('en-GB', {
+      timeZone: tz,
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    });
+    const parts = formatter.formatToParts(now);
+    const hourPart = parts.find((p) => p.type === 'hour')?.value || '00';
+    const minutePart = parts.find((p) => p.type === 'minute')?.value || '00';
+    const currentMinutes = parseInt(hourPart, 10) * 60 + parseInt(minutePart, 10);
+
+    const [startH, startM] = quietHours.start.split(':').map((s) => parseInt(s, 10));
+    const [endH, endM] = quietHours.end.split(':').map((s) => parseInt(s, 10));
+    const startMinutes = (startH || 0) * 60 + (startM || 0);
+    const endMinutes = (endH || 0) * 60 + (endM || 0);
+
+    if (startMinutes <= endMinutes) {
+      // Daytime quiet window (e.g. 13:00 to 15:00)
+      return currentMinutes >= startMinutes && currentMinutes < endMinutes;
+    } else {
+      // Overnight quiet window (e.g. 22:00 to 07:00)
+      return currentMinutes >= startMinutes || currentMinutes < endMinutes;
+    }
+  } catch {
+    return false;
+  }
 }
 
 function isRiskMeetingMinimum(currentLevel: RiskLevel, minSetting?: string): boolean {
@@ -251,6 +296,21 @@ async function executeHourlyDispatch(request: Request) {
         dispatchKey,
         status: 'SKIPPED',
         reason: 'Skipped: every_3_hours frequency active (current UTC hour is not at 3-hour interval).',
+      });
+      continue;
+    }
+
+    // 5b. Quiet Hours Check (Honoring subscriber's local timezone)
+    if (subscriber.quiet_hours?.enabled && isWithinQuietHours(subscriber.quiet_hours, subscriber.timezone)) {
+      skippedCount++;
+      results.push({
+        subscriberId,
+        email: subscriberEmail,
+        location: subscriber.location_name || 'Location',
+        coordinates: { latitude: subscriber.latitude ?? 0, longitude: subscriber.longitude ?? 0 },
+        dispatchKey,
+        status: 'SKIPPED',
+        reason: `Skipped: quiet hours active (${subscriber.quiet_hours.start} - ${subscriber.quiet_hours.end} ${subscriber.timezone || 'Asia/Kolkata'}).`,
       });
       continue;
     }

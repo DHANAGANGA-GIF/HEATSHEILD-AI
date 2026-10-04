@@ -63,7 +63,8 @@ export async function getGmailRefreshToken(): Promise<string | null> {
  */
 export async function saveGmailRefreshToken(
   refreshToken: string,
-  accountEmail?: string
+  accountEmail?: string,
+  userId?: string
 ): Promise<{ success: boolean; error?: string }> {
   inMemoryRefreshToken = refreshToken;
   if (accountEmail) {
@@ -75,33 +76,43 @@ export async function saveGmailRefreshToken(
     try {
       const { ciphertext, iv, authTag } = encryptString(refreshToken);
 
-      // Check if a record already exists
-      const { data: existing } = await supabase
+      // Check if a record exists for this provider and user
+      let query = supabase
         .from('oauth_tokens')
-        .select('id, account_email')
-        .eq('provider', 'google')
+        .select('id, account_email, user_id')
+        .eq('provider', 'google');
+
+      if (userId) {
+        query = query.eq('user_id', userId);
+      }
+
+      const { data: existing } = await query
+        .order('updated_at', { ascending: false })
         .limit(1)
         .maybeSingle();
 
       const emailToPersist = accountEmail || existing?.account_email || process.env.GMAIL_SENDER_EMAIL || null;
 
       if (existing?.id) {
+        const updateData: Record<string, any> = {
+          encrypted_token: ciphertext,
+          iv,
+          auth_tag: authTag,
+          account_email: emailToPersist,
+          updated_at: new Date().toISOString(),
+        };
+        if (userId) updateData.user_id = userId;
+
         const { error } = await supabase
           .from('oauth_tokens')
-          .update({
-            encrypted_token: ciphertext,
-            iv,
-            auth_tag: authTag,
-            account_email: emailToPersist,
-            updated_at: new Date().toISOString(),
-          })
+          .update(updateData)
           .eq('id', existing.id);
 
         if (error) {
           return { success: false, error: error.message };
         }
       } else {
-        const { error } = await supabase.from('oauth_tokens').insert({
+        const insertData: Record<string, any> = {
           provider: 'google',
           encrypted_token: ciphertext,
           iv,
@@ -110,10 +121,25 @@ export async function saveGmailRefreshToken(
           account_email: emailToPersist,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
-        });
+        };
+        if (userId) insertData.user_id = userId;
+
+        const { error } = await supabase.from('oauth_tokens').insert(insertData);
 
         if (error) {
           return { success: false, error: error.message };
+        }
+      }
+
+      // If userId provided, touch user profile
+      if (userId) {
+        try {
+          await supabase
+            .from('profiles')
+            .update({ updated_at: new Date().toISOString() })
+            .eq('id', userId);
+        } catch {
+          // Non-blocking
         }
       }
 

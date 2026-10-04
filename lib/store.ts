@@ -122,30 +122,22 @@ export function getUserProfile(): UserProfile {
   }
 }
 
-export function setSessionCookie(token: string): void {
-  if (typeof document !== 'undefined') {
-    if (!token || typeof token !== 'string') return;
-    const trimmed = token.trim();
-    // Strict requirement: ONLY store actual JWT tokens (3 dot-separated base64url segments)
-    // Never store a bare UID, user ID, email, or arbitrary string.
-    if (trimmed.split('.').length !== 3) {
-      return;
-    }
-    const isHttps = typeof window !== 'undefined' && window.location.protocol === 'https:';
-    document.cookie = `hs_session=${encodeURIComponent(trimmed)}; path=/; max-age=604800; SameSite=Lax${isHttps ? '; Secure' : ''}`;
-  }
+/**
+ * Session cookie hs_session is strictly httpOnly and set server-side via POST /api/auth/session.
+ * Client-side document.cookie writes are disabled to protect against XSS token leakage.
+ */
+export function setSessionCookie(_token: string): void {
+  // Deprecated: Session cookie is now strictly httpOnly, managed exclusively by /api/auth/session.
+  // Client-side JavaScript cannot and must not write httpOnly cookies.
 }
 
 export function getSessionCookie(): string | null {
-  if (typeof document === 'undefined') return null;
-  const match = document.cookie.match(/(?:^|;\s*)hs_session=([^;]+)/);
-  if (!match || !match[1]) return null;
-  const val = decodeURIComponent(match[1]).trim();
-  if (val.split('.').length === 3) return val;
+  // Deprecated: hs_session is httpOnly and inaccessible to JavaScript document.cookie.
   return null;
 }
 
 export function clearSessionCookie(): void {
+  // Clear any legacy client-side cookie if it exists in legacy browsers
   if (typeof document !== 'undefined') {
     document.cookie = 'hs_session=; path=/; max-age=0; SameSite=Lax';
   }

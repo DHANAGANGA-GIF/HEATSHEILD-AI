@@ -34,6 +34,7 @@ const PROTECTED_PATHS = [
   '/onboarding',
   '/analytics',
   '/help',
+  '/api/email/google/connect',
 ];
 
 // Paths that are always publicly accessible
@@ -52,8 +53,7 @@ const PUBLIC_PATHS = [
   '/api/messages',
   '/api/analytics',
   '/api/admin',
-  '/api/email/google/connect',    // Gmail OAuth initiation — no auth needed
-  '/api/email/google/callback',   // Gmail OAuth callback — receives Google redirect
+  '/api/email/google/callback',   // Gmail OAuth callback — receives Google redirect with cryptographically verified state
   '/api/email/google/status',     // Gmail OAuth status check — returns connected/disconnected state
   '/api/email/status',            // Public email delivery status check
   '/api/email/test',              // Test send endpoint

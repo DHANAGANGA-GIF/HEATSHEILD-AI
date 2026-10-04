@@ -5,6 +5,8 @@ import {
   verifyFirebaseToken,
   extractBearerToken,
   resolveAuthSession,
+  registerTestPublicCert,
+  clearTestPublicCerts,
 } from '../lib/firebase/admin';
 import { setSessionCookie, clearSessionCookie, getSessionCookie } from '../lib/store';
 import { GET as gmailConnectGet } from '../app/api/email/google/connect/route';
@@ -178,8 +180,8 @@ describe('Authentication Session End-to-End Regression Test Suite', () => {
     assert.strictEqual(cookieHeader, null);
   });
 
-  // TEST H: Authenticated user → Gmail OAuth connect → OAuth flow starts successfully
-  it('TEST H: GET /api/email/google/connect initiates Google OAuth flow (302 redirect)', async () => {
+  // TEST H: Authenticated user → Gmail OAuth connect → OAuth flow starts successfully; Unauthenticated → 401
+  it('TEST H: GET /api/email/google/connect enforces authentication and initiates OAuth flow with bound state', async () => {
     const origId = process.env.GOOGLE_CLIENT_ID;
     const origSecret = process.env.GOOGLE_CLIENT_SECRET;
 
@@ -187,16 +189,37 @@ describe('Authentication Session End-to-End Regression Test Suite', () => {
     process.env.GOOGLE_CLIENT_SECRET = 'test-client-secret-12345';
 
     try {
-      const req = new Request('https://heatshield-ai-kare.vercel.app/api/email/google/connect', {
+      // 1. Unauthenticated request must receive 401
+      const unauthReq = new Request('https://heatshield-ai-kare.vercel.app/api/email/google/connect', {
         method: 'GET',
       });
+      const unauthRes = await gmailConnectGet(unauthReq);
+      assert.strictEqual(unauthRes.status, 401, 'Unauthenticated request must be rejected with 401');
 
-      const res = await gmailConnectGet(req);
-      assert.strictEqual(res.status, 307, 'Should return redirect to Google OAuth consent page');
-      const location = res.headers.get('location');
-      assert.ok(location, 'Should have Location redirect header');
-      assert.ok(location?.includes('accounts.google.com'), 'Redirect URL must point to Google accounts');
-      assert.ok(location?.includes('gmail.send'), 'OAuth scope must request gmail.send');
+      // 2. Authenticated request receives 307 redirect with cryptographically bound state
+      // Register the test RSA public key so verifyFirebaseToken can validate the mock JWT signature
+      const testPemPublicKey = publicKey.export({ type: 'pkcs1', format: 'pem' }) as string;
+      registerTestPublicCert('mock_test_kid_1', testPemPublicKey);
+
+      try {
+        const validJwt = createMockJwt({ sub: 'user_oauth_initiator', email: 'admin@heatshield.ai' });
+        const authReq = new Request('https://heatshield-ai-kare.vercel.app/api/email/google/connect', {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${validJwt}`,
+          },
+        });
+
+        const res = await gmailConnectGet(authReq);
+        assert.strictEqual(res.status, 307, 'Should return redirect to Google OAuth consent page');
+        const location = res.headers.get('location');
+        assert.ok(location, 'Should have Location redirect header');
+        assert.ok(location?.includes('accounts.google.com'), 'Redirect URL must point to Google accounts');
+        assert.ok(location?.includes('gmail.send'), 'OAuth scope must request gmail.send');
+        assert.ok(location?.includes('state='), 'Redirect URL must include cryptographically bound state');
+      } finally {
+        clearTestPublicCerts();
+      }
     } finally {
       process.env.GOOGLE_CLIENT_ID = origId;
       process.env.GOOGLE_CLIENT_SECRET = origSecret;

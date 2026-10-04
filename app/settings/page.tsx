@@ -47,6 +47,9 @@ export default function SettingsPage() {
   const [alertThreshold, setAlertThreshold] = useState<'moderate' | 'high' | 'extreme'>('high');
   const [forecastAlertsEnabled, setForecastAlertsEnabled] = useState<boolean>(true);
   const [dailySummaryEnabled, setDailySummaryEnabled] = useState<boolean>(false);
+  const [quietHours, setQuietHours] = useState<{ enabled: boolean; start: string; end: string }>(() => {
+    return profile.quiet_hours || { enabled: false, start: '22:00', end: '07:00' };
+  });
 
   // Gmail connection state
   const [gmailStatus, setGmailStatus] = useState<{
@@ -101,6 +104,7 @@ export default function SettingsPage() {
           if (p.alert_threshold) setAlertThreshold(p.alert_threshold);
           if (p.forecast_alerts_enabled !== undefined) setForecastAlertsEnabled(p.forecast_alerts_enabled);
           if (p.daily_summary_enabled !== undefined) setDailySummaryEnabled(p.daily_summary_enabled);
+          if (p.quiet_hours) setQuietHours(p.quiet_hours);
         }
       })
       .catch(() => {});
@@ -150,6 +154,7 @@ export default function SettingsPage() {
       alert_threshold: alertThreshold,
       forecast_alerts_enabled: forecastAlertsEnabled,
       daily_summary_enabled: dailySummaryEnabled,
+      quiet_hours: quietHours,
     };
 
     saveUserProfile(updatedProfile);
@@ -167,6 +172,7 @@ export default function SettingsPage() {
           alert_threshold: alertThreshold,
           forecast_alerts_enabled: forecastAlertsEnabled,
           daily_summary_enabled: dailySummaryEnabled,
+          quiet_hours: quietHours,
         }),
         credentials: 'include',
       });
@@ -433,6 +439,49 @@ export default function SettingsPage() {
                   aria-label="Daily summary"
                   className="w-4 h-4 rounded accent-emerald-500 cursor-pointer"
                 />
+              </div>
+
+              {/* Quiet Hours */}
+              <div className="p-3.5 bg-slate-950 border border-slate-800 rounded-lg space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="font-semibold text-slate-100 block">{t('quiet_hours', language)}</span>
+                    <span className="text-slate-500 text-[11px] block">
+                      Pause non-critical automated alerts during this window in your local timezone ({timezone}).
+                    </span>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={quietHours.enabled}
+                    onChange={(e) => setQuietHours(prev => ({ ...prev, enabled: e.target.checked }))}
+                    aria-label="Quiet hours"
+                    className="w-4 h-4 rounded accent-emerald-500 cursor-pointer"
+                  />
+                </div>
+                {quietHours.enabled && (
+                  <div className="flex items-center gap-4 pt-2 border-t border-slate-900">
+                    <div className="flex items-center gap-2">
+                      <span className="text-slate-400 text-[11px]">Start:</span>
+                      <input
+                        type="time"
+                        value={quietHours.start}
+                        onChange={(e) => setQuietHours(prev => ({ ...prev, start: e.target.value }))}
+                        className="bg-slate-900 text-slate-200 text-xs rounded border border-slate-700 px-2 py-1 font-mono focus:outline-none focus:border-emerald-500"
+                        aria-label="Quiet hours start"
+                      />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-slate-400 text-[11px]">End:</span>
+                      <input
+                        type="time"
+                        value={quietHours.end}
+                        onChange={(e) => setQuietHours(prev => ({ ...prev, end: e.target.value }))}
+                        className="bg-slate-900 text-slate-200 text-xs rounded border border-slate-700 px-2 py-1 font-mono focus:outline-none focus:border-emerald-500"
+                        aria-label="Quiet hours end"
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>

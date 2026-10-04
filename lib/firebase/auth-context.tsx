@@ -200,29 +200,34 @@ export function FirebaseAuthProvider({ children }: { children: ReactNode }) {
           setFirebaseUser(user);
           syncAppProfile(user);
 
-          try {
-            const token = await user.getIdToken(false /* retrieve existing or refreshed */);
-            setIdToken(token || null);
-            if (token) {
-              setSessionCookie(token);
-              // Authoritatively synchronize server session cookie before completing init
-              try {
-                await fetch('/api/auth/session', {
+          // Immediately declare authenticated — Firebase user is confirmed.
+          // This lets the dashboard render without waiting for the network round-trip.
+          setAuthStatus('AUTHENTICATED');
+          setLoading(false);
+
+          // Retrieve the token and fire-and-forget server session re-sync.
+          // signIn() already awaited this before navigating, so here it is only
+          // a background keepalive — it MUST NOT block UI state.
+          user.getIdToken(false /* use cached token if still valid */)
+            .then((token) => {
+              setIdToken(token || null);
+              if (token) {
+                setSessionCookie(token);
+                // Non-blocking server session refresh
+                fetch('/api/auth/session', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({ idToken: token }),
                   credentials: 'include',
+                }).catch((sessSyncErr) => {
+                  console.warn('[HeatShield] Server session sync warning (non-fatal):', sessSyncErr);
                 });
-              } catch (sessSyncErr) {
-                console.warn('[HeatShield] Server session sync warning (non-fatal):', sessSyncErr);
               }
-            }
-            saveUserProfile({ last_login_at: new Date().toISOString() } as any);
-          } catch {
-            setIdToken(null);
-          }
-          setAuthStatus('AUTHENTICATED');
-          setLoading(false);
+              saveUserProfile({ last_login_at: new Date().toISOString() } as any);
+            })
+            .catch(() => {
+              setIdToken(null);
+            });
         } else {
           // Firebase user not yet found in local memory — verify server session before declaring unauthenticated
           try {
@@ -531,19 +536,8 @@ export function FirebaseAuthProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    // 3. Check hs_session cookie — ONLY accept it if it looks like a real JWT (3 dot-separated parts)
-    if (typeof document !== 'undefined') {
-      const match = document.cookie.match(/(?:^|;\s*)hs_session=([^;]+)/);
-      if (match && match[1]) {
-        const val = decodeURIComponent(match[1]);
-        // A Firebase JWT always has exactly 3 base64url parts separated by dots
-        if (val && val.split('.').length === 3) return val;
-      }
-    }
-
-    // NOTE: We intentionally do NOT fall back to returning a bare UID here.
-    // A UID is not a token — sending it as a Bearer token will always return 401.
-    // If no valid JWT is available, the user must re-authenticate.
+    // 3. Note: hs_session cookie is httpOnly and automatically sent by the browser
+    // with credentials: 'include'. It is never directly accessible to JavaScript.
     return null;
   }, [firebaseUser]);
 

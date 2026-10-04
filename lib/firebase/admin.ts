@@ -45,9 +45,18 @@ async function getGooglePublicCerts(): Promise<Record<string, string> | null> {
     };
     return certs;
   } catch (err) {
-    console.warn('[HeatShield] Failed to fetch Google public certs for ID token verification:', err);
     return googleCertsCache?.certs || null;
   }
+}
+
+let testCerts: Record<string, string> = {};
+
+export function registerTestPublicCert(kid: string, certOrKey: string): void {
+  testCerts[kid] = certOrKey;
+}
+
+export function clearTestPublicCerts(): void {
+  testCerts = {};
 }
 
 function parseJwt(token: string): {
@@ -168,7 +177,7 @@ export async function verifyFirebaseToken(
   const jwt = parseJwt(token);
   if (jwt && jwt.header?.alg === 'RS256' && jwt.header?.kid) {
     const certs = await getGooglePublicCerts();
-    const cert = certs?.[jwt.header.kid];
+    const cert = certs?.[jwt.header.kid] || testCerts[jwt.header.kid];
     if (cert) {
       try {
         const verifier = crypto.createVerify('RSA-SHA256');
