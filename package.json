@@ -4,10 +4,10 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "node --max-old-space-size=4096 ./node_modules/next/dist/bin/next build",
     "start": "next start",
     "lint": "next lint",
-    "test": "npx tsx --test tests/ai-assistant.test.ts tests/cluster-detector.test.ts tests/community-map.test.ts tests/demo-hardening.test.ts tests/forecast-alert.test.ts tests/location-ux.test.ts tests/organization.test.ts tests/otp-communication.test.ts tests/realtime-broadcast.test.ts tests/realtime-hardening.test.ts tests/risk-engine.test.ts tests/risk-simulator.test.ts tests/security-hardening.test.ts tests/firebase-auth.test.ts tests/snapshot-consistency.test.ts tests/email-delivery-modes.test.ts tests/ml-validation.test.ts tests/xai-directional.test.ts tests/input-bounds-validation.test.ts tests/security-rls-schema.test.ts tests/hourly-heat-risk-dispatch.test.ts tests/auth-session-regression.test.ts tests/email-recipient-routing.test.ts tests/public-landing.test.ts"
+    "test": "npx tsx --test tests/ai-assistant.test.ts tests/cluster-detector.test.ts tests/community-map.test.ts tests/demo-hardening.test.ts tests/forecast-alert.test.ts tests/location-ux.test.ts tests/organization.test.ts tests/otp-communication.test.ts tests/realtime-broadcast.test.ts tests/realtime-hardening.test.ts tests/risk-engine.test.ts tests/risk-simulator.test.ts tests/security-hardening.test.ts tests/firebase-auth.test.ts tests/snapshot-consistency.test.ts tests/email-delivery-modes.test.ts tests/ml-validation.test.ts tests/xai-directional.test.ts tests/input-bounds-validation.test.ts tests/security-rls-schema.test.ts tests/hourly-heat-risk-dispatch.test.ts tests/auth-session-regression.test.ts tests/email-recipient-routing.test.ts tests/public-landing.test.ts tests/google-auth-hardening.test.ts"
 
   },
   "dependencies": {

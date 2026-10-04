@@ -14,6 +14,29 @@ import { saveUserProfile, getUserProfile } from '@/lib/store';
 
 export const dynamic = 'force-dynamic';
 
+function GoogleIcon({ className = 'w-5 h-5' }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        fill="#4285F4"
+        d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.66-5.17 3.66-9.17z"
+      />
+      <path
+        fill="#34A853"
+        d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.15C3.26 21.36 7.33 24 12 24z"
+      />
+      <path
+        fill="#FBBC05"
+        d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.25C.45 8.17 0 9.99 0 12s.45 3.83 1.25 5.42l4.03-3.15z"
+      />
+      <path
+        fill="#EA4335"
+        d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.33 0 3.26 2.64 1.25 6.58l4.03 3.15c.95-2.83 3.6-4.98 6.72-4.98z"
+      />
+    </svg>
+  );
+}
+
 function getSafeRedirectUrl(param: string | null, role?: string, onboarded: boolean = true): string {
   // Validate redirect param: must start with single '/' and not contain protocol, '//', or backslash
   if (param && param.startsWith('/') && !param.startsWith('//') && !param.includes(':') && !param.includes('\\')) {
@@ -32,8 +55,17 @@ function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const { signIn, signUp, sendPasswordReset, isAuthenticated, loading: authLoading, actionLoading } = useAuth();
+  const {
+    signIn,
+    signUp,
+    signInWithGoogle,
+    sendPasswordReset,
+    isAuthenticated,
+    loading: authLoading,
+    actionLoading,
+  } = useAuth();
 
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [authMode, setAuthMode] = useState<'signin' | 'signup' | 'reset'>('signin');
   const [authMethod, setAuthMethod] = useState<'email' | 'phone'>('email');
 
@@ -124,6 +156,31 @@ function LoginContent() {
       performRedirect();
     }
     setLoading(false);
+  };
+
+  // ── Google Sign-In Handler (Firebase Auth Identity) ────────────────────────
+  const handleGoogleSignIn = async () => {
+    setGoogleLoading(true);
+    setErrorMsg(null);
+    setSuccessMsg(null);
+
+    try {
+      const result = await signInWithGoogle();
+      if (!result.success) {
+        isRedirectingRef.current = false;
+        setErrorMsg(result.error || 'Google sign-in was not completed.');
+        setGoogleLoading(false);
+        return;
+      }
+
+      setSuccessMsg('Google sign-in successful! Entering dashboard...');
+      performRedirect();
+    } catch (err: any) {
+      isRedirectingRef.current = false;
+      setErrorMsg(err?.message || 'Unexpected error during Google sign-in.');
+    } finally {
+      setGoogleLoading(false);
+    }
   };
 
   // ── Supabase Fallback Email Auth (when Firebase not configured) ──────────
@@ -280,7 +337,7 @@ function LoginContent() {
 
   // ── Determine which auth handler to use ───────────────────────────────────
   const handleEmailAuth = isFirebaseConfigured ? handleFirebaseAuth : handleSupabaseAuth;
-  const isWorking = loading || actionLoading;
+  const isWorking = loading || actionLoading || googleLoading;
 
   if (authLoading) {
     return (
@@ -322,6 +379,33 @@ function LoginContent() {
             <UserPlus className="w-4 h-4 inline mr-1.5 -mt-0.5" />Sign Up
           </button>
         </div>
+
+        {/* Google Sign-In Button (Firebase Auth Identity) */}
+        {authMode !== 'reset' && (
+          <div className="mb-6">
+            <button
+              type="button"
+              onClick={handleGoogleSignIn}
+              disabled={isWorking}
+              className="w-full flex items-center justify-center gap-3 py-2.5 px-4 bg-white hover:bg-slate-100 disabled:bg-slate-200 text-slate-900 font-semibold text-sm rounded-xl transition shadow-md border border-slate-300 disabled:opacity-60 active:scale-[0.99]"
+            >
+              {googleLoading ? (
+                <Loader2 className="w-4 h-4 animate-spin text-slate-700" />
+              ) : (
+                <GoogleIcon className="w-5 h-5 shrink-0" />
+              )}
+              <span>{authMode === 'signup' ? 'Sign up with Google' : 'Continue with Google'}</span>
+            </button>
+
+            <div className="relative flex items-center justify-center mt-5 mb-1">
+              <div className="border-t border-slate-800 w-full" />
+              <span className="bg-slate-900 px-3 text-[11px] text-slate-400 font-mono uppercase tracking-wider shrink-0">
+                or continue with
+              </span>
+              <div className="border-t border-slate-800 w-full" />
+            </div>
+          </div>
+        )}
 
         {/* Auth Method Toggle */}
         <div className="flex gap-2 mb-6">

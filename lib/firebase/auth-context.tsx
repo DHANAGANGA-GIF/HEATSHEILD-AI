@@ -31,8 +31,11 @@ import {
   setPersistence,
   AuthError,
   updateProfile,
+  signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
 } from 'firebase/auth';
-import { firebaseAuth, isFirebaseConfigured } from './client';
+import { firebaseAuth, isFirebaseConfigured, getGoogleAuthProvider } from './client';
 import { getUserProfile, saveUserProfile, clearUserProfile, setSessionCookie, clearSessionCookie, DEFAULT_USER_PROFILE } from '@/lib/store';
 import { writeUserProfile } from './firestore';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
@@ -68,6 +71,8 @@ export interface AuthState {
 export interface AuthActions {
   signIn: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   signUp: (email: string, password: string, displayName?: string) => Promise<{ success: boolean; error?: string }>;
+  signInWithGoogle: () => Promise<{ success: boolean; error?: string }>;
+  checkRedirectResult: () => Promise<{ success: boolean; error?: string }>;
   signOut: () => Promise<void>;
   sendPasswordReset: (email: string) => Promise<{ success: boolean; error?: string }>;
   sendVerificationEmail: () => Promise<{ success: boolean; error?: string }>;
@@ -82,6 +87,20 @@ const AuthContext = createContext<(AuthState & AuthActions) | null>(null);
 function normalizeAuthError(err: AuthError | Error | unknown): string {
   const code = (err as AuthError)?.code || '';
   switch (code) {
+    case 'auth/popup-closed-by-user':
+      return 'Google sign-in was cancelled before completion.';
+    case 'auth/popup-blocked':
+      return 'Sign-in popup was blocked by your browser. Please allow popups for this site or try again.';
+    case 'auth/cancelled-popup-request':
+      return 'Sign-in request was cancelled. Please try again.';
+    case 'auth/account-exists-with-different-credential':
+      return 'An account already exists with this email using a different sign-in method. Please sign in with email and password.';
+    case 'auth/unauthorized-domain':
+      return 'This domain is not authorized for Google sign-in. Please ensure heatshield-ai-kare.vercel.app is added to Firebase Authorized Domains.';
+    case 'auth/operation-not-allowed':
+      return 'Google sign-in is not enabled in Firebase Console. Please enable Google provider in Authentication settings.';
+    case 'auth/credential-already-in-use':
+      return 'This Google account credential is already linked to another user account.';
     case 'auth/invalid-credential':
     case 'auth/wrong-password':
     case 'auth/user-not-found':
@@ -192,6 +211,33 @@ export function FirebaseAuthProvider({ children }: { children: ReactNode }) {
 
     // Set persistence to LOCAL (survives browser restarts)
     setPersistence(firebaseAuth, browserLocalPersistence).catch(() => {});
+
+    // Check for incoming redirect sign-in result (mobile / popup-blocked fallback)
+    getRedirectResult(firebaseAuth)
+      .then(async (result) => {
+        if (result?.user) {
+          const user = result.user;
+          const token = await user.getIdToken(true).catch(() => null);
+          if (token) {
+            await fetch('/api/auth/session', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ idToken: token }),
+              credentials: 'include',
+            }).catch(() => {});
+            setFirebaseUser(user);
+            setIdToken(token);
+            setSessionCookie(token);
+            syncAppProfile(user);
+            saveUserProfile({ last_login_at: new Date().toISOString() } as any);
+            setAuthStatus('AUTHENTICATED');
+            setLoading(false);
+          }
+        }
+      })
+      .catch((err) => {
+        console.warn('[HeatShield] getRedirectResult on mount check:', err);
+      });
 
     const unsubscribe = onAuthStateChanged(
       firebaseAuth,
@@ -442,6 +488,130 @@ export function FirebaseAuthProvider({ children }: { children: ReactNode }) {
     }
   }, [syncAppProfile]);
 
+  const checkRedirectResult = useCallback(async (): Promise<{ success: boolean; error?: string }> => {
+    if (!isFirebaseConfigured || !firebaseAuth) {
+      return { success: false };
+    }
+    try {
+      const result = await getRedirectResult(firebaseAuth);
+      if (result?.user) {
+        const user = result.user;
+        const token = await user.getIdToken(true);
+        if (token) {
+          const sessionRes = await fetch('/api/auth/session', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ idToken: token }),
+            credentials: 'include',
+          });
+          const rawBodyText = await sessionRes.text().catch(() => '');
+          let sessionData: any = null;
+          try {
+            sessionData = JSON.parse(rawBodyText);
+          } catch {}
+
+          if (!sessionRes.ok || !sessionData?.authenticated) {
+            throw new Error(sessionData?.error || 'Server session rejected redirect login.');
+          }
+
+          setFirebaseUser(user);
+          setIdToken(token);
+          setSessionCookie(token);
+          syncAppProfile(user);
+          saveUserProfile({ last_login_at: new Date().toISOString() } as any);
+          setAuthStatus('AUTHENTICATED');
+          setLoading(false);
+          return { success: true };
+        }
+      }
+      return { success: false };
+    } catch (err) {
+      const msg = normalizeAuthError(err);
+      console.warn('[HeatShield] checkRedirectResult error:', msg);
+      setError(msg);
+      return { success: false, error: msg };
+    }
+  }, [syncAppProfile]);
+
+  const signInWithGoogle = useCallback(async (): Promise<{ success: boolean; error?: string }> => {
+    if (!isFirebaseConfigured || !firebaseAuth) {
+      return { success: false, error: 'Firebase Authentication is not configured.' };
+    }
+    setActionLoading(true);
+    setError(null);
+    try {
+      // 1. Ensure local persistence
+      await setPersistence(firebaseAuth, browserLocalPersistence).catch(() => {});
+
+      const provider = getGoogleAuthProvider();
+
+      // 2. Attempt popup sign-in
+      let user: User;
+      try {
+        const result = await signInWithPopup(firebaseAuth, provider);
+        user = result.user;
+      } catch (popupErr: any) {
+        // If popup was blocked by browser or environment, fall back to redirect
+        if (popupErr?.code === 'auth/popup-blocked') {
+          console.warn('[HeatShield] Popup blocked by browser; falling back to signInWithRedirect');
+          await signInWithRedirect(firebaseAuth, provider);
+          return { success: true }; // Redirect in progress
+        }
+        throw popupErr;
+      }
+
+      // 3. Force fresh ID token
+      let token: string | null = null;
+      try {
+        token = await user.getIdToken(true);
+      } catch (tokenErr: any) {
+        console.warn('[HeatShield] getIdToken error during signInWithGoogle:', tokenErr?.message);
+        token = null;
+      }
+      if (!token) {
+        throw new Error('Failed to retrieve authentication token from Google sign-in.');
+      }
+
+      // 4. Authoritative server session synchronization before navigating to dashboard
+      const sessionRes = await fetch('/api/auth/session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idToken: token }),
+        credentials: 'include',
+      });
+
+      const rawBodyText = await sessionRes.text().catch(() => '');
+      let sessionData: any = null;
+      try {
+        sessionData = JSON.parse(rawBodyText);
+      } catch {}
+
+      if (!sessionRes.ok || !sessionData?.authenticated) {
+        const errorMsg = sessionData?.error || `Server session establishment failed (${sessionRes.status}).`;
+        console.error('[HeatShield] signInWithGoogle: server session rejected:', errorMsg);
+        throw new Error(errorMsg);
+      }
+
+      // 5. Synchronize client auth state
+      setFirebaseUser(user);
+      setIdToken(token);
+      setSessionCookie(token);
+      syncAppProfile(user);
+      saveUserProfile({ last_login_at: new Date().toISOString() } as any);
+      setAuthStatus('AUTHENTICATED');
+      setLoading(false);
+
+      return { success: true };
+    } catch (err) {
+      const msg = normalizeAuthError(err);
+      console.error('[HeatShield] signInWithGoogle failed:', msg);
+      setError(msg);
+      return { success: false, error: msg };
+    } finally {
+      setActionLoading(false);
+    }
+  }, [syncAppProfile]);
+
   const signOut = useCallback(async (): Promise<void> => {
     setActionLoading(true);
     setError(null);
@@ -559,6 +729,8 @@ export function FirebaseAuthProvider({ children }: { children: ReactNode }) {
     authStatus,
     signIn,
     signUp,
+    signInWithGoogle,
+    checkRedirectResult,
     signOut,
     sendPasswordReset,
     sendVerificationEmail,
