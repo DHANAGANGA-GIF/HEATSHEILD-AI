@@ -138,7 +138,7 @@ export default function TimelinePage() {
       <Navbar onToggleMobileSidebar={() => setMobileSidebarOpen(!mobileSidebarOpen)} />
 
       <div className="flex-1 flex">
-        <Sidebar mobileOpen={mobileSidebarOpen} onCloseMobile={() => setMobileSidebarOpen(false)} />
+        <Sidebar mobileOpen={mobileSidebarOpen} onCloseMobile={() => setMobileSidebarOpen(false)} lang={userLang} />
 
         <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full space-y-6">
 
@@ -147,7 +147,7 @@ export default function TimelinePage() {
             <div>
               <div className="flex items-center gap-2.5">
                 <Clock className="w-5 h-5 text-emerald-400" />
-                <h1 className="text-xl font-bold text-slate-100">HEAT RISK FORECAST TIMELINE</h1>
+                <h1 className="text-xl font-bold text-slate-100 uppercase">{t('forecast_timeline', userLang)}</h1>
               </div>
               <div className="flex items-center gap-2 mt-0.5 text-xs text-slate-400 font-mono">
                 <MapPin className="w-3.5 h-3.5 text-slate-500" />

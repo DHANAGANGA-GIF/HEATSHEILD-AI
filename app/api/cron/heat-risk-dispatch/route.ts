@@ -489,6 +489,8 @@ async function executeHourlyDispatch(request: Request) {
         riskCalculatedAt: riskAssessment.timestamp,
         contributingFactors,
         modelVersion: riskAssessment.model_version,
+        language: (subscriber.preferred_language as 'en' | 'te' | 'ta' | 'hi') || 'en',
+        timezone: subscriber.timezone,
       });
 
       // 11. Record Result in Database (Enforcing Idempotency via dispatch_key)

@@ -7,7 +7,8 @@ import { AiAssistant } from '@/components/AiAssistant';
 import { fetchWeatherData } from '@/lib/weather-api';
 import { evaluateHeatRisk } from '@/lib/risk-engine';
 import { getUserProfile } from '@/lib/store';
-import { RiskAssessment, TechMode, WeatherData } from '@/lib/types';
+import { Language, RiskAssessment, TechMode, WeatherData } from '@/lib/types';
+import { t } from '@/lib/i18n';
 import { MessageSquare } from 'lucide-react';
 
 export default function AssistantPage() {
@@ -16,6 +17,7 @@ export default function AssistantPage() {
   const [weather, setWeather] = useState<WeatherData | null>(null);
   const [risk, setRisk] = useState<RiskAssessment | null>(null);
   const [loading, setLoading] = useState(true);
+  const [lang, setLang] = useState<Language>(() => getUserProfile().language || 'en');
 
   const loadData = () => {
     setLoading(true);
@@ -48,7 +50,7 @@ export default function AssistantPage() {
       />
 
       <div className="flex-1 flex">
-        <Sidebar mobileOpen={mobileSidebarOpen} onCloseMobile={() => setMobileSidebarOpen(false)} />
+        <Sidebar mobileOpen={mobileSidebarOpen} onCloseMobile={() => setMobileSidebarOpen(false)} lang={lang} />
 
         <main className="flex-1 p-4 sm:p-6 max-w-5xl mx-auto w-full flex flex-col h-[calc(100vh-4rem)]">
           {/* Header */}
@@ -56,7 +58,7 @@ export default function AssistantPage() {
             <div className="flex items-center gap-2.5">
               <MessageSquare className="w-5 h-5 text-emerald-500" />
               <div>
-                <h1 className="text-base font-bold text-slate-100">HEATSHIELD AI SAFETY ASSISTANT</h1>
+                <h1 className="text-base font-bold text-slate-100 uppercase">{t('assistant', lang)}</h1>
                 <p className="text-xs text-slate-400 font-mono">
                   Contextual Risk Explanation & Preventive Safety Guidance ({techMode.toUpperCase()} MODE)
                 </p>
@@ -80,11 +82,11 @@ export default function AssistantPage() {
               <div className="h-full bg-slate-900 rounded-xl border border-slate-800 flex flex-col items-center justify-center gap-3 text-center p-8">
                 <p className="text-sm font-semibold text-slate-200">We couldn&apos;t retrieve current weather data.</p>
                 <p className="text-xs text-slate-400 max-w-xs">The assistant can still answer general heat safety questions. Contextual risk information will be unavailable.</p>
-                <button onClick={loadData} className="mt-1 px-4 py-2 text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition">Try Again</button>
-                <AiAssistant weather={null} risk={null} mode={techMode} onModeChange={setTechMode} />
+                <button onClick={loadData} className="mt-1 px-4 py-2 text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition">{t('try_again', lang)}</button>
+                <AiAssistant weather={null} risk={null} mode={techMode} onModeChange={setTechMode} lang={lang} />
               </div>
             ) : (
-              <AiAssistant weather={weather} risk={risk} mode={techMode} onModeChange={setTechMode} />
+              <AiAssistant weather={weather} risk={risk} mode={techMode} onModeChange={setTechMode} lang={lang} />
             )}
           </div>
         </main>

@@ -5,6 +5,9 @@ import {
   MapPin, Cloud, Cpu, TrendingUp, Bell, MessageSquare, ShieldCheck,
 } from 'lucide-react';
 
+import { Language } from '@/lib/types';
+import { t } from '@/lib/i18n';
+
 export type SystemStatusValue =
   | 'LIVE'
   | 'CACHED'
@@ -33,6 +36,7 @@ interface SystemStatusPanelProps {
   alertsStatus: SystemStatusValue;     // ACTIVE | DISABLED | UNAVAILABLE
   aiStatus: SystemStatusValue;         // READY | UNAVAILABLE
   authStatus?: SystemStatusValue;      // AUTHENTICATED | SIGNED OUT
+  lang?: Language;
   className?: string;
 }
 
@@ -96,16 +100,17 @@ export const SystemStatusPanel: React.FC<SystemStatusPanelProps> = ({
   alertsStatus,
   aiStatus,
   authStatus = 'AUTHENTICATED',
+  lang = 'en',
   className = '',
 }) => {
   const items: StatusItem[] = [
-    { label: 'LOCATION',     value: locationStatus, icon: <MapPin className="w-3.5 h-3.5" /> },
-    { label: 'WEATHER',      value: weatherStatus,  icon: <Cloud className="w-3.5 h-3.5" /> },
-    { label: 'RISK ENGINE',  value: 'READY',        icon: <Cpu className="w-3.5 h-3.5" /> },
-    { label: 'FORECAST',     value: forecastStatus, icon: <TrendingUp className="w-3.5 h-3.5" /> },
-    { label: 'ALERTS',       value: alertsStatus,   icon: <Bell className="w-3.5 h-3.5" /> },
-    { label: 'AI ASSISTANT', value: aiStatus,       icon: <MessageSquare className="w-3.5 h-3.5" /> },
-    { label: 'AUTH',         value: authStatus,     icon: <ShieldCheck className="w-3.5 h-3.5" /> },
+    { label: t('location', lang).toUpperCase(),     value: locationStatus, icon: <MapPin className="w-3.5 h-3.5" /> },
+    { label: t('temperature', lang).toUpperCase(),  value: weatherStatus,  icon: <Cloud className="w-3.5 h-3.5" /> },
+    { label: 'RISK ENGINE',                         value: 'READY',        icon: <Cpu className="w-3.5 h-3.5" /> },
+    { label: t('forecast_timeline', lang).toUpperCase(), value: forecastStatus, icon: <TrendingUp className="w-3.5 h-3.5" /> },
+    { label: t('alerts', lang).toUpperCase(),       value: alertsStatus,   icon: <Bell className="w-3.5 h-3.5" /> },
+    { label: t('assistant', lang).toUpperCase(),    value: aiStatus,       icon: <MessageSquare className="w-3.5 h-3.5" /> },
+    { label: t('authenticated', lang).toUpperCase(), value: authStatus,    icon: <ShieldCheck className="w-3.5 h-3.5" /> },
   ];
 
   return (
@@ -119,7 +124,7 @@ export const SystemStatusPanel: React.FC<SystemStatusPanelProps> = ({
           <div key={item.label} className="flex flex-col gap-1.5">
             <div className="flex items-center gap-1 text-slate-500">
               {item.icon}
-              <span className="text-[10px] font-mono font-semibold uppercase tracking-wide">{item.label}</span>
+              <span className="text-[10px] font-mono font-semibold uppercase tracking-wide truncate">{item.label}</span>
             </div>
             <StatusBadge value={item.value} />
           </div>

@@ -222,6 +222,7 @@ export default function DashboardPage() {
             alertsStatus={alertsSysStatus}
             aiStatus={aiSysStatus}
             authStatus={authStatus}
+            lang={lang}
           />
 
           {/* Embedded AI Assistant (toggleable) */}
@@ -232,6 +233,7 @@ export default function DashboardPage() {
                 risk={risk}
                 mode={techMode}
                 onModeChange={setTechMode}
+                lang={lang}
               />
             </div>
           )}

@@ -9,7 +9,8 @@ import { Sidebar } from '@/components/Sidebar';
 import { fetchWeatherData } from '@/lib/weather-api';
 import { evaluateHeatRisk } from '@/lib/risk-engine';
 import { getUserProfile } from '@/lib/store';
-import { RiskAssessment, WeatherData } from '@/lib/types';
+import { Language, RiskAssessment, WeatherData } from '@/lib/types';
+import { t } from '@/lib/i18n';
 import Link from 'next/link';
 import { Flame, ShieldCheck, Info, BarChart, ArrowRight, BookOpen, FileCheck } from 'lucide-react';
 
@@ -17,6 +18,7 @@ export default function RiskPage() {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [weather, setWeather] = useState<WeatherData | null>(null);
   const [risk, setRisk] = useState<RiskAssessment | null>(null);
+  const [lang, setLang] = useState<Language>(() => getUserProfile().language || 'en');
 
   useEffect(() => {
     const p = getUserProfile();
@@ -37,7 +39,7 @@ export default function RiskPage() {
       <Navbar onToggleMobileSidebar={() => setMobileSidebarOpen(!mobileSidebarOpen)} />
 
       <div className="flex-1 flex">
-        <Sidebar mobileOpen={mobileSidebarOpen} onCloseMobile={() => setMobileSidebarOpen(false)} />
+        <Sidebar mobileOpen={mobileSidebarOpen} onCloseMobile={() => setMobileSidebarOpen(false)} lang={lang} />
 
         <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-5xl mx-auto w-full space-y-6">
           <div className="bg-slate-900 p-6 rounded-xl border border-slate-800 shadow-xs">

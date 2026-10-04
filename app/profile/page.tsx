@@ -11,8 +11,10 @@ import { UserProfile, EmailFrequency } from '@/lib/types';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import {
   User, Save, CheckCircle, ShieldCheck, Key, Lock, Bell, MapPin,
-  LogOut, ExternalLink, Smartphone, Mail, KeyRound, Loader2, CheckCircle2, AlertCircle, Flame
+  LogOut, ExternalLink, Smartphone, Mail, KeyRound, Loader2, CheckCircle2, AlertCircle, Flame, Globe
 } from 'lucide-react';
+import { Language } from '@/lib/types';
+import { SUPPORTED_LANGUAGES } from '@/lib/i18n';
 import Link from 'next/link';
 import { useAuth } from '@/lib/firebase/auth-context';
 import { authenticatedFetch } from '@/lib/api-client';
@@ -127,6 +129,7 @@ export default function ProfilePage() {
         .update({
           hourly_heat_alerts_enabled: Boolean(profile.hourly_heat_alerts_enabled),
           full_name: profile.name,
+          preferred_language: updated.language || 'en',
         })
         .eq('id', profile.id || profile.firebase_uid);
     }
@@ -574,6 +577,31 @@ export default function ProfilePage() {
                   <option value="limited">Limited Cooling</option>
                   <option value="prefer_not_to_say">Prefer not to say</option>
                 </select>
+              </div>
+
+              {/* Language Preference */}
+              <div>
+                <label className="block text-xs font-bold font-mono text-slate-300 uppercase mb-1 flex items-center gap-1.5">
+                  <Globe className="w-3.5 h-3.5 text-emerald-400" />
+                  Interface Language / அறிவிப்பு மொழி
+                </label>
+                <select
+                  value={profile.language || profile.preferred_language || 'en'}
+                  onChange={(e) => {
+                    const lang = e.target.value as Language;
+                    const updated = { ...profile, language: lang, preferred_language: lang };
+                    setProfile(updated);
+                    saveUserProfile(updated);
+                  }}
+                  className="w-full bg-slate-950 text-white text-xs rounded-xl border border-slate-800 px-3 py-2.5 focus:outline-none focus:border-emerald-500"
+                >
+                  {SUPPORTED_LANGUAGES.map((l) => (
+                    <option key={l.code} value={l.code}>
+                      {l.flag} {l.nativeName} ({l.name})
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[11px] text-slate-500 mt-1">Dashboard interface and email alerts will be delivered in this language.</p>
               </div>
             </div>
 

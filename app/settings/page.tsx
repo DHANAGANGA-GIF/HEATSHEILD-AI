@@ -123,7 +123,7 @@ export default function SettingsPage() {
 
   const handleLanguageSelect = (newLang: Language) => {
     setLanguage(newLang);
-    const updated = { ...profile, language: newLang };
+    const updated = { ...profile, language: newLang, preferred_language: newLang };
     setProfile(updated);
     saveUserProfile(updated);
 
@@ -131,7 +131,7 @@ export default function SettingsPage() {
     fetch('/api/user/profile', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ language: newLang }),
+      body: JSON.stringify({ language: newLang, preferred_language: newLang }),
       credentials: 'include',
     }).catch(() => {});
   };
@@ -143,6 +143,7 @@ export default function SettingsPage() {
     const updatedProfile: UserProfile = {
       ...profile,
       language,
+      preferred_language: language,
       hourly_heat_alerts_enabled: emailAlertsEnabled,
       email_alerts_enabled: emailAlertsEnabled,
       timezone,
@@ -160,6 +161,7 @@ export default function SettingsPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           language,
+          preferred_language: language,
           timezone,
           email_alerts_enabled: emailAlertsEnabled,
           alert_threshold: alertThreshold,
@@ -250,7 +252,7 @@ export default function SettingsPage() {
       <Navbar onToggleMobileSidebar={() => setMobileSidebarOpen(!mobileSidebarOpen)} />
 
       <div className="flex-1 flex">
-        <Sidebar mobileOpen={mobileSidebarOpen} onCloseMobile={() => setMobileSidebarOpen(false)} />
+        <Sidebar mobileOpen={mobileSidebarOpen} onCloseMobile={() => setMobileSidebarOpen(false)} lang={language} />
 
         <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-4xl mx-auto w-full space-y-6">
           {/* Header */}

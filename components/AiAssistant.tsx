@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { AssistantMessage, generateAssistantResponse, SUGGESTED_QUESTIONS } from '@/lib/ai-assistant';
-import { RiskAssessment, TechMode, WeatherData } from '@/lib/types';
+import { Language, RiskAssessment, TechMode, WeatherData } from '@/lib/types';
+import { t } from '@/lib/i18n';
 import { MessageSquare, Send, ShieldAlert, Sparkles, RefreshCw, AlertCircle } from 'lucide-react';
 
 interface AiAssistantProps {
@@ -10,6 +11,7 @@ interface AiAssistantProps {
   risk?: RiskAssessment | null;
   mode?: TechMode;
   onModeChange?: (mode: TechMode) => void;
+  lang?: Language;
   className?: string;
 }
 
@@ -18,6 +20,7 @@ export function AiAssistant({
   risk,
   mode: externalMode,
   onModeChange,
+  lang = 'en',
   className = '',
 }: AiAssistantProps) {
   const [internalMode, setInternalMode] = useState<TechMode>('technical');
@@ -162,7 +165,7 @@ Welcome to HeatShield AI. Environmental data is loading or unavailable. Ask gene
                 activeMode === 'simple' ? 'bg-slate-700 text-white shadow-2xs font-semibold' : 'text-slate-400 hover:text-slate-200'
               }`}
             >
-              Simple
+              {t('simple', lang)}
             </button>
             <button
               onClick={() => handleToggleMode('technical')}
@@ -170,7 +173,7 @@ Welcome to HeatShield AI. Environmental data is loading or unavailable. Ask gene
                 activeMode === 'technical' ? 'bg-slate-700 text-white shadow-2xs font-semibold' : 'text-slate-400 hover:text-slate-200'
               }`}
             >
-              Technical
+              {t('technical', lang)}
             </button>
           </div>
         </div>

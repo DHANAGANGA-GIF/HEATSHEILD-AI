@@ -18,6 +18,7 @@ import {
   TrendingUp, TrendingDown, Thermometer, Droplets, Wind,
   BarChart2, RefreshCw, MapPin, AlertTriangle, Activity, Flame
 } from 'lucide-react';
+import { t } from '@/lib/i18n';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -185,7 +186,7 @@ export default function AnalyticsPage() {
       <Navbar onToggleMobileSidebar={() => setMobileSidebarOpen(!mobileSidebarOpen)} />
 
       <div className="flex-1 flex">
-        <Sidebar mobileOpen={mobileSidebarOpen} onCloseMobile={() => setMobileSidebarOpen(false)} />
+        <Sidebar mobileOpen={mobileSidebarOpen} onCloseMobile={() => setMobileSidebarOpen(false)} lang={userLang} />
 
         <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full space-y-6">
           {/* Header */}
@@ -193,7 +194,7 @@ export default function AnalyticsPage() {
             <div>
               <div className="flex items-center gap-2.5">
                 <BarChart2 className="w-5 h-5 text-emerald-400" />
-                <h1 className="text-xl font-bold text-slate-100">HEAT RISK ANALYTICS</h1>
+                <h1 className="text-xl font-bold text-slate-100 uppercase">{t('analytics', userLang)}</h1>
               </div>
               <div className="flex items-center gap-2 mt-0.5 text-xs text-slate-400 font-mono">
                 <MapPin className="w-3.5 h-3.5 text-slate-500" />

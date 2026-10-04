@@ -150,13 +150,14 @@ export default function AlertsPage() {
   const activeAlerts = alerts.filter(a => !a.dismissed && (selectedCategory === 'All' || a.rule_id.toLowerCase().includes(selectedCategory.toLowerCase())));
   const dismissedAlerts = alerts.filter(a => a.dismissed);
   const unreadCount = activeAlerts.filter(a => !a.read).length;
+  const userLang = getUserProfile().language || 'en';
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 font-sans flex flex-col">
       <Navbar onToggleMobileSidebar={() => setMobileSidebarOpen(!mobileSidebarOpen)} />
 
       <div className="flex-1 flex">
-        <Sidebar mobileOpen={mobileSidebarOpen} onCloseMobile={() => setMobileSidebarOpen(false)} />
+        <Sidebar mobileOpen={mobileSidebarOpen} onCloseMobile={() => setMobileSidebarOpen(false)} lang={userLang} />
 
         <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-4xl mx-auto w-full space-y-6">
 
