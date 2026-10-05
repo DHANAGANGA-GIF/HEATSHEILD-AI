@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { verifyAdminRequest } from '@/lib/admin-auth';
-import { sendAlertEmail, getEmailProvider } from '@/lib/email-service';
+import { sendAlertEmail } from '@/lib/email-service';
 import { getStoredSenderEmail, getStoredOAuthAccountEmail } from '@/lib/email-providers/token-store';
+import { SmartAlert } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,22 +29,50 @@ export async function POST(request: Request) {
       );
     }
 
-    const senderEmail = process.env.GMAIL_SENDER_EMAIL || getStoredSenderEmail() || getStoredOAuthAccountEmail() || 'system@heatshield.ai';
+    const senderEmail =
+      process.env.GMAIL_SENDER_EMAIL ||
+      getStoredSenderEmail() ||
+      getStoredOAuthAccountEmail() ||
+      'system@heatshield.ai';
+
+    const testAlert: SmartAlert = {
+      id: `admin_test_${Date.now()}`,
+      rule_id: 'FORECAST_HIGH',
+      priority: 'CAUTION',
+      title: '[HeatShield Admin] System Sender Diagnostic Test',
+      message:
+        'This is an automated system sender test generated from the HeatShield AI Admin Console. If you received this email, the transactional email delivery pipeline is operational.',
+      affected_period: new Date().toISOString(),
+      affected_period_label: 'Now',
+      trigger_data: {
+        temperature: 31.0,
+        apparent_temperature: 34.5,
+        humidity: 65,
+        wind_speed: 12,
+        risk_score: 50,
+        risk_level: 'MODERATE',
+      },
+      recommended_action: 'No action required — this is a diagnostic test.',
+      source_status: 'LIVE',
+      timestamp: new Date().toISOString(),
+      dismissed: false,
+      read: false,
+      dedup_key: `admin_test_${Date.now()}`,
+      location_name: 'Admin System Diagnostic Console',
+      precautions: [
+        'System sender test alert successfully generated.',
+        'Transactional email delivery pipeline is verified.',
+        'Recipient preferences and localized templates operate correctly.',
+      ],
+      medical_disclaimer:
+        'HeatShield AI is an environmental safety decision-support platform. It does not provide medical diagnoses.',
+    };
 
     const result = await sendAlertEmail({
       to: adminEmail,
-      subject: '[HeatShield Admin] System Sender Diagnostic Test',
-      riskLevel: 'MODERATE',
-      apparentTemp: 34.5,
-      temperature: 31.0,
-      humidity: 65,
+      alert: testAlert,
       locationName: 'Admin System Diagnostic Console',
       language: 'en',
-      precautions: [
-        'System sender test alert successfully generated.',
-        'Gmail API transactional delivery pipeline is verified.',
-        'Recipient preferences and localized templates operate correctly.',
-      ],
     });
 
     if (result.success) {
