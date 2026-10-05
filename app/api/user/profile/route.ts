@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server';
 import { resolveAuthSession } from '@/lib/firebase/admin';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import { Language, UserProfile } from '@/lib/types';
-import { getGmailRefreshToken, getStoredOAuthAccountEmail } from '@/lib/email-providers/token-store';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,10 +22,6 @@ export async function GET(request: Request) {
     const email = session.email || '';
     const name = session.name || '';
 
-    // Check Gmail connection state
-    const gmailToken = await getGmailRefreshToken();
-    const isGmailConnected = Boolean(gmailToken && gmailToken.length > 10);
-
     let profileData: Partial<UserProfile> = {
       id: uid,
       firebase_uid: uid,
@@ -39,7 +34,6 @@ export async function GET(request: Request) {
       forecast_alerts_enabled: true,
       daily_summary_enabled: false,
       quiet_hours: { enabled: false, start: '22:00', end: '07:00' },
-      gmail_connected: isGmailConnected,
     };
 
     if (isSupabaseConfigured && supabase) {

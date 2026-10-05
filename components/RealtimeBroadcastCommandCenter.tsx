@@ -345,17 +345,10 @@ export const RealtimeBroadcastCommandCenter: React.FC = () => {
           <div className="p-2 bg-slate-900/80 rounded-xl border border-slate-800 text-[11px] font-mono text-slate-400 flex flex-wrap items-center justify-between gap-2">
             <span>
               Provider: <strong className="text-white uppercase">{emailServiceStatus.provider || 'EMAIL'}</strong> —{' '}
-              {emailServiceStatus.message}
-              {emailServiceStatus.reason ? ` (${emailServiceStatus.reason})` : ''}
+              {emailServiceStatus.ready
+                ? (emailServiceStatus.message || 'Operational')
+                : 'Email notifications are temporarily unavailable.'}
             </span>
-            {emailServiceStatus.provider === 'gmail' && !emailServiceStatus.oauthConnected && (
-              <a
-                href="/api/email/google/connect"
-                className="text-emerald-400 hover:underline font-bold"
-              >
-                Connect Gmail OAuth &rarr;
-              </a>
-            )}
           </div>
         )}
 

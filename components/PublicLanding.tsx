@@ -1241,7 +1241,7 @@ export default function PublicLanding() {
               <ul className="space-y-3 text-sm text-slate-300">
                 <li className="flex items-start gap-2.5">
                   <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" aria-hidden="true" />
-                  <span><strong>Email alerts:</strong> Available now for registered users via Gmail OAuth connection.</span>
+                  <span><strong>Email alerts:</strong> Available now for registered users via HeatShield notification service.</span>
                 </li>
                 <li className="flex items-start gap-2.5">
                   <Info className="w-4 h-4 text-slate-500 shrink-0 mt-0.5" aria-hidden="true" />

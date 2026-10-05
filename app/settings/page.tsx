@@ -51,17 +51,6 @@ export default function SettingsPage() {
     return profile.quiet_hours || { enabled: false, start: '22:00', end: '07:00' };
   });
 
-  // Gmail connection state
-  const [gmailStatus, setGmailStatus] = useState<{
-    connected: boolean;
-    email: string | null;
-    loading: boolean;
-  }>({
-    connected: false,
-    email: null,
-    loading: true,
-  });
-
   // Test Email state
   const [testEmailLoading, setTestEmailLoading] = useState(false);
   const [testEmailFeedback, setTestEmailFeedback] = useState<{
@@ -78,21 +67,7 @@ export default function SettingsPage() {
 
   // Fetch initial server status
   useEffect(() => {
-    // 1. Fetch Gmail status
-    fetch('/api/email/google/status')
-      .then((res) => res.json())
-      .then((data) => {
-        setGmailStatus({
-          connected: Boolean(data?.connected),
-          email: data?.email || null,
-          loading: false,
-        });
-      })
-      .catch(() => {
-        setGmailStatus({ connected: false, email: null, loading: false });
-      });
-
-    // 2. Fetch server user profile if logged in
+    // 1. Fetch server user profile if logged in
     fetch('/api/user/profile', { credentials: 'include' })
       .then((res) => res.json())
       .then((resData) => {
@@ -225,28 +200,16 @@ export default function SettingsPage() {
       } else {
         setTestEmailFeedback({
           type: 'error',
-          message: data.error || 'Failed to dispatch test email. Check your Gmail connection.',
+          message: data.error || 'Email notifications are temporarily unavailable.',
         });
       }
     } catch (err: any) {
       setTestEmailFeedback({
         type: 'error',
-        message: err?.message || 'Network error sending test email.',
+        message: err?.message || 'Email notifications are temporarily unavailable.',
       });
     } finally {
       setTestEmailLoading(false);
-    }
-  };
-
-  const handleDisconnectGmail = async () => {
-    if (!confirm('Are you sure you want to disconnect Gmail? Background email alerts will be disabled until you reconnect.')) {
-      return;
-    }
-    try {
-      await fetch('/api/email/google/status', { method: 'DELETE' });
-      setGmailStatus({ connected: false, email: null, loading: false });
-    } catch {
-      alert('Failed to disconnect Gmail.');
     }
   };
 
@@ -486,59 +449,7 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          {/* Section 4: GMAIL OAUTH INTEGRATION */}
-          <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl space-y-4">
-            <h2 className="text-xs font-bold font-mono text-emerald-400 uppercase tracking-widest flex items-center gap-2 pb-2 border-b border-slate-800">
-              <Mail className="w-4 h-4 text-emerald-400" />
-              GMAIL INTEGRATION
-            </h2>
-
-            <div className="p-4 bg-slate-950 border border-slate-800 rounded-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="font-semibold text-sm text-white">Gmail Dispatch Gateway</span>
-                  {gmailStatus.loading ? (
-                    <Loader2 className="w-4 h-4 animate-spin text-slate-400" />
-                  ) : gmailStatus.connected ? (
-                    <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-800 flex items-center gap-1">
-                      <CheckCircle2 className="w-3 h-3" /> {t('gmail_connected', language)}
-                    </span>
-                  ) : (
-                    <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-slate-800 text-slate-400 border border-slate-700">
-                      Not Connected
-                    </span>
-                  )}
-                </div>
-                <p className="text-xs text-slate-400 mt-1">
-                  {gmailStatus.connected
-                    ? `Connected account: ${gmailStatus.email || 'Configured via OAuth'}. Refresh token is securely persisted on the server.`
-                    : 'Authorize HeatShield AI once to dispatch autonomous heat alerts without reconnecting.'}
-                </p>
-              </div>
-
-              <div className="flex items-center gap-2 w-full sm:w-auto">
-                {gmailStatus.connected ? (
-                  <button
-                    type="button"
-                    onClick={handleDisconnectGmail}
-                    className="text-xs px-3.5 py-2 rounded-lg bg-red-950/60 hover:bg-red-900/60 text-red-300 border border-red-800 transition font-semibold"
-                  >
-                    {t('disconnect_gmail', language)}
-                  </button>
-                ) : (
-                  <a
-                    href="/api/email/google/connect"
-                    className="text-xs px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold transition flex items-center gap-1.5 shadow-sm"
-                  >
-                    <span>{t('connect_gmail', language)}</span>
-                    <ExternalLink className="w-3.5 h-3.5" />
-                  </a>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Section 5: TEST EMAIL BUTTON (Requirement 29) */}
+          {/* Section 4: EMAIL DISPATCH TEST (Requirement 29) */}
           <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl space-y-4">
             <h2 className="text-xs font-bold font-mono text-emerald-400 uppercase tracking-widest flex items-center gap-2 pb-2 border-b border-slate-800">
               <Send className="w-4 h-4 text-emerald-400" />
@@ -584,7 +495,7 @@ export default function SettingsPage() {
             )}
           </div>
 
-          {/* Section 6: PRIVACY & COMPLIANCE */}
+          {/* Section 5: PRIVACY & COMPLIANCE */}
           <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl space-y-3">
             <h2 className="text-xs font-bold font-mono text-emerald-400 uppercase tracking-widest flex items-center gap-2 pb-2 border-b border-slate-800">
               <Shield className="w-4 h-4 text-emerald-400" />

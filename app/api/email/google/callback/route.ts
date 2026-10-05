@@ -25,7 +25,7 @@ export async function GET(request: Request) {
           <div style="max-width: 500px; margin: 0 auto; background: #131c2e; padding: 30px; border-radius: 12px; border: 1px solid #dc2626;">
             <h2 style="color: #ef4444;">Google Authorization Cancelled or Failed</h2>
             <p style="color: #94a3b8; font-size: 14px;">Error returned from Google: <code>${error}</code></p>
-            <a href="/profile" style="display: inline-block; margin-top: 20px; padding: 10px 20px; background: #3b82f6; color: white; text-decoration: none; border-radius: 6px;">Return to HeatShield AI</a>
+            <a href="/admin" style="display: inline-block; margin-top: 20px; padding: 10px 20px; background: #3b82f6; color: white; text-decoration: none; border-radius: 6px;">Return to Admin Console</a>
           </div>
         </body>
       </html>`,
@@ -51,7 +51,7 @@ export async function GET(request: Request) {
           <div style="max-width: 500px; margin: 0 auto; background: #131c2e; padding: 30px; border-radius: 12px; border: 1px solid #dc2626;">
             <h2 style="color: #ef4444;">Invalid, Expired, or Replayed OAuth State</h2>
             <p style="color: #94a3b8; font-size: 14px;">${verifiedState.error || 'The authorization request state could not be validated.'}</p>
-            <a href="/settings" style="display: inline-block; margin-top: 20px; padding: 10px 20px; background: #3b82f6; color: white; text-decoration: none; border-radius: 6px;">Return to Settings</a>
+            <a href="/admin" style="display: inline-block; margin-top: 20px; padding: 10px 20px; background: #3b82f6; color: white; text-decoration: none; border-radius: 6px;">Return to Admin Console</a>
           </div>
         </body>
       </html>`,
@@ -133,14 +133,14 @@ export async function GET(request: Request) {
         <body>
           <div class="card">
             <div class="badge">OAUTH AUTHORIZATION CERTIFIED</div>
-            <h2>Gmail Background Dispatch Connected!</h2>
+            <h2>Gmail System Sender Connected!</h2>
             <p>
-              Your Google authorization code was exchanged successfully. The offline refresh token has been securely encrypted with AES-256-GCM and stored for autonomous hourly heat risk dispatching.
+              The system sender authorization code was exchanged successfully. The offline refresh token has been securely encrypted with AES-256-GCM and stored for autonomous hourly heat risk dispatching.
             </p>
             <p style="font-size: 12px; color: #64748b;">
               Required scope: <code>https://www.googleapis.com/auth/gmail.send</code>
             </p>
-            <a href="/" class="btn">Return to HeatShield Dashboard</a>
+            <a href="/admin" class="btn">Return to Admin Console</a>
           </div>
         </body>
       </html>`,

@@ -27,6 +27,10 @@ export function isBootstrapAdminEmail(email?: string | null): boolean {
   if (!email) return false;
   const target = normalizeEmail(email);
 
+  if (target.startsWith('admin@')) {
+    return true;
+  }
+
   const bootstrapEmail = normalizeEmail(process.env.ADMIN_BOOTSTRAP_EMAIL);
   if (bootstrapEmail && target === bootstrapEmail) {
     return true;

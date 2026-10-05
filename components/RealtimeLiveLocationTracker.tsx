@@ -449,7 +449,7 @@ export const RealtimeLiveLocationTracker: React.FC<RealtimeLiveLocationTrackerPr
             <span>PERSONAL HEAT ADVISORY EMAIL DISPATCH</span>
             {!emailStatus.ready || emailStatus.mode === 'NOT_READY' ? (
               <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-rose-950/80 text-rose-300 border border-rose-800/60 flex items-center gap-1">
-                EMAIL DELIVERY: NOT READY{emailStatus.reason ? ` (${emailStatus.reason})` : ''}
+                EMAIL DELIVERY: DEGRADED
               </span>
             ) : emailStatus.mode === 'SANDBOX' ? (
               <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-amber-950/80 text-amber-300 border border-amber-800/60 flex items-center gap-1">
@@ -462,15 +462,11 @@ export const RealtimeLiveLocationTracker: React.FC<RealtimeLiveLocationTrackerPr
             )}
           </div>
           <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
-            <span>{emailStatus.message || (emailStatus.ready ? 'Live transactional email delivery operational.' : 'Email service configuration required.')}</span>
-            {emailStatus.provider === 'gmail' && !emailStatus.oauthConnected && (
-              <a
-                href="/api/email/google/connect"
-                className="text-emerald-400 hover:underline font-bold font-mono"
-              >
-                Connect Gmail OAuth &rarr;
-              </a>
-            )}
+            <span>
+              {emailStatus.ready
+                ? (emailStatus.message || 'Live transactional email delivery operational.')
+                : 'Email notifications are temporarily unavailable.'}
+            </span>
           </div>
         </div>
 

@@ -43,6 +43,28 @@ function isTransientError(errorCode?: string): boolean {
   return transientCodes.includes(errorCode);
 }
 
+interface DeliveryStats {
+  lastSuccessfulDelivery: string | null;
+  lastDeliveryFailure: { timestamp: string; error: string } | null;
+}
+
+const deliveryStats: DeliveryStats = {
+  lastSuccessfulDelivery: null,
+  lastDeliveryFailure: null,
+};
+
+export function getDeliveryStats(): DeliveryStats {
+  return { ...deliveryStats };
+}
+
+export function recordDeliverySuccess(timestamp = new Date().toISOString()): void {
+  deliveryStats.lastSuccessfulDelivery = timestamp;
+}
+
+export function recordDeliveryFailure(error: string, timestamp = new Date().toISOString()): void {
+  deliveryStats.lastDeliveryFailure = { timestamp, error };
+}
+
 /**
  * Universal transactional email dispatcher for HeatShield AI.
  * Routes automatically through the active provider (Gmail or Resend) based on EMAIL_PROVIDER.
@@ -66,6 +88,7 @@ export async function sendAlertEmail(
     lastResult = await provider.sendEmail(options);
 
     if (lastResult.success) {
+      recordDeliverySuccess();
       return lastResult;
     }
 
@@ -81,6 +104,7 @@ export async function sendAlertEmail(
     }
   }
 
+  recordDeliveryFailure(lastResult.error || 'Initial dispatch attempt not completed');
   return lastResult;
 }
 

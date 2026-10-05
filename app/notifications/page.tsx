@@ -697,7 +697,7 @@ function NotificationsContent() {
                         </div>
                         {!emailStatus.ready || emailStatus.mode === 'NOT_READY' ? (
                           <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-rose-950/80 text-rose-300 border border-rose-800/60">
-                            EMAIL DELIVERY: NOT READY{emailStatus.reason ? ` (${emailStatus.reason})` : ''}
+                            EMAIL DELIVERY: DEGRADED
                           </span>
                         ) : emailStatus.mode === 'SANDBOX' ? (
                           <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-amber-950/80 text-amber-300 border border-amber-800/60">
@@ -710,15 +710,11 @@ function NotificationsContent() {
                         )}
                       </div>
                       <div className="text-[10px] leading-relaxed text-slate-400 flex flex-wrap items-center justify-between gap-2">
-                        <span>{emailStatus.message || (emailStatus.ready ? 'Live transactional email delivery operational.' : 'Email service configuration required.')}</span>
-                        {emailStatus.provider === 'gmail' && !emailStatus.oauthConnected && (
-                          <a
-                            href="/api/email/google/connect"
-                            className="text-emerald-400 hover:underline font-bold font-mono"
-                          >
-                            Connect Gmail OAuth &rarr;
-                          </a>
-                        )}
+                        <span>
+                          {emailStatus.ready
+                            ? (emailStatus.message || 'Live transactional email delivery operational.')
+                            : 'Email notifications are temporarily unavailable.'}
+                        </span>
                       </div>
                     </div>
 
