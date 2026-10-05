@@ -149,7 +149,15 @@ export function saveUserProfile(profile: Partial<UserProfile>): UserProfile {
   const isDifferentUser = (profile.id && current.id && profile.id !== current.id) ||
     (profile.firebase_uid && current.firebase_uid && profile.firebase_uid !== current.firebase_uid);
   const base = isDifferentUser ? DEFAULT_USER_PROFILE : current;
-  const updated = { ...base, authenticated: true, updated_at: new Date().toISOString(), ...profile };
+  const effectiveLang = profile.preferred_language || profile.language || base.preferred_language || base.language || 'en';
+  const updated = {
+    ...base,
+    authenticated: true,
+    updated_at: new Date().toISOString(),
+    ...profile,
+    language: effectiveLang,
+    preferred_language: effectiveLang,
+  };
 
   if (typeof window !== 'undefined') {
     localStorage.setItem(PROFILE_KEY, JSON.stringify(updated));
@@ -164,16 +172,20 @@ export function saveUserProfile(profile: Partial<UserProfile>): UserProfile {
         user_id: updated.id,
         email: updated.email,
         display_name: updated.name || updated.email.split('@')[0],
+        preferred_language: updated.preferred_language,
+        timezone: updated.timezone || 'Asia/Kolkata',
+        quiet_hours: updated.quiet_hours,
+        minimum_risk_level: updated.minimum_risk_level || 'high',
         location_name: updated.location?.name || 'My Location',
         latitude: updated.location?.latitude ?? 0,
         longitude: updated.location?.longitude ?? 0,
         location_source: updated.location?.gps_accuracy ? 'LIVE_GPS' : 'SAVED_LOCATION',
-        email_alerts_enabled: true,
+        email_alerts_enabled: updated.email_alerts_enabled !== false,
         hourly_summary_enabled: true,
         hourly_heat_alerts_enabled: updated.hourly_heat_alerts_enabled ?? false,
         email_verified: updated.email_verified ?? false,
         critical_alerts_enabled: true,
-        forecast_alerts_enabled: true,
+        forecast_alerts_enabled: updated.forecast_alerts_enabled ?? true,
         sms_phone: updated.sms_phone,
       });
     } catch {

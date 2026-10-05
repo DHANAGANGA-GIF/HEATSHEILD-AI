@@ -12,7 +12,9 @@ import {
 } from '@/lib/store';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import { verifyFirebaseToken, extractBearerToken } from '@/lib/firebase/admin';
-import { HeatRiskDispatchLog, RecipientNotificationProfile, RiskLevel, SmartAlert } from '@/lib/types';
+import { HeatRiskDispatchLog, RecipientNotificationProfile, RiskLevel, SmartAlert, Language } from '@/lib/types';
+import { getPrecautions } from '@/lib/precaution-engine';
+import { isWithinQuietHours } from '@/lib/notification-utils';
 
 export const dynamic = 'force-dynamic';
 
@@ -148,47 +150,7 @@ async function fetchEligibleSubscribers(): Promise<RecipientNotificationProfile[
   return subscribers;
 }
 
-/**
- * Checks whether the current instant falls within the user's configured quiet hours,
- * evaluating time in the user's specific local timezone.
- */
-export function isWithinQuietHours(
-  quietHours?: { enabled: boolean; start: string; end: string },
-  timezone?: string
-): boolean {
-  if (!quietHours || !quietHours.enabled) return false;
-  if (!quietHours.start || !quietHours.end) return false;
-
-  try {
-    const tz = timezone || 'Asia/Kolkata';
-    const now = new Date();
-    const formatter = new Intl.DateTimeFormat('en-GB', {
-      timeZone: tz,
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false,
-    });
-    const parts = formatter.formatToParts(now);
-    const hourPart = parts.find((p) => p.type === 'hour')?.value || '00';
-    const minutePart = parts.find((p) => p.type === 'minute')?.value || '00';
-    const currentMinutes = parseInt(hourPart, 10) * 60 + parseInt(minutePart, 10);
-
-    const [startH, startM] = quietHours.start.split(':').map((s) => parseInt(s, 10));
-    const [endH, endM] = quietHours.end.split(':').map((s) => parseInt(s, 10));
-    const startMinutes = (startH || 0) * 60 + (startM || 0);
-    const endMinutes = (endH || 0) * 60 + (endM || 0);
-
-    if (startMinutes <= endMinutes) {
-      // Daytime quiet window (e.g. 13:00 to 15:00)
-      return currentMinutes >= startMinutes && currentMinutes < endMinutes;
-    } else {
-      // Overnight quiet window (e.g. 22:00 to 07:00)
-      return currentMinutes >= startMinutes || currentMinutes < endMinutes;
-    }
-  } catch {
-    return false;
-  }
-}
+// isWithinQuietHours is imported from @/lib/notification-utils
 
 function isRiskMeetingMinimum(currentLevel: RiskLevel, minSetting?: string): boolean {
   const hierarchy: Record<string, number> = {
@@ -484,13 +446,31 @@ async function executeHourlyDispatch(request: Request) {
         }
       }
 
-      // 9. Generate Personalized Precautions & Contributing Factors
-      const precautionsObj = generatePersonalizedGuidance(
-        riskAssessment.risk_level,
-        { activity: 'moderate', duration: 'moderate', cooling: 'good', age_group: ageGroup },
-        weather
-      );
-      const precautionsList = precautionsObj.map((p) => p.simple_text);
+      // 9. Generate Contextual Precautions & Risk Drivers in Subscriber's Language
+      const subscriberLang = (subscriber.preferred_language as Language) || 'en';
+      const precautionData = getPrecautions({
+        temperature: weather.temperature,
+        humidity: weather.relative_humidity,
+        apparentTemperature: weather.apparent_temperature,
+        windSpeed: weather.wind_speed,
+        activity: subscriber.activity_level || 'moderate',
+        exposure: subscriber.exposure || 'occasional',
+        cooling: subscriber.cooling_access === 'limited' ? 'limited' : 'good',
+        riskScore: riskAssessment.risk_score,
+        riskLevel: riskAssessment.risk_level,
+        forecast: weather.hourly_forecast?.map((h) => ({
+          time: h.time,
+          temperature: h.temperature,
+          apparentTemperature: h.apparent_temperature,
+          riskScore: h.risk_score,
+          riskLevel: h.risk_level,
+        })),
+        language: subscriberLang,
+      });
+
+      const precautionsList = precautionData.priority;
+      const dynamicReasons = precautionData.reasons;
+      const upcomingWarning = precautionData.upcoming[0];
 
       const isCritical = riskAssessment.risk_level === 'EXTREME';
       const alertPriority = isCritical
@@ -499,12 +479,10 @@ async function executeHourlyDispatch(request: Request) {
         ? 'HIGH PRIORITY'
         : 'CAUTION';
 
-      const contributingFactors: ContributingFactorItem[] = (riskAssessment.factors || []).map((f) => ({
-        name: f.name,
-        impact: f.impact,
-        description: f.description_simple || f.description_technical,
-        direction: f.direction,
-        weight_percent: f.weight_percent,
+      const contributingFactors: ContributingFactorItem[] = dynamicReasons.map((r) => ({
+        name: r,
+        impact: riskAssessment.risk_level === 'EXTREME' ? 'critical' : riskAssessment.risk_level === 'HIGH' ? 'high' : 'moderate',
+        direction: 'escalating',
       }));
 
       const alertPayload: SmartAlert = {
@@ -549,9 +527,31 @@ async function executeHourlyDispatch(request: Request) {
         riskCalculatedAt: riskAssessment.timestamp,
         contributingFactors,
         modelVersion: riskAssessment.model_version,
-        language: (subscriber.preferred_language as 'en' | 'te' | 'ta' | 'hi') || 'en',
+        language: subscriberLang,
         timezone: subscriber.timezone,
+        upcomingRisk: upcomingWarning,
       });
+
+      // Insert audit log to Supabase notification_logs if active
+      if (isSupabaseConfigured && supabase) {
+        try {
+          await supabase.from('notification_logs').insert({
+            user_id: subscriber.user_id && subscriber.user_id.length > 20 ? subscriber.user_id : null,
+            event_type: 'HOURLY_HEAT_ALERT',
+            risk_level: riskAssessment.risk_level,
+            language: subscriberLang,
+            recipient: subscriberEmail,
+            subject: `HeatShield AI — ${riskAssessment.risk_level} (${riskAssessment.risk_score}/100) [${locName}]`,
+            status: emailResult.success ? 'ACCEPTED' : 'FAILED',
+            provider_message_id: emailResult.id || null,
+            failure_reason: emailResult.error || null,
+            event_fingerprint: dispatchKey,
+            sent_at: emailResult.success ? new Date().toISOString() : null,
+          });
+        } catch {
+          // Gracefully continue
+        }
+      }
 
       // 11. Record Result in Database (Enforcing Idempotency via dispatch_key)
       if (emailResult.success) {

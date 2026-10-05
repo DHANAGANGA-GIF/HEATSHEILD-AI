@@ -6,10 +6,12 @@ import { Language, LocationData } from '@/lib/types';
 import { LocationSource } from '@/lib/constants';
 import { t } from '@/lib/i18n';
 
+export type DataFreshnessStatus = 'LIVE / FRESH' | 'LIVE' | 'RECENT' | 'CACHED' | 'STALE' | 'ERROR' | 'UNAVAILABLE' | 'FALLBACK';
+
 interface LocationStatusBarProps {
   location: LocationData;
   locationSource: LocationSource;
-  dataStatus: 'LIVE' | 'CACHED' | 'UNAVAILABLE' | 'FALLBACK';
+  dataStatus: DataFreshnessStatus;
   lastUpdated?: string;
   onChangeLocation?: () => void;
   onRefresh?: () => void;
@@ -26,11 +28,15 @@ const SOURCE_CONFIG: Record<LocationSource, { label: string; color: string; dotC
   DEFAULT: { label: 'Default Location', color: 'text-slate-600 bg-slate-50 border-slate-200',        dotColor: 'bg-slate-400' },
 };
 
-const STATUS_CONFIG: Record<'LIVE' | 'CACHED' | 'UNAVAILABLE' | 'FALLBACK', { label: string; color: string; dotColor: string }> = {
-  LIVE:        { label: 'LIVE',        color: 'text-emerald-700',  dotColor: 'bg-emerald-500 animate-pulse' },
-  CACHED:      { label: 'CACHED',      color: 'text-amber-700',    dotColor: 'bg-amber-400' },
-  UNAVAILABLE: { label: 'UNAVAILABLE', color: 'text-red-600',      dotColor: 'bg-red-500' },
-  FALLBACK:    { label: 'UNAVAILABLE', color: 'text-red-600',      dotColor: 'bg-red-500' },
+const STATUS_CONFIG: Record<DataFreshnessStatus, { label: string; color: string; dotColor: string }> = {
+  'LIVE / FRESH': { label: 'LIVE / FRESH', color: 'text-emerald-700',  dotColor: 'bg-emerald-500 animate-pulse' },
+  LIVE:           { label: 'LIVE',         color: 'text-emerald-700',  dotColor: 'bg-emerald-500 animate-pulse' },
+  RECENT:         { label: 'RECENT',       color: 'text-sky-700',      dotColor: 'bg-sky-500' },
+  CACHED:         { label: 'CACHED',       color: 'text-amber-700',    dotColor: 'bg-amber-400' },
+  STALE:          { label: 'STALE',        color: 'text-orange-700',   dotColor: 'bg-orange-500' },
+  ERROR:          { label: 'ERROR',        color: 'text-red-600',      dotColor: 'bg-red-500' },
+  UNAVAILABLE:    { label: 'UNAVAILABLE',  color: 'text-red-600',      dotColor: 'bg-red-500' },
+  FALLBACK:       { label: 'UNAVAILABLE',  color: 'text-red-600',      dotColor: 'bg-red-500' },
 };
 
 export const LocationStatusBar: React.FC<LocationStatusBarProps> = ({

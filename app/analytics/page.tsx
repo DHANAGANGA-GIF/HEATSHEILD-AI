@@ -9,6 +9,7 @@ import { fetchWeatherData } from '@/lib/weather-api';
 import { evaluateHeatRisk } from '@/lib/risk-engine';
 import { getUserProfile } from '@/lib/store';
 import { scoreForecast, ForecastContext } from '@/lib/forecast-engine';
+import { getPrecautions } from '@/lib/precaution-engine';
 import { HourlyForecastRisk, WeatherData } from '@/lib/types';
 import {
   BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -110,7 +111,6 @@ function StatCard({ icon: Icon, label, value, sub, color = 'emerald' }: {
   );
 }
 
-import { getPrecautions } from '@/lib/precaution-engine';
 
 export default function AnalyticsPage() {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
@@ -157,8 +157,9 @@ export default function AnalyticsPage() {
           riskLevel: item.risk_level,
         }));
         setChartData(points);
-        if (points.length > 0 && !selectedPoint) {
-          setSelectedPoint(points[0]);
+        if (points.length > 0) {
+          // Use functional update so selectedPoint is not a useCallback dependency
+          setSelectedPoint((prev) => prev ?? points[0]);
         }
       }
       setLastUpdated(new Date().toLocaleTimeString([], { timeZone: userTimezone, hour: '2-digit', minute: '2-digit' }));

@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { generateOAuthState, verifyOAuthState } from '../lib/email-providers/oauth-state';
-import { isWithinQuietHours } from '../app/api/cron/heat-risk-dispatch/route';
+import { isWithinQuietHours } from '../lib/notification-utils';
 import { POST as sessionPost, DELETE as sessionDelete } from '../app/api/auth/session/route';
 import { GET as googleConnectGet } from '../app/api/email/google/connect/route';
 import { GET as profileGet, PUT as profilePut } from '../app/api/user/profile/route';

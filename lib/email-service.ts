@@ -7,11 +7,14 @@ import {
   ResendErrorCode,
   classifyResendError,
   ContributingFactorItem,
+  getLocalizedAlertEmail,
+  LocalizedAlertEmailParams,
 } from './email-providers';
 
 export {
   getEmailProvider,
   classifyResendError,
+  getLocalizedAlertEmail,
 };
 export type {
   ContributingFactorItem,
@@ -20,6 +23,7 @@ export type {
   EmailServiceStatus,
   ResendErrorCode,
   IEmailProvider,
+  LocalizedAlertEmailParams,
 };
 
 /**

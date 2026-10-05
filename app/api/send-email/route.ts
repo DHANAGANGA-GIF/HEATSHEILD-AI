@@ -7,6 +7,8 @@ import { verifyFirebaseToken, extractBearerToken, resolveAuthSession } from '@/l
 import { SmartAlert, UserProfile, Language } from '@/lib/types';
 import { getPrecautions } from '@/lib/precaution-engine';
 import { checkAlertCooldown, recordAlertDispatch } from '@/lib/alert-manager';
+import { isSupabaseConfigured, supabase } from '@/lib/supabase';
+import { ContributingFactorItem } from '@/lib/email-service';
 
 export const dynamic = 'force-dynamic';
 
@@ -167,9 +169,28 @@ export async function POST(request: Request) {
       );
     }
 
-    // ── Step 4.6: Dynamic Contextual Precaution Engine ────────────────────────
-    const userLang: Language = (userProfile?.language as Language) || 'en';
-    const userTimezone = userProfile?.timezone || 'Asia/Kolkata';
+    // ── Step 4.6: Authoritative Language & Contextual Precaution Engine ──────
+    let userLang: Language = (userProfile?.preferred_language || userProfile?.language as Language) || 'en';
+    let userTimezone = userProfile?.timezone || 'Asia/Kolkata';
+
+    if (isSupabaseConfigured && supabase) {
+      try {
+        const { data: dbProfile } = await supabase
+          .from('profiles')
+          .select('preferred_language, timezone')
+          .eq('id', firebaseUid)
+          .maybeSingle();
+
+        if (dbProfile?.preferred_language && ['en', 'te', 'ta', 'hi'].includes(dbProfile.preferred_language)) {
+          userLang = dbProfile.preferred_language as Language;
+        }
+        if (dbProfile?.timezone) {
+          userTimezone = dbProfile.timezone;
+        }
+      } catch {
+        // Fall back to payload settings
+      }
+    }
 
     const precautionData = getPrecautions({
       temperature: snapshot.temperature,
@@ -197,7 +218,14 @@ export async function POST(request: Request) {
         ? precautionData.priority
         : snapshot.precautions;
 
+    const dynamicReasons = precautionData.reasons;
     const upcomingRiskWarning = precautionData.upcoming[0] || undefined;
+
+    const contributingFactors: ContributingFactorItem[] = dynamicReasons.map((r) => ({
+      name: r,
+      impact: snapshot.risk_level === 'EXTREME' ? 'critical' : snapshot.risk_level === 'HIGH' ? 'high' : 'moderate',
+      direction: 'escalating',
+    }));
 
     // ── Step 5: Build alert payload FROM the snapshot (single source of truth) ─
     const locationStatusLabel =
@@ -260,6 +288,7 @@ export async function POST(request: Request) {
       weatherObservedAt: snapshot.observation_timestamp,
       dataQualityStatus: snapshot.data_quality,
       riskCalculatedAt: snapshot.snapshot_created_at,
+      contributingFactors,
       language: userLang,
       timezone: userTimezone,
       upcomingRisk: upcomingRiskWarning,
@@ -280,6 +309,28 @@ export async function POST(request: Request) {
       providerMessageId: result.id,
       errorMessage: result.error,
     });
+
+    // Record in persistent notification_logs table if Supabase is active
+    if (isSupabaseConfigured && supabase) {
+      try {
+        await supabase.from('notification_logs').insert({
+          user_id: firebaseUid && firebaseUid.length > 20 ? firebaseUid : null,
+          event_type: isTest ? 'TEST_ADVISORY' : 'HEAT_RISK_ADVISORY',
+          risk_level: snapshot.risk_level,
+          language: userLang,
+          recipient: recipientEmail,
+          subject: isTest
+            ? `[TEST EMAIL] HeatShield AI — ${snapshot.risk_level} (${snapshot.risk_score}/100) [${locName}]`
+            : `HeatShield AI — ${snapshot.risk_level} (${snapshot.risk_score}/100) [${locName}]`,
+          status: result.success ? 'SENT' : 'FAILED',
+          provider_message_id: result.id || null,
+          failure_reason: result.error || null,
+          sent_at: result.success ? new Date().toISOString() : null,
+        });
+      } catch {
+        // Non-blocking log insertion
+      }
+    }
 
     if (!result.success) {
       return NextResponse.json(

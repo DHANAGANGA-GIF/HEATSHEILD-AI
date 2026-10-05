@@ -9,7 +9,7 @@ import { WeatherCard } from '@/components/WeatherCard';
 import { RiskDrivers } from '@/components/RiskDrivers';
 import { GuidanceList } from '@/components/GuidanceList';
 import { AiAssistant } from '@/components/AiAssistant';
-import { LocationStatusBar } from '@/components/LocationStatusBar';
+import { LocationStatusBar, DataFreshnessStatus } from '@/components/LocationStatusBar';
 import { LocationSelector } from '@/components/LocationSelector';
 import { SystemStatusPanel, SystemStatusValue } from '@/components/SystemStatusPanel';
 import { fetchWeatherData } from '@/lib/weather-api';
@@ -50,13 +50,13 @@ export default function DashboardPage() {
   }, [appProfile]);
 
   // RACE-CONDITION & STALE REQUEST PROTECTED DATA LOADER
-  const loadData = useCallback(async (loc: LocationData) => {
+  const loadData = useCallback(async (loc: LocationData, skipCache: boolean = false) => {
     const currentSeq = ++requestSeqRef.current;
     setLoading(true);
     const p = appProfile || getUserProfile();
     setProfile(p);
     
-    const wData = await fetchWeatherData(loc.latitude, loc.longitude, loc.name);
+    const wData = await fetchWeatherData(loc.latitude, loc.longitude, loc.name, skipCache);
 
     // RACE CONDITION GUARD: Discard out-of-order stale responses
     if (currentSeq !== requestSeqRef.current) {
@@ -74,10 +74,10 @@ export default function DashboardPage() {
     setLoading(false);
   }, [appProfile]);
 
-  const loadDashboardData = useCallback(async () => {
+  const loadDashboardData = useCallback(async (skipCache: boolean = false) => {
     const p = appProfile || getUserProfile();
     const loc = p.location || { name: 'Chennai', latitude: 13.0827, longitude: 80.2707 };
-    await loadData(loc);
+    await loadData(loc, skipCache);
   }, [appProfile, loadData]);
 
   useEffect(() => {
@@ -120,15 +120,27 @@ export default function DashboardPage() {
   const displayUserEmail = firebaseUser?.email || appProfile?.email || '';
   const displayRole = (appProfile?.role || profile.role || 'user').toUpperCase();
 
-  // Calculate weather freshness & stale protection
+  // Calculate weather freshness & stale protection adhering to Phase 5:
+  // LIVE / FRESH (< 15 min and live API source)
+  // RECENT (15-60 min)
+  // CACHED (within 15-min cache TTL)
+  // STALE (> 60 min)
+  // ERROR / UNAVAILABLE
   const weatherAgeMins = weather ? Math.floor((Date.now() - new Date(weather.timestamp).getTime()) / 60000) : 0;
-  const isStale = weatherAgeMins > 15;
+  const isStale = weatherAgeMins > 60;
 
-  const dataStatus: 'LIVE' | 'CACHED' | 'UNAVAILABLE' | 'FALLBACK' = weather
-    ? weather.is_fallback ? 'FALLBACK'
-    : weather.is_cached || isStale ? 'CACHED'
-    : 'LIVE'
-    : loading ? 'LIVE' : 'UNAVAILABLE';
+  let dataStatus: DataFreshnessStatus;
+  if (!weather || weather.is_fallback) {
+    dataStatus = loading ? 'LIVE / FRESH' : 'ERROR';
+  } else if (isStale) {
+    dataStatus = 'STALE';
+  } else if (weather.is_cached && weatherAgeMins <= 15) {
+    dataStatus = 'CACHED';
+  } else if (weatherAgeMins > 15 && weatherAgeMins <= 60) {
+    dataStatus = 'RECENT';
+  } else {
+    dataStatus = 'LIVE / FRESH';
+  }
 
   const lastUpdatedLabel = weather
     ? isStale
@@ -209,7 +221,7 @@ export default function DashboardPage() {
             dataStatus={dataStatus}
             lastUpdated={lastUpdatedLabel}
             onChangeLocation={() => setShowLocationSelector(true)}
-            onRefresh={loadDashboardData}
+            onRefresh={() => loadDashboardData(true)}
             isLoading={loading}
             lang={lang}
           />
@@ -249,7 +261,7 @@ export default function DashboardPage() {
               <p className="text-sm font-semibold text-slate-200">{t('unavailable', lang)}</p>
               <p className="text-xs text-slate-400">Risk assessment is temporarily unavailable because current environmental data could not be retrieved.</p>
               <button
-                onClick={loadDashboardData}
+                onClick={() => { void loadDashboardData(); }}
                 className="mt-2 px-4 py-2 text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition"
               >
                 {t('try_again', lang)}

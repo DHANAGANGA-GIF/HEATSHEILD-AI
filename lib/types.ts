@@ -418,6 +418,11 @@ export interface RecipientNotificationProfile {
   timezone?: string;
   /** Age is ONLY included if voluntarily provided by the user. Never guessed. */
   age?: number;
+  age_group?: AgeGroup;
+  activity_level?: ActivityLevel;
+  exposure?: ExposureType;
+  exposure_duration?: ExposureDuration;
+  cooling_access?: CoolingAccess;
   location_name: string;
   latitude: number;
   longitude: number;
