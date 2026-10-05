@@ -141,4 +141,35 @@ export const te: Record<string, string> = {
   close: 'మూసివేయండి',
   filter: 'ఫిల్టర్',
   search: 'వెతకండి',
+
+  // Freshness & Telemetry
+  fresh: 'లైవ్ / తాజా',
+  recent: 'ఇటీవలి డేటా',
+  error: 'లోపం',
+
+  // Navigation & Group Titles
+  locations: 'సేవ్ చేసిన ప్రాంతాలు',
+  system: 'సిస్టమ్ ఆర్కిటెక్చర్',
+  report_issue: 'సమస్యను నివేదించండి',
+  core_platform: 'ప్రధాన వేదిక',
+  academic_system: 'విద్యా & వ్యవస్థ',
+  community_map_group: 'కమ్యూనిటీ & మ్యాప్',
+  organizations: 'సంస్థలు',
+  management_utils: 'నిర్వహణ & సాధనాలు',
+
+  // Admin Control Center
+  admin_overview: 'సమీక్ష',
+  admin_users: 'వినియోగదారులు',
+  admin_risk_monitoring: 'ప్రమాద పర్యవేక్షణ',
+  admin_notifications: 'నోటిఫికేషన్‌లు',
+  admin_email_delivery: 'ఇమెయిల్ డెలివరీ',
+  admin_weather_health: 'వాతావరణ & డేటా స్థితి',
+  admin_system_health: 'సిస్టమ్ ఆరోగ్యం',
+  admin_audit_logs: 'ఆడిట్ లాగ్‌లు',
+  admin_settings: 'అడ్మిన్ సెట్టింగ్‌లు',
+  no_data_available: 'డేటా అందుబాటులో లేదు',
+
+  // Risk Factors & Explanations
+  why_this_risk_desc: 'ఈ పర్యావరణ మరియు సందర్భానుసార కారకాలు మీ ప్రస్తుత వేడి-ప్రమాద స్థాయిని మరియు భద్రతా సూచనలను నిర్ణయిస్తాయి.',
+  relative_weight: 'సాపేక్ష ప్రభావం',
 };

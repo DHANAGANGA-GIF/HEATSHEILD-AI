@@ -141,4 +141,35 @@ export const en: Record<string, string> = {
   close: 'Close',
   filter: 'Filter',
   search: 'Search',
+
+  // Freshness & Telemetry
+  fresh: 'FRESH',
+  recent: 'RECENT',
+  error: 'ERROR',
+
+  // Navigation & Group Titles
+  locations: 'Saved Locations',
+  system: 'System Architecture',
+  report_issue: 'Report Issue',
+  core_platform: 'Core Platform',
+  academic_system: 'Academic & System',
+  community_map_group: 'Community & Map',
+  organizations: 'Organizations',
+  management_utils: 'Management & Utils',
+
+  // Admin Control Center
+  admin_overview: 'Overview',
+  admin_users: 'Users',
+  admin_risk_monitoring: 'Risk Monitoring',
+  admin_notifications: 'Notifications',
+  admin_email_delivery: 'Email Delivery',
+  admin_weather_health: 'Weather & Data Health',
+  admin_system_health: 'System Health',
+  admin_audit_logs: 'Audit Logs',
+  admin_settings: 'Admin Settings',
+  no_data_available: 'No data available',
+
+  // Risk Factors & Explanations
+  why_this_risk_desc: 'These environmental and contextual factors combine to determine your current heat-risk level and actionable safety guidance.',
+  relative_weight: 'relative weight',
 };

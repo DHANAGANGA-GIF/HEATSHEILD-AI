@@ -141,4 +141,35 @@ export const ta: Record<string, string> = {
   close: 'மூடு',
   filter: 'வடிகட்டு',
   search: 'தேடு',
+
+  // Freshness & Telemetry
+  fresh: 'நேரலை / புதிய',
+  recent: 'சமீபத்திய தரவு',
+  error: 'பிழை',
+
+  // Navigation & Group Titles
+  locations: 'சேமிக்கப்பட்ட இடங்கள்',
+  system: 'கணினி கட்டமைப்பு',
+  report_issue: 'சிக்கலைப் புகாரளிக்கவும்',
+  core_platform: 'முக்கிய தளம்',
+  academic_system: 'கல்வி & கணினி',
+  community_map_group: 'சமூகம் & வரைபடம்',
+  organizations: 'அமைப்புகள்',
+  management_utils: 'நிர்வாகம் & கருவிகள்',
+
+  // Admin Control Center
+  admin_overview: 'மேலோட்டம்',
+  admin_users: 'பயனர்கள்',
+  admin_risk_monitoring: 'ஆபத்து கண்காணிப்பு',
+  admin_notifications: 'அறிவிப்புகள்',
+  admin_email_delivery: 'மின்னஞ்சல் அனுப்புதல்',
+  admin_weather_health: 'வானிலை & தரவு நிலை',
+  admin_system_health: 'கணினி ஆரோக்கியம்',
+  admin_audit_logs: 'தணிக்கை பதிவுகள்',
+  admin_settings: 'நிர்வாக அமைப்புகள்',
+  no_data_available: 'தரவு கிடைக்கவில்லை',
+
+  // Risk Factors & Explanations
+  why_this_risk_desc: 'இந்த சுற்றுச்சூழல் மற்றும் சூழ்நிலைக் காரணிகள் உங்கள் தற்போதைய வெப்ப அபாய நிலை மற்றும் பாதுகாப்பு வழிகாட்டுதலைத் தீர்மானிக்கின்றன.',
+  relative_weight: 'ஒப்பீட்டு தாக்கம்',
 };

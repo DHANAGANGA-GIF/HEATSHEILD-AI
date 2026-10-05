@@ -141,4 +141,35 @@ export const hi: Record<string, string> = {
   close: 'बंद करें',
   filter: 'फ़िल्टर',
   search: 'खोजें',
+
+  // Freshness & Telemetry
+  fresh: 'लाइव / ताज़ा',
+  recent: 'हालिया डेटा',
+  error: 'त्रुटि',
+
+  // Navigation & Group Titles
+  locations: 'सहेजे गए स्थान',
+  system: 'सिस्टम आर्किटेक्चर',
+  report_issue: 'समस्या की रिपोर्ट करें',
+  core_platform: 'मुख्य मंच',
+  academic_system: 'शैक्षणिक एवं प्रणाली',
+  community_map_group: 'समुदाय एवं मानचित्र',
+  organizations: 'संगठन',
+  management_utils: 'प्रबंधन एवं उपयोगिताएं',
+
+  // Admin Control Center
+  admin_overview: 'अवलोकन',
+  admin_users: 'उपयोगकर्ता',
+  admin_risk_monitoring: 'जोखिम निगरानी',
+  admin_notifications: 'सूचनाएं',
+  admin_email_delivery: 'ईमेल वितरण',
+  admin_weather_health: 'मौसम एवं डेटा स्वास्थ्य',
+  admin_system_health: 'सिस्टम स्वास्थ्य',
+  admin_audit_logs: 'ऑडिट लॉग',
+  admin_settings: 'एडमिन सेटिंग्स',
+  no_data_available: 'कोई डेटा उपलब्ध नहीं',
+
+  // Risk Factors & Explanations
+  why_this_risk_desc: 'ये पर्यावरणीय और प्रासंगिक कारक आपके वर्तमान गर्मी जोखिम स्तर और सुरक्षा मार्गदर्शन का निर्धारण करते हैं।',
+  relative_weight: 'सापेक्ष प्रभाव',
 };

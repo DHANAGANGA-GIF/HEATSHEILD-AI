@@ -56,6 +56,12 @@ export const Navbar: React.FC<NavbarProps> = ({
 
   const handleLanguageChange = (lang: Language) => {
     saveUserProfile({ language: lang, preferred_language: lang });
+    fetch('/api/user/profile', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ language: lang, preferred_language: lang }),
+      credentials: 'include',
+    }).catch(() => {});
     window.location.reload();
   };
 
@@ -63,7 +69,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   const displayEmail = firebaseUser?.email || appProfile?.email || '';
   const emailVerified = firebaseUser?.emailVerified ?? false;
   const userInitial = displayName.charAt(0).toUpperCase() || 'U';
-  const userLanguage = appProfile?.language || 'en';
+  const userLanguage: Language = (appProfile?.preferred_language || appProfile?.language || 'en') as Language;
   const userRole = appProfile?.role || 'user';
 
   return (

@@ -38,40 +38,41 @@ interface SidebarProps {
 
 export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, onCloseMobile, lang: langProp }) => {
   const pathname = usePathname();
-  // Resolve language: prop → stored profile → default 'en'
-  const lang: Language = langProp || getUserProfile().language || 'en';
+  // Resolve language: prop → stored profile (preferred_language first) → default 'en'
+  const profile = getUserProfile();
+  const lang: Language = langProp || profile.preferred_language || profile.language || 'en';
 
   const navGroups = [
     {
-      title: 'CORE PLATFORM',
+      title: t('core_platform', lang).toUpperCase(),
       items: [
         { label: t('dashboard', lang), href: '/dashboard', icon: LayoutDashboard },
         { label: t('risk', lang), href: '/risk', icon: Flame },
-        { label: 'Risk Timeline', href: '/timeline', icon: Clock },
+        { label: t('timeline', lang), href: '/timeline', icon: Clock },
         { label: t('analytics', lang), href: '/analytics', icon: BarChart2 },
         { label: t('assistant', lang), href: '/assistant', icon: MessageSquare },
         { label: t('what_if_simulator', lang), href: '/simulator', icon: Sliders },
-        { label: 'Saved Locations', href: '/locations', icon: Bookmark },
+        { label: t('locations', lang), href: '/locations', icon: Bookmark },
       ],
     },
     {
-      title: 'ACADEMIC & SYSTEM (V2.1)',
+      title: t('academic_system', lang).toUpperCase(),
       items: [
         { label: t('methodology', lang), href: '/methodology', icon: BookOpen },
         { label: t('evidence', lang), href: '/evidence', icon: FileCheck },
-        { label: 'System Architecture', href: '/system', icon: Cpu },
+        { label: t('system', lang), href: '/system', icon: Cpu },
       ],
     },
     {
-      title: 'COMMUNITY & MAP',
+      title: t('community_map_group', lang).toUpperCase(),
       items: [
         { label: t('community', lang), href: '/community', icon: Users },
         { label: t('community_map', lang), href: '/community/map', icon: MapPin },
-        { label: 'Report Issue', href: '/community/report', icon: AlertCircle },
+        { label: t('report_issue', lang), href: '/community/report', icon: AlertCircle },
       ],
     },
     {
-      title: 'ORGANIZATIONS',
+      title: t('organizations', lang).toUpperCase(),
       items: [
         { label: t('school', lang), href: '/school', icon: GraduationCap },
         { label: t('worksite', lang), href: '/worksite', icon: Briefcase },
@@ -79,7 +80,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ mobileOpen, onCloseMobile, lan
       ],
     },
     {
-      title: 'MANAGEMENT & UTILS',
+      title: t('management_utils', lang).toUpperCase(),
       items: [
         { label: t('admin', lang), href: '/admin', icon: ShieldCheck },
         { label: t('reports', lang), href: '/reports', icon: FileText },
