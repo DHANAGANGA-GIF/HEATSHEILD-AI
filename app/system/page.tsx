@@ -370,12 +370,12 @@ export default function SystemPage() {
                     ALERTING & CRON ORCHESTRATION TIER
                   </div>
                   <p className="text-slate-400 text-[11px] leading-relaxed">
-                    Vercel serverless cron scheduled daily at 06:00 UTC (0 6 * * *), transactional email dispatch via Gmail OAuth / SMTP,
+                    Vercel serverless cron scheduled daily at 06:00 UTC (0 6 * * *), transactional email dispatch via Resend API (default) / SMTP,
                     smart alert deduplication, and 6-hour alert cooldown safety limits.
                   </p>
                 </div>
                 <div className="px-3 py-1 bg-slate-900 border border-slate-800 rounded font-mono text-[10px] text-slate-300">
-                  Vercel Cron + Gmail OAuth
+                  Vercel Cron + Resend API
                 </div>
               </div>
             </div>

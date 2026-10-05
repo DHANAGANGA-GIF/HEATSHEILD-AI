@@ -211,7 +211,7 @@ export function getLocalizedAlertEmail(params: LocalizedAlertEmailParams): Rende
 
   const subject =
     params.customSubject ||
-    `HeatShield AI — ${localizedRiskLevel} (${riskScore}/100) ${i18n.subHeader} [${loc}]`;
+    `${i18n.header} — ${localizedRiskLevel} (${riskScore}/100) ${i18n.subHeader} [${loc}]`;
 
   const badgeColors: Record<string, { bg: string; text: string; border: string }> = {
     LOW: { bg: '#064e3b', text: '#6ee7b7', border: '#059669' },
